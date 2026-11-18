@@ -1,0 +1,10 @@
+{
+  "url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+  "bytes": 41205931,
+  "sha256": "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
+  "license": "Apache-2.0",
+  "packagedAs": "english-model.tar.gz",
+  "archive_layout": "USTAR with explicit root and parent directory entries",
+  "packaged_revision": "english-0.15-hive-2",
+  "packaged_sha256": "964a17465e40d9e6116182f8703f05f33a56facfd5d03198c6e765df9b3d66eb"
+}

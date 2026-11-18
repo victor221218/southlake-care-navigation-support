@@ -1,0 +1,9 @@
+Bundled speech components
+
+vosk-browser 0.0.8, Ciaran O'Reilly and contributors; Vosk API, Alpha Cephei and contributors; bundled small English Vosk model 0.15.
+License: Apache License 2.0 (APACHE-2.0.txt).
+Upstream: https://github.com/ccoreilly/vosk-browser and https://alphacephei.com/vosk/
+
+Team 26 packaging modifications: the browser worker is served as a static file with a separate content security policy; initialization progress, error-stage diagnostics and final-result signals are added. The model archive includes explicit parent directory entries required by the Vosk unpacker. Recognition engine and model file contents are retained from the pinned upstream build. Model archive provenance and the packaged checksum/revision are recorded in voice-model-source.json.
+
+The generated worker retains its upstream JavaScript copyright notices.

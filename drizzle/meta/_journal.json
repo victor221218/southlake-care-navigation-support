@@ -1,0 +1,28 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1794581326827,
+      "tag": "0000_cultured_timeslip",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1794581326828,
+      "tag": "0001_conversation_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1794581326829,
+      "tag": "0002_service_workspace",
+      "breakpoints": true
+    },
+    { "idx": 3, "version": "6", "when": 1794950000000, "tag": "0003_personal_documents", "breakpoints": true }
+  ]
+}

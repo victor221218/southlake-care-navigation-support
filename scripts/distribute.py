@@ -1,0 +1,79 @@
+"""Create clean portable Windows and recipient-test Mac archives."""
+import argparse
+import copy
+import json
+import pathlib
+import shutil
+import zipfile
+from mac_package import asar_hashes, build_mac, digest, entry, verify_mac
+
+root = pathlib.Path(__file__).resolve().parent.parent
+output = root.parent.parent / 'outputs'
+output.mkdir(exist_ok=True)
+runtimes = json.loads((root / '.runtime/runtimes.json').read_text())
+version = json.loads((root / 'package.json').read_text())['version']
+parser = argparse.ArgumentParser()
+selection = parser.add_mutually_exclusive_group()
+selection.add_argument('--platform', choices=('Windows', 'Mac-Apple-Silicon', 'Mac-Intel'))
+selection.add_argument('--mac-only', action='store_true')
+args = parser.parse_args()
+asar = root / 'release/app.asar'
+hashes = None
+checksums = {}
+checksum_file = output / 'Southlake-Hive-Desktop-SHA256.txt'
+if checksum_file.exists():
+    for line in checksum_file.read_text().splitlines():
+        if '  ' in line:
+            value, name = line.split('  ', 1)
+            if (output / name).is_file():
+                checksums[name] = value
+mac_reports = []
+
+for runtime in runtimes:
+    platform, arch = runtime['platform'], runtime['arch']
+    label = 'Windows' if platform == 'win32' else 'Mac-Apple-Silicon' if arch == 'arm64' else 'Mac-Intel'
+    if (args.platform and args.platform != label) or (args.mac_only and platform != 'darwin'):
+        continue
+    alias = output / f'Southlake-Hive-{label}.zip'
+    if platform == 'darwin':
+        if hashes is None:
+            hashes = asar_hashes(root, asar)
+        destination = output / f'Southlake-Hive-{label}-{version}-Test.zip'
+        temporary = destination.with_suffix('.building.zip')
+        build_mac(root, runtime, temporary, version, asar, hashes)
+        report = verify_mac(temporary, *hashes, arch, version)
+        temporary.replace(destination)
+        report['file'] = destination.name
+        shutil.copyfile(destination, alias)
+        checksums[destination.name] = report['sha256']
+        checksums[alias.name] = report['sha256']
+        mac_reports.append(report)
+    else:
+        destination = alias
+        with zipfile.ZipFile(runtime['path']) as source, zipfile.ZipFile(destination, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=5, allowZip64=True) as target:
+            for original in source.infolist():
+                if original.filename.lower().endswith('resources/default_app.asar'):
+                    continue
+                info = copy.copy(original)
+                info.filename = 'Southlake Hive/' + ('Southlake Hive.exe' if original.filename == 'electron.exe' else original.filename)
+                target.writestr(info, source.read(original))
+            with asar.open('rb') as stream, target.open(entry('Southlake Hive/resources/app.asar'), 'w', force_zip64=True) as dest:
+                shutil.copyfileobj(stream, dest, length=1024 * 1024)
+            for name in ('START-HERE.md', 'SHARING.md'):
+                target.writestr(entry(name), (root / name).read_bytes())
+        with zipfile.ZipFile(destination) as archive:
+            assert archive.testzip() is None
+        checksums[destination.name] = digest(destination)
+    print(json.dumps({'file': str(destination), 'bytes': destination.stat().st_size, 'sha256': checksums[destination.name]}), flush=True)
+
+checksum_file.write_text(''.join(f'{value}  {name}\n' for name, value in sorted(checksums.items())))
+if mac_reports:
+    report_file = output / 'Southlake-Hive-Mac-Verification.json'
+    previous = json.loads(report_file.read_text()) if report_file.exists() else {'packages': []}
+    reports = {report['architecture']: report for report in previous['packages']}
+    reports.update({report['architecture']: report for report in mac_reports})
+    report_file.write_text(json.dumps({'package_revision': 'mac-2', 'app_version': version,
+                                      'built_on': 'Windows; no macOS runtime is available in this workspace',
+                                      'packages': list(reports.values())}, indent=2) + '\n')
+shutil.copyfile(root / 'START-HERE.md', output / 'Southlake-Hive-Desktop-Start-Here.md')
+shutil.copyfile(root / 'SHARING.md', output / 'Southlake-Hive-Sharing-Guide.md')

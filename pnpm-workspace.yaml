@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+  electron: true
+  electron-winstaller: false
+minimumReleaseAgeExclude:
+  - '@electron/asar@4.3.2'
+  - electron@45.3.2

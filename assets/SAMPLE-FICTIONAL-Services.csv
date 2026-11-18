@@ -1,0 +1,5 @@
+ID,Service,Area,Category,Contact name,Phone,Website,Available slots,Notes
+SAMPLE-A,Example Community Rides,North York,Transportation,Alex Example,416-555-0101,https://example.org/rides,4,Fictional practice data. No real service or contact.
+SAMPLE-B,Example Home Support,Aurora,Home support,,905-555-0102,https://example.org/support,2,Fictional practice data. No real service or contact.
+SAMPLE-C,Example Accessible Travel,North York,Transportation,Sam Example,416-555-0103,https://example.org/travel,3,Fictional practice data. No real service or contact.
+SAMPLE-D,Example Meal Visits,Newmarket,Meals,,905-555-0104,https://example.org/meals,0,Fictional practice data. No real service or contact.

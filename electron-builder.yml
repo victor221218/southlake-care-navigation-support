@@ -1,0 +1,27 @@
+appId: org.team26.southlakehive
+productName: Southlake Hive
+electronVersion: 45.3.2
+toolsets:
+  nsis: 1.2.1
+directories:
+  output: release/installer
+files:
+  - dist/**/*
+  - assets/**/*
+  - drizzle/**/*
+  - START-HERE.md
+  - package.json
+asar: true
+win:
+  target:
+    - target: nsis
+      arch: x64
+  signAndEditExecutable: false
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  artifactName: Southlake-Hive-Setup.exe
+  include: scripts/installer.nsh
