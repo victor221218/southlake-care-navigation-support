@@ -8,10 +8,13 @@ import { DocumentStore } from './documents/store.mjs';
 import { DocumentImporter } from './documents/importer.mjs';
 import { DocumentAssistant } from './documents/assistant.mjs';
 import { cspForPath } from './security.mjs';
+import { APP_NAME, windowsDataDirectory } from './app-identity.mjs';
+import { ensureKnownServices, serviceCategories, SERVICE_DIRECTORY_FORMAT } from './documents/services.mjs';
 
 const root=app.getAppPath(),uiOrigin='hive://app';
-app.setName('Southlake Hive');
-if(process.env.HIVE_QA_DATA_DIR&&path.isAbsolute(process.env.HIVE_QA_DATA_DIR))app.setPath('userData',process.env.HIVE_QA_DATA_DIR);
+app.setName(APP_NAME);
+app.setPath('userData',windowsDataDirectory(app.getPath('appData'),process.env.HIVE_QA_DATA_DIR));
+if(process.platform==='win32')app.setAppUserModelId('org.team26.southlakehive');
 protocol.registerSchemesAsPrivileged([{scheme:'hive',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
 const hasLock=app.requestSingleInstanceLock();if(!hasLock)app.quit();
 const dataDir=app.getPath('userData');
@@ -23,7 +26,7 @@ const safeError=error=>({message:error.message||'This action could not complete.
 const fromApp=event=>event.sender===window?.webContents&&event.senderFrame?.url.startsWith(uiOrigin+'/');
 const idle=()=>{if(assistant.busy||importer.busy||connection.busy||pickerBusy)throw new Error('Finish the current answer, file import, or sign-in first.');};
 async function updateAccount(){try{account=await connection.session();accountError='';}catch(error){accountError=error.message;account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'};}return account;}
-async function snapshot(){await updateAccount();return{account,accountError,documents:await store.documents(),cards:await store.list({limit:60}),version:app.getVersion(),models:modelList,storage:'Saved on this Windows account',voice:'English voice model included',workspace:account.connected?account.label:'Starter workspace · this computer'};}
+async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents();return{account,accountError,documents:allDocuments.filter(d=>d.format!==SERVICE_DIRECTORY_FORMAT),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),serviceCategories,version:app.getVersion(),models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this Windows account',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
 async function allowedOriginal(document){
   if(!document?.original_path)return null;
   const base=path.resolve(dataDir,'documents',owner())+path.sep,target=path.resolve(document.original_path);
@@ -37,7 +40,7 @@ async function invoke(method,args){
   if(method==='sign-out'){idle();const result=await connection.signOut();await updateAccount();assistant.reset();importer.cancel();modelList={items:[],selected:null};return{...await snapshot(),revocationConfirmed:result.revoked};}
   if(method==='select-account'){idle();await connection.select(args.id);await updateAccount();assistant.reset();importer.cancel();modelList={items:[],selected:null};return snapshot();}
   if(method==='models'){modelList=await assistant.models();return modelList;}
-  if(method==='select-model'){if(assistant.busy)throw new Error('Stop the current answer first.');if(!modelList.items.some(m=>m.id===args.id))throw new Error('Choose an available model.');assistant.model=args.id;modelList.selected=args.id;return modelList;}
+  if(method==='select-model'){if(assistant.busy)throw new Error('Stop the current answer first.');if(!assistant.modelItems.some(m=>m.id===args.id))throw new Error('Choose an available model.');assistant.model=args.id;modelList={items:assistant.modelItems,selected:args.id};return modelList;}
   if(method==='list-cards')return store.list(args);
   if(method==='get-card')return store.get(args.id);
   if(method==='save-note')return store.note(args);
@@ -65,16 +68,16 @@ async function invoke(method,args){
   if(method==='clear-chat')return assistant.clear();
   if(method==='calculate')return store.calculate(args);
   if(method==='export'){
-    idle();pickerBusy=true;try{const selected=await dialog.showSaveDialog(window,{title:'Save a private memory backup',defaultPath:'Hive-personal-memory-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'Hive memory backup',extensions:['json']}]});
+    idle();pickerBusy=true;try{const selected=await dialog.showSaveDialog(window,{title:'Save a private memory backup',defaultPath:'Southlake-Care-Navigation-Support-memory-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'Personal memory backup',extensions:['json']}]});
     if(selected.canceled)return{cancelled:true};await writeFile(selected.filePath,JSON.stringify(await store.export(),null,2),{mode:0o600});return{exported:true};}finally{pickerBusy=false;}
   }
   if(method==='restore'){
-    idle();pickerBusy=true;try{const selected=await dialog.showOpenDialog(window,{title:'Restore a private Hive backup',properties:['openFile'],filters:[{name:'Hive memory backup',extensions:['json']}]});
+    idle();pickerBusy=true;try{const selected=await dialog.showOpenDialog(window,{title:'Restore a private memory backup',properties:['openFile'],filters:[{name:'Personal memory backup',extensions:['json']}]});
     if(selected.canceled)return{cancelled:true};const size=(await stat(selected.filePaths[0])).size;
     if(size>100*1024*1024)throw new Error('This backup exceeds the 100 MB import limit.');
     return await store.restore(JSON.parse(await readFile(selected.filePaths[0],'utf8')));}finally{pickerBusy=false;}
   }
-  if(method==='starter-count'){const starter=new DocumentStore({database:()=>db,owner:()=> 'device'});return{count:(await starter.list({limit:1})).total};}
+  if(method==='starter-count'){const starter=new DocumentStore({database:()=>db,owner:()=> 'device'});const notes=await db.prepare("SELECT COUNT(*) AS count FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id JOIN personal_documents d ON d.id=c.document_id WHERE n.owner_id='device' AND d.format='service-directory'").first();return{count:(await starter.list({collection:'personal',limit:1})).total+(notes?.count||0)};}
   if(method==='copy-starter'){idle();if(!account.connected)throw new Error('Connect the account that should receive these starter cards.');const starter=new DocumentStore({database:()=>db,owner:()=> 'device'});return store.restore(await starter.export());}
   if(method==='open-link'){
     let url;try{url=new URL(args.url);}catch{throw new Error('This link is invalid.');}
@@ -117,9 +120,9 @@ async function boot(){
     try{return{ok:true,value:await invoke(request.method,request.args||{})};}catch(error){return{ok:false,error:safeError(error)};}
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},{label:'View',submenu:[{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]}]));
-  window=new BrowserWindow({width:1360,height:900,minWidth:980,minHeight:720,title:'Southlake Hive',backgroundColor:'#f4f8fa',autoHideMenuBar:true,webPreferences:{preload:path.join(root,'dist/preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}});
+  window=new BrowserWindow({width:1420,height:920,minWidth:980,minHeight:720,title:APP_NAME,backgroundColor:'#f4f8fa',autoHideMenuBar:true,webPreferences:{preload:path.join(root,'dist/preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}});
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith(uiOrigin+'/'))event.preventDefault();});
   window.on('close',event=>{if(ready&&!closing&&!window.webContents.isCrashed()){event.preventDefault();emit({type:'closing-requested'});}});
   window.on('closed',()=>{window=null;});await window.loadURL(uiOrigin+'/index.html');
 }
-if(hasLock)boot().catch(error=>{dialog.showErrorBox('Hive could not start',error.message+'\nYour previous saved data has been preserved.');app.quit();});
+if(hasLock)boot().catch(error=>{dialog.showErrorBox(APP_NAME+' could not start',error.message+'\nYour previous saved data has been preserved.');app.quit();});

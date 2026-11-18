@@ -8,14 +8,14 @@ root = pathlib.Path(__file__).resolve().parent.parent
 output = root.parent.parent / 'outputs'
 output.mkdir(exist_ok=True)
 version = json.loads((root / 'package.json').read_text(encoding='utf-8-sig'))['version']
-output = output / 'Southlake-Hive-Windows-2.0'
+output = output / ('Southlake-Care-Navigation-Support-Windows-' + '.'.join(version.split('.')[:2]))
 output.mkdir(exist_ok=True)
-destination = output / f'Southlake-Hive-Source-{version}.zip'
+destination = output / f'Southlake-Care-Navigation-Support-Source-{version}.zip'
 files = [root / name for name in (
     'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.gitignore',
-    'README.md', 'WINDOWS-DEVELOPMENT.md', 'START-HERE.md', 'SHARING.md', 'DIRECTORY-SOURCES.md', 'BUILDING.md', 'electron-builder.yml',
+    'README.md', 'RELEASE-NOTES.md', 'WINDOWS-DEVELOPMENT.md', 'START-HERE.md', 'SHARING.md', 'DIRECTORY-SOURCES.md', 'BUILDING.md', 'electron-builder.yml',
 )]
-for folder in ('src', 'ui', 'tests', 'scripts', 'assets', 'drizzle'):
+for folder in ('src', 'ui', 'tests', 'scripts', 'assets', 'drizzle', 'docs'):
     files.extend(item for item in (root / folder).rglob('*') if item.is_file() and '__pycache__' not in item.parts)
 with zipfile.ZipFile(destination, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=5) as archive:
     for file in sorted(files):

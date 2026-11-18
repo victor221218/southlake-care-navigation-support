@@ -1,5 +1,5 @@
-#define AppName "Southlake Hive"
-#define AppVersion "2.0.0"
+#define AppName "Southlake Care Navigation Support"
+#define AppVersion "2.1.0"
 
 [Setup]
 AppId={{DD39358A-679C-4ED1-A8F0-163CBE2DCED6}
@@ -17,7 +17,7 @@ DisableProgramGroupPage=yes
 DisableDirPage=yes
 DisableWelcomePage=no
 OutputDir=..\release\setup
-OutputBaseFilename=Southlake-Hive-Setup
+OutputBaseFilename=Southlake-Care-Navigation-Support-Setup-2.1.0
 SetupIconFile=..\assets\hive.ico
 UninstallDisplayIcon={app}\hive.ico
 Compression=lzma2/fast
@@ -30,14 +30,19 @@ UsePreviousAppDir=not PortableCheck
 Uninstallable=not PortableCheck
 
 [Files]
-Source: "..\release\windows-app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\release\windows-app-{#AppVersion}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+Type: files; Name: "{app}\Southlake Hive.exe"
+Type: files; Name: "{autodesktop}\Southlake Hive.lnk"; Check: not PortableCheck
+Type: files; Name: "{userprograms}\Southlake Hive\Southlake Hive.lnk"; Check: not PortableCheck
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\Southlake Hive.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; Check: not PortableCheck
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Southlake Hive.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; Check: not PortableCheck
+Name: "{group}\{#AppName}"; Filename: "{app}\Southlake Care Navigation Support.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; Check: not PortableCheck
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Southlake Care Navigation Support.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; Check: not PortableCheck
 
 [Run]
-Filename: "{app}\Southlake Hive.exe"; Description: "Open Southlake Hive"; Flags: nowait postinstall skipifsilent; Check: not PortableCheck
+Filename: "{app}\Southlake Care Navigation Support.exe"; Description: "Open Southlake Care Navigation Support"; Flags: nowait postinstall skipifsilent; Check: not PortableCheck
 
 [Code]
 function PortableCheck: Boolean;

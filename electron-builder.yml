@@ -1,5 +1,5 @@
 appId: org.team26.southlakehive
-productName: Southlake Hive
+productName: Southlake Care Navigation Support
 electronVersion: 45.3.2
 toolsets:
   nsis: 1.2.1
@@ -23,5 +23,5 @@ nsis:
   allowElevation: false
   runAfterFinish: true
   deleteAppDataOnUninstall: false
-  artifactName: Southlake-Hive-Setup.exe
+  artifactName: Southlake-Care-Navigation-Support-Setup.exe
   include: scripts/installer.nsh

@@ -16,7 +16,7 @@ args = parser.parse_args()
 runtimes = json.loads((root / '.runtime/runtimes.json').read_text())
 runtime = next(item for item in runtimes if item['platform'] == 'win32' and item['arch'] == 'x64')
 version = json.loads((root / 'package.json').read_text())['version']
-stage = root / (f'.runtime/assistant-smoke-{version}' if args.assistant_smoke else f'.runtime/voice-smoke-{version}' if args.voice_smoke else '.runtime/desktop-qa' if args.qa else 'release/windows-app')
+stage = root / (f'.runtime/assistant-smoke-{version}' if args.assistant_smoke else f'.runtime/voice-smoke-{version}' if args.voice_smoke else '.runtime/desktop-qa' if args.qa else f'release/windows-app-{version}')
 if args.document_smoke:
     stage = root / f'.runtime/document-smoke-{version}'
 stage.mkdir(parents=True, exist_ok=True)
@@ -28,7 +28,7 @@ with zipfile.ZipFile(runtime['path']) as archive:
         relative = pathlib.PurePosixPath(member.filename)
         if relative.is_absolute() or '..' in relative.parts:
             raise ValueError('Unexpected runtime archive path')
-        name = ('Southlake Hive Assistant Test.exe' if args.assistant_smoke else 'Southlake Hive Voice Test.exe' if args.voice_smoke else 'Southlake Hive.exe') if member.filename == 'electron.exe' else member.filename
+        name = ('Southlake Hive Assistant Test.exe' if args.assistant_smoke else 'Southlake Hive Voice Test.exe' if args.voice_smoke else 'Southlake Care Navigation Support.exe') if member.filename == 'electron.exe' else member.filename
         if args.document_smoke and member.filename == 'electron.exe':
             name = 'Southlake Hive Document Test.exe'
         destination = stage / name

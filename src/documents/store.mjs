@@ -54,28 +54,31 @@ export class DocumentStore {
       return this.changed({ document_id: id, count: parsed.sections.length, added, updated, duplicate: false });
     });
   }
-  async list({ query = '', document_id = null, include_archived = false, limit = 60, offset = 0 } = {}) {
-    const rows = (await this.db().prepare(`SELECT c.*,d.filename, (SELECT COUNT(*) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_count,
+  async list({ query = '', document_id = null, collection = 'all', category = '', include_archived = false, limit = 60, offset = 0 } = {}) {
+    if (!['all', 'services', 'personal'].includes(collection)) throw new Error('Choose a supported card collection.');
+    const rows = (await this.db().prepare(`SELECT c.*,d.filename,d.format AS source_format, (SELECT COUNT(*) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_count,
       (SELECT group_concat(body,' ') FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_text
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
-      WHERE c.owner_id=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''} ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : [])).all()).results;
+      WHERE c.owner_id=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
+      ${collection === 'services' ? "AND d.format='service-directory'" : collection === 'personal' ? "AND (d.format IS NULL OR d.format<>'service-directory')" : ''}
+      ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : [])).all()).results;
     const terms = tokens(query);
     const matches = rows.map(row => {
       const title = norm(row.title), haystack = norm(row.title + ' ' + row.body + ' ' + (row.comment_text || '') + ' ' + (row.filename || ''));
       return { row, matches: terms.every(term=>haystack.includes(term)), score: terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0) + (title.includes(term) ? 2 : 0), 0) };
-    }).filter(item => !terms.length || item.matches).sort((a, b) => b.score - a.score);
+    }).filter(item => (!category || JSON.parse(item.row.fields_json || '{}').Category === category) && (!terms.length || item.matches)).sort((a, b) => b.score - a.score || (collection === 'services' ? a.row.title.localeCompare(b.row.title) : 0));
     const total = matches.length;
     return { total, items: matches.slice(Math.max(0,offset), Math.max(0,offset) + Math.max(1, Math.min(100,limit))).map(({ row }) => {
       const card = unpack(row); delete card.fields_json; delete card.contacts_json; delete card.links_json; delete card.comment_text;
-      return { ...card, body: card.body.slice(0, 650), fields: undefined };
+      return { ...card, body: card.body.slice(0, 650), category: card.fields.Category || '', fields: undefined };
     }) };
   }
   async get(id) {
-    const card = unpack(await this.db().prepare('SELECT c.*,d.filename FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
+    const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
     if (!card) throw new Error('This card is not in your active workspace.');
     const comments = (await this.db().prepare('SELECT id,body,created_at,updated_at,version FROM personal_comments WHERE card_id=? AND owner_id=? ORDER BY created_at').bind(id, this.owner()).all()).results;
     delete card.fields_json; delete card.contacts_json; delete card.links_json;
-    return { ...card, comments };
+    return { ...card, category: card.fields.Category || '', comments };
   }
   async note({ title, body, id = null, expected_version = null, kind = 'note' }) {
     body = clean(body, 12000); title = clean(title || body.split('\n')[0], 140);
@@ -132,7 +135,7 @@ export class DocumentStore {
     return { format: 'southlake-personal-memory', version: 1, exported_at: now(), documents: docs, cards, comments };
   }
   async restore(data) {
-    if (data?.format !== 'southlake-personal-memory' || data.version !== 1 || !Array.isArray(data.cards) || data.cards.length > 20000 || !Array.isArray(data.documents) || !Array.isArray(data.comments) || data.comments.length > 50000) throw new Error('Choose a valid Hive personal-memory backup.');
+    if (data?.format !== 'southlake-personal-memory' || data.version !== 1 || !Array.isArray(data.cards) || data.cards.length > 20000 || !Array.isArray(data.documents) || !Array.isArray(data.comments) || data.comments.length > 50000) throw new Error('Choose a valid Southlake personal-memory backup.');
     const owner = this.owner(), docs = new Map(), cards = new Map(); let added = 0, notesAdded = 0;
     return this.db().transaction(async () => {
       for (const doc of data.documents) {

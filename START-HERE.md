@@ -1,13 +1,19 @@
-# Southlake Care Navigation Support — Windows 2.0 prototype
+# Southlake Care Navigation Support — Windows 2.1 prototype
 
-Open **Southlake-Hive-Setup-2.0.0.exe**, choose **Install**, then **Finish**. Open **Southlake Hive** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Southlake-Care-Navigation-Support-Setup-2.1.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
+## Known services are ready to browse
+
+Open **Known services** on the left for 27 researched service cards, with a category filter, search, public contact details and source links. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
+
+Choose **Ask about this card** before leaving service feedback so it is saved on that card. Open **Workspace** to see imported documents and personal message cards.
+
 ## Start with three steps
 
-1. **Connect ChatGPT.** Sign in on the official OpenAI page in your browser, review identity and plan-usage permission, then return to Hive. Use your own account. Account, workspace and app eligibility are decided by OpenAI; signing in alone does not prove AI usage is available. The app never switches to API billing.
-2. **Add a document.** Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Try a fictional sample** in the empty card list. The sample contains no real services or contacts.
+1. **Connect ChatGPT.** Sign in on the official OpenAI page in your browser, review identity and plan-usage permission, then return to the app. Use your own account. Account, workspace and app eligibility are decided by OpenAI; signing in alone does not prove AI usage is available. The app never switches to API billing.
+2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Workspace → Try a fictional sample** in the empty personal card list. The sample contains no real services or contacts.
 3. **Ask a question.** Matching source cards appear below the answer. Open one for its exact fields, contacts, source links and notes. **Ask about this card** makes it the conversation's selected source.
 
 **Your notes & corrections** save automatically when you pause. Wait for **Saved on this card**. Choose **New note** for a separate entry. Closing the card or app also waits for a pending note to save.
@@ -15,6 +21,10 @@ This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bi
 **Keep this message** saves the exact words you send. With a selected card, it becomes a note on that card; otherwise, it becomes a personal message card. Turn this off for questions you do not want to retain. Questions are labelled as your messages, not verified facts. AI replies do not automatically overwrite source records.
 
 **New conversation** clears this conversation and selected card. Saved cards and notes remain. The full chat transcript is not stored. Later questions retrieve relevant saved information again. This uses your saved records; it does not train the AI model or read your ChatGPT Memory.
+
+## Which model is answering?
+
+The app uses OpenAI’s hosted models through your ChatGPT connection. After the first AI answer or choosing a model, its name appears under **Ask your assistant**. Use **Connection & backup → Choose an available AI model** to see the options your account permits. The app initially prefers an available mini/instant model. It does not copy the model selected in a separate ChatGPT chat. The English speech model only transcribes your voice.
 
 ## Files and updates
 
@@ -28,19 +38,19 @@ Calculations use imported numeric cell values. Excel formulas are not executed o
 
 ## Private memory and backups
 
-Each ChatGPT connection has its own local records. Other Hive users do not receive your documents or notes. Different computers and Windows accounts have separate storage. There is no shared team database or automatic cross-computer synchronization.
+Each ChatGPT connection has its own local records. Other app users do not receive your documents or notes. Different computers and Windows accounts have separate storage. There is no shared team database or automatic cross-computer synchronization.
 
 You may import before sign-in in the **Starter workspace**. After sign-in, open **Connection & backup → Copy starter cards into this account**. This is an explicit private copy. Signing out keeps that account's cards for a verified reconnect and shows the separate starter workspace.
 
 Use **Save a backup** to export all extracted information, cards and notes. Use **Restore a backup** on another computer to add them to the active workspace. Matching records are retained to avoid duplicates. Original files and credentials are excluded. Keep the backup private. Restoring does not erase current records.
 
-Memory is normally in `%APPDATA%\Southlake Hive\documents.sqlite`; copied originals are in its `documents` subfolder. Credentials are separately encrypted in `account\chatgpt.auth` using Windows protected storage. The document database and backups are **not encrypted by Hive**. Protect the Windows account and backups. Earlier v1.x files, including hive.sqlite and practice.sqlite, are preserved but are not converted into this new document workspace.
+Memory is normally in `%APPDATA%\Southlake Hive\documents.sqlite`; copied originals are in its `documents` subfolder. Credentials are separately encrypted in `account\chatgpt.auth` using Windows protected storage. The document database and backups are **not encrypted by the app**. Protect the Windows account and backups. Earlier v1.x files, including hive.sqlite and practice.sqlite, are preserved but are not converted into this new document workspace.
 
-Only AI questions send your message and relevant saved text to OpenAI. Import, card search and note saving work without internet or ChatGPT. Sign-in does not give Hive access to your ChatGPT chats or ChatGPT Memory. Keep patient identifiers out of this pilot, consistent with the project scope.
+Only AI questions send your message and relevant saved text to OpenAI. Import, card search and note saving work without internet or ChatGPT. Sign-in does not give the app access to your ChatGPT chats or ChatGPT Memory. Keep patient identifiers out of this pilot, consistent with the project scope.
 
 ## Try this
 
-Import the fictional sample. Open **Example Community Rides**, add **“Practice note: call before referring.”**, and wait for the saved indicator. Start a new conversation, search for **Practice note**, and reopen the card. Close and reopen Hive to check it again.
+Choose Workspace and import the fictional sample. Open **Example Community Rides**, add **“Practice note: call before referring.”**, and wait for the saved indicator. Start a new conversation, search for **Practice note**, and reopen the card. Close and reopen the app to check it again.
 
 With an eligible ChatGPT connection, ask:
 
@@ -51,3 +61,7 @@ Expected calculation: **7 slots across 2 matching rows**. Turn off **Keep this m
 Live ChatGPT sign-in and inference on the recipient's eligible account, and live microphone access, remain recipient checks. Automated local parser, persistence, calculation, account-isolation and simulated AI checks do not prove these live capabilities.
 
 Official connection reference: https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt
+
+## Updating from version 2.0
+
+Close Southlake Hive before running the version 2.1 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The new public directory is added without replacing personal files. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.

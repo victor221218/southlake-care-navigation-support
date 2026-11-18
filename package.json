@@ -1,7 +1,7 @@
 {
   "name": "southlake-hive-desktop",
-  "productName": "Southlake Hive",
-  "version": "2.0.0",
+  "productName": "Southlake Care Navigation Support",
+  "version": "2.1.0",
   "description": "A personal document assistant with private source cards and persistent notes for Windows.",
   "author": "Team 26",
   "private": true,

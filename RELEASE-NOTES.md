@@ -1,20 +1,18 @@
-# Southlake Care Navigation Support 2.0.0 — Windows prototype
+# Southlake Care Navigation Support 2.1.0 — Windows update
 
-## Downloads
+- The app, window title, installer and shortcuts use Southlake Care Navigation Support.
+- Add a document sits beside Speak at the bottom of the chat.
+- Known services replaces the sidebar Add a note action. It opens 27 public service pathways with category filtering, search, phone/email or sourced named contact details, source links and review dates.
+- Workspace continues to show personal documents and saved messages. Notes and corrections stay on their selected card, including after a new conversation or restart. Public starting cards do not contain anyone's feedback or invented success rates.
+- Removed the sidebar line about documents/notes staying on the computer. The underlying personal storage behavior is preserved.
+- The chosen OpenAI model is visible after model selection or an AI request. Account-eligible model selection remains available in Connection & backup.
 
-Use the complete handoff ZIP for all deliverables in one download, or download the Windows installer and guide individually. The full handoff ZIP contains editable source files, not just a built executable.
+## Install or update
 
-## Included
+Close the previous app. Download and run **Southlake-Care-Navigation-Support-Setup-2.1.0.exe**, then open **Southlake Care Navigation Support**. The installer preserves the previous installation identity and Windows app-data folder, keeping document memory and saved connections. It does not introduce automatic updates or shared-team memory.
 
-- Windows installer with the application runtime, document readers and English speech-input model.
-- Personal document workspace, source cards, persistent notes and backup/restore.
-- Excel/CSV/TSV, Word, searchable PDF, text and Markdown import.
-- ChatGPT sign-in integration and source-grounded AI orchestration.
-- Original source, dependency lockfile, build instructions, tests and third-party notices.
-- The version 2.0.0 verification report: 69 automated checks and native Windows reader/persistence checks passed.
+## Validation and scope
 
-## Prototype limits
+77 automated checks passed. Native Windows checks passed for first-run service preload, service filter/search, contact/source controls, renamed interface, document-upload placement, card-note persistence, Excel/Word/PDF readers, document import, selected-card feedback, new conversation, close-save and reopen behavior. The release verification file records installer extraction and file-hash checks separately.
 
-The installer is unsigned. Real recipient ChatGPT eligibility/sign-in/inference, live microphone access and Southlake deployment approval remain verification tasks. AI answers require an admitted account/app connection. Sign-in does not grant access to ChatGPT conversations or ChatGPT Memory. Data handling and supported-file limits are described in START-HERE.md.
-
-There is no shared-user database or automatic personal-memory cloud sync in this build. No real account credentials or saved user records are included. The optional sample is explicitly fictional. This repository is a project prototype handoff, not an assertion of clinical deployment approval.
+This is an unsigned prototype update. Real recipient ChatGPT eligibility/sign-in/inference, microphone behavior on that computer, publisher signing and Southlake deployment approval remain recipient/administrator checks. AI uses OpenAI's hosted models through the connected eligible account; it is not a separately bundled local LLM and does not read ChatGPT chat history or ChatGPT Memory.
