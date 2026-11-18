@@ -33,14 +33,14 @@ The current deliverable is a Windows app. To connect it to ChatGPT, open Hive an
 
 ## The workflow
 
-| Step | What happens | Who |
-| --- | --- | --- |
-| **1. Install** | Open `Southlake-Hive-Setup-2.0.0.exe`, choose Install, then Finish. Later, open Southlake Hive from the desktop or Start menu. | User / tester |
-| **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to Hive. | User / tester |
-| **3. Add a document** | Choose Add a document, select a file, review its preview and warnings, then Save cards. | User / tester |
-| **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. | User / tester |
-| **5. Keep useful information** | Open a card, add notes or corrections, and wait for the saved indicator. Kept messages attach to the selected card or become personal message cards. | User / tester |
-| **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. | Technical team |
+| Step | What happens |
+| --- | --- |
+| **1. Install** | Open `Southlake-Hive-Setup-2.0.0.exe`, choose Install, then Finish. Later, open Southlake Hive from the desktop or Start menu. |
+| **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to Hive. |
+| **3. Add a document** | Choose Add a document, select a file, review its preview and warnings, then Save cards. |
+| **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
+| **5. Keep useful information** | Open a card, add notes or corrections, and wait for the saved indicator. Kept messages attach to the selected card or become personal message cards. |
+| **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. |
 
 ### Example
 
