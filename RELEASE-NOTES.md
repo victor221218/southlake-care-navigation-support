@@ -1,4 +1,4 @@
-# Southlake Hive 2.0.0 — Windows prototype
+# Southlake Care Navigation Support 2.0.0 — Windows prototype
 
 ## Downloads
 

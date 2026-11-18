@@ -1,4 +1,4 @@
-# Southlake Hive 2.0 — Windows pilot
+# Southlake Care Navigation Support — Windows 2.0 prototype
 
 Open **Southlake-Hive-Setup-2.0.0.exe**, choose **Install**, then **Finish**. Open **Southlake Hive** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 

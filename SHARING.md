@@ -1,6 +1,6 @@
 # Share the Windows app
 
-Send **Southlake-Hive-Setup-2.0.0.exe** and **Karen-Windows-Quick-Start.html** through an approved file-sharing service such as OneDrive or SharePoint, or a USB drive. Give the recipient download access. There is no ZIP to extract.
+Send **Southlake-Hive-Setup-2.0.0.exe** and **Windows-Quick-Start.html** through an approved file-sharing service such as OneDrive or SharePoint, or a USB drive. Give the recipient download access. There is no ZIP to extract.
 
 A C: drive link works on this computer only. To send a download link, upload the installer and share that actual file page. Building an installer does not create a public download URL.
 
@@ -10,7 +10,7 @@ Suggested message:
 
 ## Administrator checks
 
-The pilot installer is unsigned. Arrange approved software distribution and publisher signing before routine Southlake rollout. Do not ask Karen to bypass Windows protection. Verify the intended Windows computer, microphone, documents and real ChatGPT inference using the intended account/workspace. OpenAI controls account/app eligibility; a subscription label alone does not guarantee access. No API key or sponsor token is included.
+The pilot installer is unsigned. Arrange approved software distribution and publisher signing before routine Southlake rollout. Follow the organization's software approval process when Windows blocks an unsigned build. Verify the intended Windows computer, microphone, documents and real ChatGPT inference using the intended account/workspace. OpenAI controls account/app eligibility; a subscription label alone does not guarantee access. No API key or sponsor token is included.
 
 Hive independently implements the published Sign in with ChatGPT protocol. Confirm that the intended deployment is admitted and Southlake authorizes the document-data flow to OpenAI. The separately licensed demonstration DevKit is not bundled.
 

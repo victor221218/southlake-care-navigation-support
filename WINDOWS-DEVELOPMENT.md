@@ -1,6 +1,6 @@
 # Windows development — version 2.0.0
 
-These steps are for Matthew or a developer. Karen uses the finished Windows installer and needs none of these tools.
+These steps cover development and installer builds. End users use the finished Windows installer and need none of these tools.
 
 ## Prerequisites
 

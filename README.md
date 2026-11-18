@@ -1,25 +1,27 @@
-# Southlake Hive — Windows Personal Assistant
+# Southlake Care Navigation Support
 
-A Windows prototype that helps Karen and other navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
+A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
 **Status:** version 2.0.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
+The project is called **Southlake Care Navigation Support**. The existing version 2.0.0 Windows installer opens as **Southlake Hive**; use that name in the desktop or Start menu after installation.
+
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-hive-windows/releases/download/v2.0.0/Southlake-Hive-Handoff-2.0.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.0.0/Southlake-Hive-Handoff-2.0.0.zip)
 
-Everything Matthew needs to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
+Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Karen: install and try the app** | [Windows installer](https://github.com/victor221218/southlake-hive-windows/releases/download/v2.0.0/Southlake-Hive-Setup-2.0.0.exe) |
-| **Karen: short illustrated text guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-hive-windows/releases/download/v2.0.0/Karen-Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Matthew: download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-hive-windows/releases/download/v2.0.0/Southlake-Hive-Handoff-2.0.0.zip) |
-| **Matthew: read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.0.0/Southlake-Hive-Setup-2.0.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.0.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.0.0/Southlake-Hive-Handoff-2.0.0.zip) |
+| **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-hive-windows/releases/tag/v2.0.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.0.0) |
 
-The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Karen uses the installer; developers use the source files.
+The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
 ## What Hive and ChatGPT each do
 
@@ -33,12 +35,12 @@ The current deliverable is a Windows app. To connect it to ChatGPT, open Hive an
 
 | Step | What happens | Who |
 | --- | --- | --- |
-| **1. Install** | Open `Southlake-Hive-Setup-2.0.0.exe`, choose Install, then Finish. Later, open Southlake Hive from the desktop or Start menu. | Karen / tester |
-| **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to Hive. | Karen / tester |
-| **3. Add a document** | Choose Add a document, select a file, review its preview and warnings, then Save cards. | Karen / tester |
-| **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. | Karen / tester |
-| **5. Keep useful information** | Open a card, add notes or corrections, and wait for the saved indicator. Kept messages attach to the selected card or become personal message cards. | Karen / tester |
-| **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. | Matthew / technical team |
+| **1. Install** | Open `Southlake-Hive-Setup-2.0.0.exe`, choose Install, then Finish. Later, open Southlake Hive from the desktop or Start menu. | User / tester |
+| **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to Hive. | User / tester |
+| **3. Add a document** | Choose Add a document, select a file, review its preview and warnings, then Save cards. | User / tester |
+| **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. | User / tester |
+| **5. Keep useful information** | Open a card, add notes or corrections, and wait for the saved indicator. Kept messages attach to the selected card or become personal message cards. | User / tester |
+| **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. | Technical team |
 
 ### Example
 
@@ -90,7 +92,7 @@ Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Hive-Wind
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
 | `Southlake-Hive-Setup-2.0.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
-| `documentation/Karen-Windows-Quick-Start.html` | Short guide for Karen and testers |
+| `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
 | `documentation/Administrator-Handoff.md` | Maintenance/distribution notes and remaining rollout checks |
 | `Verification.json` | The test and installer-verification summary |
@@ -99,7 +101,7 @@ Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Hive-Wind
 
 ## Source code map
 
-These files are for Matthew or another developer. Karen does not need to open or run them.
+These files are for developers. End users do not need to open or run them.
 
 | File or folder | What it does |
 | --- | --- |
@@ -135,7 +137,7 @@ pnpm start
 
 Build before testing because the document tests execute the built background reader. Creating a distributable installer additionally needs Python, the matching official Windows Electron runtime and Inno Setup. Follow [WINDOWS-DEVELOPMENT.md](WINDOWS-DEVELOPMENT.md) for the exact configuration and commands.
 
-Karen's finished installer does not require these developer tools.
+The finished installer does not require these developer tools.
 
 ## What has been checked
 
@@ -156,4 +158,4 @@ AI questions send the question and relevant saved text to OpenAI. File import an
 
 No real user records, imported private documents, passwords or account credentials are included in this repository or its handoff downloads. Third-party components retain their original licenses and notices; the Vosk notices are included under assets and the built app includes collected dependency notices.
 
-The pilot is initially published from `victor221218` for handoff. Matthew and Southlake can arrange ongoing repository administration or transfer later. The software downloads and its original source remain available together through the release page.
+Repository administration can be transferred to the receiving technical team as part of the handoff. The downloads and original source are available together through the release page.
