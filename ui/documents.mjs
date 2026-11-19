@@ -9,7 +9,7 @@ const feedbackLabels = {
   unselected: 'No service selected',
   recorded: 'Feedback recorded'
 };
-let caseFeedback = '', caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHistory = null;
+let caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHistory = null;
 let expandedMemoryGroup = '', memoryHistoryOffset = 0;
 let manualWrapUp = false;
 const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
@@ -51,17 +51,29 @@ function answerCardHTML(card, reply) {
       ${button('open-card','View details','answer-card-details',`${details} data-reply-id="${e(reply.id)}" aria-label="View details for ${e(card.title)}"`)}
     </div></article>`;
 }
-function nextSteps(completion) {
+function completionMessage(completion) {
   const attrs = `data-id="${e(activeCase.id)}" data-version="${activeCase.version}"`;
-  return `<section class="case-next-steps" aria-label="Conversation next steps">
-    <h4 tabindex="-1">What would you like to do next?</h4>
-    <div class="case-next-actions">
-      ${button('keep-case-open','Keep chat open<small>Return to this conversation later.</small>','secondary',
-        `${attrs} data-message-id-for-completion="${e(completion?.message_id || '')}"`)}
-      ${button('archive-case','Add to memory library<small>Save the conversation as one item.</small>','primary',attrs)}
-      ${button('delete-case','Delete chat and notes<small>Remove this chat and the feedback saved from it.</small>','secondary danger',
-        `${attrs} data-include-notes="true"`)}
-    </div></section>`;
+  return `<article class="message assistant completion-message" aria-labelledby="completion-title">
+    <div class="message-label">ASSISTANT</div>
+    <div class="case-next-steps">
+      <h3 id="completion-title" tabindex="-1">What would you like to do next?</h3>
+      ${completion ? `<div class="completion-summary"><strong>${e(completion.title)}</strong>${resultBadge(completion)}</div>` : ''}
+      <div class="case-next-actions">
+        ${button('keep-case-open','Keep in chat history<small>Leave this chat in the sidebar.</small>','secondary',
+          `${attrs} data-message-id-for-completion="${e(completion?.message_id || '')}"`)}
+        ${button('archive-case','Add to memory library<small>File this chat in Manage memory.</small>','primary',attrs)}
+        ${button('delete-case','Delete chat and notes<small>Remove this chat and the feedback saved from it.</small>','secondary danger',
+          `${attrs} data-include-notes="true"`)}
+      </div>
+    </div>
+  </article>`;
+}
+function focusCompletionMessage() {
+  const heading = $('completion-title');
+  if (!heading) return false;
+  heading.closest('.completion-message').scrollIntoView({block:'end',behavior:'instant'});
+  heading.focus({preventScroll:true});
+  return true;
 }
 function renderChatFollowup(message) {
   const followup = message.followup;
@@ -135,9 +147,7 @@ function renderChatFollowup(message) {
         <h3 id="followup-${e(message.id)}" tabindex="-1">${e(title)}</h3>${addNote}
       </div>
       ${contacts}${savedNote}${content}${available && !archived ? followupInputTools(followup.history, stepButton) : ''}
-    </section>
-    ${!busy && !manualWrapUp && !archived && followup.result && activeCase?.completion?.message_id === message.id
-      ? nextSteps(activeCase.completion) : ''}</article>`;
+    </section></article>`;
 }
 function renderModel(){const selected=state?.models?.selected,item=state?.models?.items?.find(m=>m.id===selected);$('model-status').textContent=selected?'AI model: '+(item?.name||selected):state?.account.sharing?'ChatGPT · model selected when you ask':'Connect ChatGPT for AI answers';}
 function serviceRowHTML(card){const contact=card.contacts?.[0];return `<article class="service-row" data-service-id="${e(card.id)}"><div class="service-row-info">${card.comment_count?`<div class="service-experience-preview">${experienceHTML(card.experience)}<small>Your latest note: ${e(card.latest_note)}</small></div>`:''}<span class="card-kicker">${e(card.category||'Known service')}</span>${button('open-card',e(card.title),'service-title',`data-id="${e(card.id)}"`)}<p>${e(card.body?.split('\n')[0]||'')}</p><span class="service-area">${e(card.area||'Confirm the service area with intake')}</span></div><div class="service-row-contact"><strong>${e(contact?.name||'Program contact')}</strong><span>${e(contact?.value||'See provider details')}</span>${card.comment_count?`<small>${card.comment_count} saved note${card.comment_count===1?'':'s'} / result${card.comment_count===1?'':'s'}</small>`:''}</div><div class="service-row-actions">${button('open-card','View details','secondary',`data-id="${e(card.id)}"`)}${button('ask-service','Ask assistant','quiet',`data-id="${e(card.id)}"`)}</div></article>`;}
@@ -193,23 +203,28 @@ function weekLabel(value) {
   });
 }
 function renderCases() {
-  const weeks = new Map();
+  const groups = new Map(Object.keys(feedbackLabels).map(status => [status, new Map()]));
+  const term = caseFilter.trim().toLowerCase();
   for (const chat of state?.cases?.items || []) {
+    if (!chat.title.toLowerCase().includes(term)) continue;
+    const weeks = groups.get(chat.feedback);
     const week = weekLabel(chat.activity_at);
     if (!weeks.has(week)) weeks.set(week, []);
     weeks.get(week).push(chat);
   }
-  const content = [...weeks].map(([week,chats]) => `<section class="case-week">
-    <h3>${e(week)}</h3>${chats.map(chat => {
-      const current = activeCase?.id === chat.id;
-      const label = feedbackLabels[chat.feedback];
-      return `<div class="case-item ${current?'active':''}" data-case-row="${e(chat.id)}" data-feedback="${e(chat.feedback)}">
-        <button data-action="open-case" data-id="${e(chat.id)}" title="${e(chat.title)}" aria-current="${current}">
-          <strong>${e(chat.title)}</strong><small><span class="case-status-dot" aria-hidden="true"></span>${e(label)}</small>
-        </button>
-        ${button('case-menu','⋯','case-more',`data-id="${e(chat.id)}" aria-label="Actions for ${e(chat.title)}" aria-controls="case-action-menu" aria-expanded="false"`)}
-      </div>`;
-    }).join('')}</section>`).join('') || '<p class="case-empty">No matching conversations.</p>';
+  const content = [...groups].filter(([,weeks]) => weeks.size).map(([status,weeks]) => `
+    <section class="case-group" data-feedback="${status}" aria-labelledby="case-group-${status}">
+      <h3 id="case-group-${status}"><span class="case-status-dot" aria-hidden="true"></span>${feedbackLabels[status]}</h3>
+      ${[...weeks].map(([week,chats]) => `<div class="case-week"><h4>${e(week)}</h4>${chats.map(chat => {
+        const current = activeCase?.id === chat.id;
+        return `<div class="case-item ${current?'active':''}" data-case-row="${e(chat.id)}" data-feedback="${status}">
+          <button data-action="open-case" data-id="${e(chat.id)}" title="${e(chat.title)}" aria-current="${current}">
+            <strong>${e(chat.title)}</strong>
+          </button>
+          ${button('case-menu','⋯','case-more',`data-id="${e(chat.id)}" aria-label="Actions for ${e(chat.title)}" aria-controls="case-action-menu" aria-expanded="false"`)}
+        </div>`;
+      }).join('')}</div>`).join('')}
+    </section>`).join('') || `<p class="case-empty">${term ? 'No chats match your search.' : 'No chats yet.'}</p>`;
   const list = $('case-list');
   if (caseListMarkup === content) return;
   hideCaseMenu();
@@ -219,10 +234,9 @@ function renderCases() {
   list.scrollTop = top;
 }
 async function refreshCaseList() {
-  const options = {query:caseFilter, feedback:caseFeedback};
-  const owner = state?.account.profileId;
-  const result = await api('list-cases', options);
-  if (!state || owner !== state.account.profileId || options.query !== caseFilter || options.feedback !== caseFeedback) return;
+  const snapshot = state;
+  const result = await api('list-cases', {all:true});
+  if (!snapshot || state !== snapshot) return;
   state.cases = result;
   renderCases();
 }
@@ -373,12 +387,7 @@ async function actOnFollowup(action, target) {
     lockCase(false);
   }
   const reply = $('messages').querySelector(`[data-message-id="${CSS.escape(result.id)}"]`);
-  const wrapUp = reply?.querySelector('.case-next-steps');
-  if (wrapUp && ['save','save-note','redo'].includes(args.step)) {
-    wrapUp.scrollIntoView({block:'nearest',behavior:'instant'});
-    wrapUp.querySelector('h4')?.focus({preventScroll:true});
-    return;
-  }
+  if (['save','save-note','cancel-note','redo'].includes(args.step) && focusCompletionMessage()) return;
   reply?.scrollIntoView({block:'nearest',behavior:'instant'});
   const opposite = args.step === 'undo' ? 'redo' : args.step === 'redo' ? 'undo' : null;
   const correction = opposite && reply?.querySelector(`[data-step="${opposite}"]`);
@@ -405,7 +414,7 @@ async function caseOptions(id=activeCase?.id,{renameOnly=false}={}) {
       ? `<div>${button('archive-case','Add to memory library','secondary',attrs+(record.message_count?'':' disabled'))}
         <p>${record.message_count?keepChatHelp:'Send a message to save this conversation.'}</p></div>`
       : `<div>${button('reopen-case','Reopen conversation','secondary',attrs)}
-        <p>Bring this conversation back to Case chats to continue.</p></div>`}
+        <p>Bring this conversation back to Chat history to continue.</p></div>`}
     <div>${button('delete-case','Delete chat history','quiet danger',attrs)}
       <p>${deleteChatHelp} You can manage separately recorded service notes and results in their organization’s history.</p></div></section>`;
   await openModal(modalHead(renameOnly?'Rename conversation':'Case options',record.title)+`<div class="detail-body case-options">
@@ -421,9 +430,7 @@ async function finishConversation(id) {
   await loadCase(id);
   manualWrapUp=true;
   renderMessages();
-  const heading=$('messages').querySelector('.case-next-steps h4');
-  heading?.parentElement.scrollIntoView({block:'nearest',behavior:'instant'});
-  heading?.focus({preventScroll:true});
+  focusCompletionMessage();
 }
 async function keepCaseOpen(target) {
   const id=target.dataset.id;
@@ -437,10 +444,11 @@ async function keepCaseOpen(target) {
     }
     manualWrapUp=false;
     renderMessages();
-    $('message').focus({preventScroll:true});
   } finally {
     lockCase(false);
   }
+  $('message').focus({preventScroll:true});
+  notice('Chat kept in Chat history.');
 }
 async function applyInputHistory(direction, target) {
   if (busy || caseChanging || !noteEditor) return;
@@ -483,7 +491,7 @@ function renderLibraryMode(){
   document.querySelectorAll('[data-library-mode]').forEach(b=>{const active=b.dataset.libraryMode===libraryMode;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
 }
 async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
-async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';caseFeedback='';$('case-search').value='';$('case-feedback-filter').value='';}if(caseFilter||caseFeedback)await refreshCaseList();$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent='Windows · version '+state.version;
+async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';$('case-search').value='';}$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent='Windows · version '+state.version;
   $('document-filter').innerHTML='<option value="">All sources</option>'+state.documents.map(d=>`<option value="${e(d.id)}">${e(d.filename)} (${d.card_count})</option>`).join('');if(documentFilter&&!state.documents.some(d=>d.id===documentFilter))documentFilter='';$('document-filter').value=documentFilter;
   $('category-filter').innerHTML='<option value="">All service categories</option>'+(state.serviceCategories||[]).map(c=>`<option value="${e(c)}">${e(c)}</option>`).join('');$('category-filter').value=category;renderLibraryMode();renderModel();renderCases();renderUndo();await loadCards();const identity=state.account.profileId||'device';if(!activeCase||activeOwner!==identity){activeCase=null;activeOwner=identity;await loadCase(state.active_case.id,{activate:false});}else if(activeCase.id===state.active_case.id){activeCase={...activeCase,...state.active_case};renderCaseTitle();}}
 async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='workspace')return;
@@ -519,21 +527,22 @@ async function changeMemoryHistory(target) {
   current?.focus({preventScroll:true});
 }
 function shell(){
-  $('app').innerHTML=`<aside class="sidebar"><div class="brand"><img class="brand-mark" src="care-navigation-logo.png" alt=""><div><strong>Care Navigation Support</strong><span>Personal assistant</span></div></div><nav>${button('workspace','◫ &nbsp; Workspace','nav-item active','data-library-mode="workspace"')}${button('known-services','▤ &nbsp; Known services','nav-item','data-library-mode="services"')}${button('manage-memory','▧ &nbsp; Manage memory','nav-item','data-library-mode="memory"')}</nav><section class="case-sidebar"><div class="case-sidebar-heading"><h2>Case chats</h2>${button('new-chat','＋ New topic','quiet')}</div><label class="sr-only" for="case-search">Search case chats</label><input id="case-search" placeholder="Search case chats"><label class="sr-only" for="case-feedback-filter">Filter chats by feedback status</label>
-      <select id="case-feedback-filter"><option value="">All conversations</option><option value="needed">Feedback needed</option><option value="unselected">No service selected</option><option value="recorded">Feedback recorded</option></select><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.13</span></div></aside>
+  $('app').innerHTML=`<aside class="sidebar"><div class="brand"><img class="brand-mark" src="care-navigation-logo.png" alt=""><div><strong>Care Navigation Support</strong><span>Personal assistant</span></div></div><nav>${button('workspace','◫ &nbsp; Workspace','nav-item active','data-library-mode="workspace"')}${button('known-services','▤ &nbsp; Known services','nav-item','data-library-mode="services"')}${button('manage-memory','▧ &nbsp; Manage memory','nav-item','data-library-mode="memory"')}</nav><section class="case-sidebar" aria-labelledby="chat-history-title">
+      <h2 id="chat-history-title">Chat history</h2>
+      ${button('new-chat','<span aria-hidden="true">+</span> New chat','case-new secondary')}
+      <label class="sr-only" for="case-search">Search chat history</label>
+      <input id="case-search" type="search" placeholder="Search chats">
+      <div id="case-list" class="case-list"></div>
+    </section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.14</span></div></aside>
   <div id="case-action-menu" class="case-action-menu" popover="auto" aria-label="Conversation actions"></div>
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
   <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Personal notes</option><option value="feedback">Service results & notes</option><option value="chats">Saved conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Public service research · confirm current eligibility and capacity.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
-  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New topic','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
+  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New chat','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
   $('case-search').addEventListener('input',()=>{
     caseFilter=$('case-search').value;
-    clearTimeout(refreshCaseList.searchTimer);
-    refreshCaseList.searchTimer=setTimeout(()=>refreshCaseList().catch(fail),120);
-  });
-  $('case-feedback-filter').addEventListener('change',()=>{
-    caseFeedback=$('case-feedback-filter').value;
-    refreshCaseList().catch(fail);
+    $('case-list').scrollTop=0;
+    renderCases();
   });
   $('case-action-menu').addEventListener('beforetoggle',event=>{
     if(event.newState==='closed'){
@@ -555,7 +564,7 @@ function shell(){
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage().catch(fail);}});
   renderLibraryMode();renderMessages();
 }
-function renderMessages(forceScroll=false){
+function renderMessages(forceScroll=false, {scrollToReply=false}={}){
   const viewport=$('messages'),follow=forceScroll||viewport.scrollHeight-viewport.scrollTop-viewport.clientHeight<80,previous=viewport.scrollTop;
   viewport.innerHTML=(caseHasMore?button('earlier-messages','↑ Earlier messages','quiet earlier-messages'):'')+(messages.length?messages.map((m,index)=>{
     if (m.followup) return renderChatFollowup(m);
@@ -565,13 +574,17 @@ function renderMessages(forceScroll=false){
     return `<article class="message ${m.role}" data-message-sequence="${m.sequence||''}"><div class="message-label">${m.role==='user'?'YOU':'ASSISTANT'}${m.source?`<span>${e(m.source==='chatgpt'?'ChatGPT':m.source==='local'?'Saved information':m.source==='error'?'Connection interrupted':m.source)}</span>`:''}${m.saved?'<span class="saved-marker">Saved to memory</span>':''}</div>${answer}${!pending&&m.cards?.length?`<div class="answer-cards">${m.cards.map(c=>answerCardHTML(c,m)).join('')}</div>`:''}${!pending&&m.calculations?.length?`<div class="calculation-proof">${m.calculations.map(c=>`<div>Calculated from ${e(c.matched_rows)} matching row(s) · ${e(c.operation)}${c.column?' of '+e(c.column):''}${c.value!==undefined?' = '+e(c.value??'No numeric values'):''}</div>`).join('')}</div>`:''}${m.role==='assistant'&&m.error?button('retry','Retry question','quiet',`data-index="${index}"`):''}</article>`;
   }).join(''):`<div class="chat-welcome"><img class="welcome-icon" src="care-navigation-logo.png" alt=""><h2>A clearer way to work<br>with your information.</h2><p>Ask a question, add a document, or keep a case conversation for later.</p><div class="prompt-chips">${button('prompt','Find a local service','prompt',`data-prompt="Find transportation services in North York. Show the service cards and contact details."`)}${button('prompt','Summarize a document','prompt',`data-prompt="Summarize my latest imported document. Highlight anything I should follow up on."`)}${button('prompt','Recall my notes','prompt',`data-prompt="What have I saved in my personal notes? Show the matching cards."`)}</div><small>Use a case title without patient names or identifiers.</small></div>`)
     +(caseHasNewer ? button('latest-messages','↓ Latest messages','quiet latest-messages') : '')
-    +(!busy && activeCase?.status === 'active' &&
-      (manualWrapUp || (activeCase.completion && !messages.some(message=>message.id===activeCase.completion.message_id)))
-      ? `<article class="message assistant"><div class="message-label">ASSISTANT</div>
-        ${!manualWrapUp ? `<div class="completion-summary"><strong>${e(activeCase.completion.title)}</strong>
-          ${resultBadge(activeCase.completion)}</div>` : ''}${nextSteps(activeCase.completion)}</article>` : '');
+    +(!busy && activeCase?.status === 'active' && (manualWrapUp || activeCase.completion)
+      ? completionMessage(activeCase.completion) : '');
   updateFollowupControls();
-  if(forceScroll){const last=viewport.querySelector('.message:last-of-type');viewport.scrollTo({top:last?last.getBoundingClientRect().top-viewport.getBoundingClientRect().top+viewport.scrollTop:viewport.scrollHeight,behavior:'instant'});}else viewport.scrollTop=follow?viewport.scrollHeight:previous;
+  if (forceScroll) {
+    const replies = viewport.querySelectorAll(scrollToReply ? '.message:not(.completion-message)' : '.message');
+    const last = replies[replies.length - 1];
+    const top = last ? last.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop : viewport.scrollHeight;
+    viewport.scrollTo({top,behavior:'instant'});
+  } else {
+    viewport.scrollTop=follow?viewport.scrollHeight:previous;
+  }
 }
 function setBusy(value){busy=value;$('send-button').textContent=value?'Stop':'Send ↑';$('message').disabled=value||caseChanging;$('add-document').disabled=value||caseChanging||importing;$('voice-button').disabled=value||caseChanging;renderAssistantSurface();renderUndo();updateFollowupControls();}
 async function sendMessage(retryText=null,retryTurnId=null){
@@ -586,7 +599,7 @@ async function sendMessage(retryText=null,retryTurnId=null){
     messages.push({role:'user',text});response={role:'assistant',text:''};messages.push(response);$('message').value='';renderMessages(true);
     const answer=await api('chat',{text,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer);response.error=answer.source==='error';await refresh();
   }catch(error){if(response){response.text=error.message;response.error=true;response.source='error';}else fail(error);}
-  finally{if(response&&response.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}setBusy(false);renderMessages(true);$('message').focus();}
+  finally{if(response&&response.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}setBusy(false);renderMessages(true,{scrollToReply:true});$('message').focus();}
 }
 function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div></div>`:'';}
 function resultDraft(){return feedbackEditor?{outcome:feedbackEditor.outcome,rating:$('result-rating')?.value||'',body:$('result-note')?.value||''}:null;}

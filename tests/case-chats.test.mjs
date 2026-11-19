@@ -69,6 +69,9 @@ test('the case queue sorts meaningful activity and reflects pending feedback, sa
     assert.equal((await f.cases.list({feedback:'needed'})).total,1);
     const finished = (await followups.update({...step,step:'save',rating:5})).payload.followup;
     assert.equal((await f.cases.list({feedback:'recorded'})).items[0].id,topic.id);
+    const fullHistory = await f.cases.list({limit:1,all:true});
+    assert.deepEqual(new Map(fullHistory.items.map(item=>[item.id,item.feedback])),
+      new Map([[topic.id,'recorded'],[other.id,'unselected']]));
     const undone = (await followups.update({...step,step:'undo',change_id:finished.history.undo.id})).payload.followup;
     assert.equal((await f.cases.list({feedback:'needed'})).total,1);
     await followups.update({...step,step:'redo',change_id:undone.history.redo.id});
@@ -81,7 +84,7 @@ test('the case queue sorts meaningful activity and reflects pending feedback, sa
     assert.equal((await f.store.memories({kind:'chats'})).total,0);
     assert.equal((await f.cases.list({feedback:'recorded'})).total,1);
     f.switch('other-account');
-    assert.equal((await f.cases.list()).total,0);
+    assert.equal((await f.cases.list({all:true})).total,0);
   } finally { await f.close(); }
 });
 

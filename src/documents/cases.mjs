@@ -18,7 +18,7 @@ export class DocumentCases {
   db(){return this.store.db();} owner(){return this.store.owner();}
   changed(value){this.db().afterCommit(()=>this.store.emit({type:'cases-changed',value}));return value;}
   async row(id){const value=await this.db().prepare('SELECT * FROM personal_cases WHERE id=? AND owner_id=?').bind(id,this.owner()).first();if(!value)throw new Error('This case is not in your active account.');return value;}
-  async list({query='',feedback='',limit=100}={}) {
+  async list({query='',feedback='',limit=100,all=false}={}) {
     const {results} = await this.db().prepare(`
       SELECT c.id, c.title, c.version, c.created_at, COUNT(m.id) AS message_count,
         COALESCE(MAX(m.updated_at), c.created_at) AS activity_at,
@@ -36,7 +36,7 @@ export class DocumentCases {
       ...row,
       feedback: row.feedback_sequence != null ? 'needed' : row.selection_count ? 'recorded' : 'unselected'
     })).filter(row => row.title.toLowerCase().includes(term) && (!feedback || row.feedback === feedback));
-    return {total:items.length, items:items.slice(0, Math.min(200,Math.max(1,Number(limit)||100)))};
+    return {total:items.length, items:all === true ? items : items.slice(0, Math.min(200,Math.max(1,Number(limit)||100)))};
   }
   async completion(row) {
     if (row.status !== 'active') return null;

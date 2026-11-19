@@ -22,9 +22,14 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const week = new Date();
   week.setDate(week.getDate()-(week.getDay()+6)%7);
   const currentWeek='Week of '+week.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
-  assert(document.querySelector(row(a)).closest('.case-week').querySelector('h3').textContent===currentWeek,'The sidebar must group the chat by its Monday week.');
+  assert(document.querySelector(row(a)).closest('.case-week').querySelector('h4').textContent===currentWeek,'Each status group must show the chat by its Monday week.');
   assert(!document.querySelector('.sidebar .input-tools'),'Saved-input corrections must not be in the sidebar.');
-  assert(document.querySelector('[data-action="new-chat"]').textContent.includes('New topic'));
+  const sidebar=document.querySelector('.case-sidebar');
+  const controls=[sidebar.querySelector('h2'),sidebar.querySelector('[data-action="new-chat"]'),
+    sidebar.querySelector('#case-search'),sidebar.querySelector('#case-list')];
+  assert(controls[0]?.textContent==='Chat history'&&controls[1]?.textContent.includes('New chat')&&
+    controls.every((control,index)=>control&&(!index||control.getBoundingClientRect().top>=controls[index-1].getBoundingClientRect().bottom))&&
+    !sidebar.querySelector('select'),'Chat history, New chat, search and the list must be stacked in order without a dropdown.');
   let assistant=document.querySelector('.message.assistant:last-child'),cards=assistant.querySelectorAll('.answer-card');
   const savedReply=(await request('get-case',{id:a})).messages.at(-1);
   assert(cards.length===savedReply.payload.cards.length&&cards.length>2,'Show every returned choice without expanding.');
@@ -63,15 +68,13 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const followupChoicesCapture=await window.hiveSmoke.capture('followup-choices');
   click('.chat-followup [data-step="later"]');await wait(()=>document.querySelector('.chat-followup [data-step="resume"]'));
   assert((await request('get-card',{id:chosenId})).experience.not_worked===previousResultCount,'Not yet must never record an outcome.');
-  filter('case-feedback-filter','needed');
-  await wait(()=>document.querySelectorAll('.case-item').length===1&&document.querySelector(row(a)+'[data-feedback="needed"]'));
+  await wait(()=>document.querySelector('.case-group[data-feedback="needed"] '+row(a)));
   click(row(a)+' [data-action="case-menu"]');
   await wait(()=>document.querySelector(menu+' [data-action="review-case-feedback"]'));
   assert(document.querySelector(row(a)+' [data-action="case-menu"]').getAttribute('aria-expanded')==='true');
   click(menu+' [data-action="review-case-feedback"]');
   await wait(()=>document.activeElement.dataset.step==='resume');
   assert(!document.querySelector(menu),'The floating menu should close after jumping to feedback.');
-  filter('case-feedback-filter','');
   click('.chat-followup [data-step="resume"]');await wait(()=>document.querySelector('.chat-followup [data-outcome="not_worked"]'));
   click('.chat-followup [data-outcome="not_worked"]');
   await wait(()=>document.querySelector('.chat-followup textarea')&&!document.querySelector('.chat-followup textarea').disabled);
@@ -81,7 +84,6 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const draftRating=document.querySelector('.chat-followup select');
   draftRating.value='2';draftRating.dispatchEvent(new Event('change',{bubbles:true}));
   assert((await request('get-card',{id:chosenId})).experience.not_worked===previousResultCount,'An unsaved choice or note must not affect service history.');
-  const followupFeedbackCapture=await window.hiveSmoke.capture('followup-feedback');
   click(row(a)+' [data-action="case-menu"]');
   click(menu+' [data-rename-only="true"]');
   await wait(()=>document.getElementById('case-title-input'));
@@ -94,14 +96,29 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   await send('Keep the walker requirement for the return trip.');type('message','Draft retained with the long-running case.');
   click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
   const b=(await request('snapshot')).active_case.id;await send('Meal support follow-up for a separate case.');
-  type('case-search','Long transport');await wait(()=>document.querySelectorAll('.case-item').length===1);assert(document.querySelector('.case-item').dataset.caseRow===a);type('case-search','');await wait(()=>document.querySelectorAll('.case-item').length>=2);
+  type('case-search','Long transport');
+  assert(document.querySelectorAll('.case-group').length===1&&
+    document.querySelector('.case-group[data-feedback="needed"] '+row(a))&&
+    document.querySelectorAll('.case-item').length===1,'Search must keep the matching chat under its status.');
+  type('case-search','No matching practice topic');
+  assert(document.querySelector('.case-empty')?.textContent==='No chats match your search.');
+  type('case-search','');
+  await wait(()=>document.querySelectorAll('.case-group').length===3);
+  assert([...document.querySelectorAll('.case-group h3')].map(heading=>heading.textContent).join('|')===
+    'Feedback needed|No service selected|Feedback recorded','All populated feedback categories must be visible in order.');
+  assert(document.querySelector('.case-group[data-feedback="unselected"] '+row(b)));
   click(`[data-case-row="${a}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent==='Long transport follow-up'&&document.getElementById('message').value==='Draft retained with the long-running case.');
   assert(document.getElementById('messages').textContent.includes('walker requirement')&&!document.getElementById('messages').textContent.includes('Meal support follow-up'),'Reopening a case must show only that discussion.');
   const returnedNote=document.querySelector('.chat-followup textarea');
   assert(returnedNote?.value===noteText&&document.querySelector('.chat-followup select')?.value==='2','Returning to the topic must restore the feedback draft.');
+  const followupFeedbackCapture=await window.hiveSmoke.capture('followup-feedback');
   click('.chat-followup [data-step="save"]');await wait(()=>document.querySelector('.followup-saved')&&document.body.dataset.caseChanging==='false');
   const steps='.case-next-steps';
-  assert(document.querySelector(steps+' h4')?.textContent==='What would you like to do next?');
+  const completion=document.querySelector('.completion-message');
+  const heading=completion?.querySelector('#completion-title');
+  assert(completion===document.getElementById('messages').lastElementChild&&
+    !document.querySelector('.followup-message '+steps)&&heading?.textContent==='What would you like to do next?'&&
+    document.activeElement===heading,'Saving must open a separate assistant message at the end and move focus to its choices.');
   assert(document.querySelectorAll(steps+' button').length===3);
   const recorded=(await request('get-card',{id:chosenId})).comments.find(note=>note.body===noteText);
   assert(recorded?.rating===2&&recorded.outcome==='not_worked','The note and rating must save to the selected provider.');
@@ -117,6 +134,13 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert((await request('get-card',{id:chosenId})).comments.some(note=>note.id===recorded.id&&note.rating===2));
   await wait(()=>document.querySelector(row(a)+'[data-feedback="recorded"]'));
   const caseChatsCapture=await window.hiveSmoke.capture('case-chats');
+  await send('Show me suitable service cards for transportation in North York.');
+  const nextReply=document.querySelector('.completion-message').previousElementSibling;
+  const firstChoice=nextReply.querySelector('.answer-card')?.getBoundingClientRect();
+  const discussion=document.getElementById('messages').getBoundingClientRect();
+  assert(firstChoice?.top>=discussion.top-1&&firstChoice.top<discussion.bottom,
+    'A new question should open at its answer even with the completion choices waiting below.');
+  type('message','Draft retained with the long-running case.');
   click(row(a)+' [data-action="case-menu"]');
   const saveChoice=document.querySelector(menu+' [data-action="archive-case"]');
   const deleteChoice=document.querySelector(menu+' [data-action="delete-case"]');
@@ -124,7 +148,7 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert(deleteChoice?.textContent.startsWith('Delete chat history')&&deleteChoice.querySelector('small')?.textContent.includes('inaccurate'));
   document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
   click(steps+' [data-action="archive-case"]');await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
-  const archived=(await request('get-case',{id:a}));assert(archived.status==='archived'&&archived.message_count===5);const archiveCard=archived.archive_card_id;
+  const archived=(await request('get-case',{id:a}));assert(archived.status==='archived'&&archived.message_count===7);const archiveCard=archived.archive_card_id;
   assert(!(await request('list-memory',{query:'walker requirement'})).items.some(i=>i.kind==='message'),'Saving the case should consolidate its automatic message cards.');
   click(row(b)+' [data-action="case-menu"]');window.confirm=()=>false;click(menu+' [data-action="delete-case"]');assert((await request('get-case',{id:b})).status==='active');
   click(row(b)+' [data-action="case-menu"]');window.confirm=()=>true;click(menu+' [data-action="delete-case"]');await wait(()=>!document.querySelector(row(b))&&document.body.dataset.caseChanging==='false');window.confirm=originalConfirm;
@@ -139,7 +163,7 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   await revealMemoryEntry(archiveCard);
   click(`.memory-record[data-memory-id="${archiveCard}"] [data-action="open-card"]`);await wait(()=>document.body.dataset.view==='workspace'&&!document.getElementById('case-archived-banner').hidden);assert(document.getElementById('composer').hidden&&document.getElementById('messages').textContent.includes('walker requirement'));
   click('#case-archived-banner [data-action="reopen-case"]');await wait(()=>!document.getElementById('composer').hidden&&document.getElementById('message').value==='Draft retained with the long-running case.');
-  assert((await request('list-memory',{kind:'chats'})).total===0,'Reopened conversations should return to Case chats.');
+  assert((await request('list-memory',{kind:'chats'})).total===0,'Reopened conversations should return to Chat history.');
   click(row(a)+' [data-action="case-menu"]');click(menu+' [data-action="archive-case"]');
   await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
   assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
@@ -163,8 +187,8 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert((await request('list-memory',{query:practiceNote,kind:'notes'})).total===0);
   assert((await request('get-case',{id:a})).status==='archived');
   click(`[data-case-row="${originalCase}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent===(document.querySelector(`[data-case-row="${originalCase}"] strong`)?.textContent));
-  return{weekly_case_sidebar:true,case_feedback_filter:true,sidebar_feedback_jump:true,suggested_case_title:true,close_case_from_sidebar:true,
+  return{weekly_case_sidebar:true,chat_history_status_groups:true,sidebar_feedback_jump:true,suggested_case_title:true,close_case_from_sidebar:true,
     save_or_delete_case_choices:true,saved_conversation_grouped_by_organization:true,
-    completion_actions_in_chat:true,archive_from_completion:true,delete_chat_with_notes:true,
+    completion_actions_in_chat:true,completion_as_separate_message:true,archive_from_completion:true,delete_chat_with_notes:true,
     compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,known_contacts_above_followup:true,independent_chat_note:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
 }

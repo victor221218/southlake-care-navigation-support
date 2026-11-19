@@ -1,12 +1,12 @@
-# Care Navigation Support — Windows 2.13 prototype
+# Care Navigation Support — Windows 2.14 prototype
 
-Open **Care-Navigation-Support-Setup-2.13.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.14.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
 ## Start in Workspace
 
-Workspace opens as a full-width chat, with Add a document beside Speak. Case chats keeps your conversations and drafts. Use **Manage memory** for information you choose to keep for future reference.
+Workspace opens as a full-width chat, with Add a document beside Speak. **Chat history** keeps your conversations and drafts. Use **Manage memory** for information you choose to keep for future reference.
 
 ## Known services are ready to browse
 
@@ -26,7 +26,7 @@ Ordinary messages stay together in the conversation. To keep a note, type **Reme
 
 **Editing and deleting memory:** choose Edit beside a saved message or feedback entry, change its text and save. Choose Delete to remove it. Document cards offer Add correction so the original source remains intact. Deleting feedback leaves its source service/document card in place. Completed changes affect subsequent AI answers; already displayed answers remain a record of that earlier conversation.
 
-**New topic** starts a separate discussion and selected-card context. Earlier case chats, drafts and saved records remain available. Conversations persist in this app; this does not train the AI model or read your ChatGPT Memory.
+**New chat** starts a separate discussion and selected-card context. Earlier case chats, drafts and saved records remain available. Conversations persist in this app; this does not train the AI model or read your ChatGPT Memory.
 
 ## Which model is answering?
 
@@ -74,8 +74,8 @@ Close the current app and open the new installer. After installation, open **Car
 
 ## Keep a case conversation
 
-1. Choose **New topic** for a separate conversation. A detailed ride request can become **Transportation in North York · Walker access**.
-2. Find it in **Case chats**, where **Week of** groups show the newest activity first. The filter lets you see which chats need feedback, have a recorded result, or have no service selected.
+1. Choose **New chat** for a separate conversation. A detailed ride request can become **Transportation in North York · Walker access**.
+2. Use the search field under **New chat** to find a conversation by title. **Chat history** shows each conversation under **Feedback needed**, **No service selected**, or **Feedback recorded**, with the latest activity first within each group.
 3. Open **⋯ → Record feedback** to jump to a pending result. Open **⋯ → Rename conversation** to type a new title or choose **Suggest a title**.
 4. Click a conversation title to return to its messages and draft. Use **Earlier messages** to read older parts of the chat.
 
@@ -89,9 +89,9 @@ Choose **⋯ → Delete chat history** to discard a practice or inaccurate chat 
 
 ### When you’re finished
 
-Once the last pending service result is saved, the chat asks **What would you like to do next?**
+After the last pending result and any open note are saved, a separate assistant message comes into view at the end of the chat. It asks **What would you like to do next?**
 
-- **Keep chat open** returns you to the conversation.
+- **Keep in chat history** leaves the chat in the sidebar.
 - **Add to memory library** files the entire conversation as one item you can open later.
 - **Delete chat and notes** permanently removes the conversation and feedback linked to it after you confirm. This includes the notes, results and ratings saved from that chat. Use Manage memory for any older standalone notes.
 
@@ -111,7 +111,7 @@ Look beneath the service follow-up for **Undo note**, **Undo result**, or **Undo
 2. Click a recommendation or **Use this service**. The listed phone and email appear under **Known contact** at the top. Choose **Add a note** and **Save note** to record information before or after a result. The note also saves to the provider card. **View details** opens the full card.
 3. After trying the service, choose **Worked** or **Didn’t work**. Use **Not yet** to return later.
 4. Add an optional note or rating and choose **Save result**. A blank note and rating are fine. **Finish later** keeps a draft with the topic. Saved feedback is also available on the service card.
-5. If it didn’t work, choose **See other options** to return to the choices. Choose **New topic** when the subject changes. Reopen earlier chats from the sidebar.
+5. If it didn’t work, choose **See other options** to return to the choices. Choose **New chat** when the subject changes. Reopen earlier chats from the sidebar.
 
 ## Record a result from Known services
 
