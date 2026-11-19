@@ -47,6 +47,7 @@ export class DocumentAssistant {
           : this.store.note({body:note || text,kind:note ? 'note' : 'message',case_id:note ? null : case_id});
         saved = note && turn ? await this.store.db().transaction(async()=>{
           const record = await save();
+          await this.store.linkCaseMemory(case_id,selected?'comment':'card',record.id,'explicit');
           await this.cases.markSaved(turn);
           return record;
         }) : await save();

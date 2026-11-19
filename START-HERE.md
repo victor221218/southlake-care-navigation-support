@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.12 prototype
+# Care Navigation Support — Windows 2.13 prototype
 
-Open **Care-Navigation-Support-Setup-2.12.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.13.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -85,7 +85,17 @@ Service recommendations appear as cards only, with every returned choice visible
 
 Choose **⋯ → Add to memory library** to keep the complete conversation as one item. Find it under a linked organization or filter **Manage memory** to **Saved conversations**. Open the saved item to review its history. Choose **Reopen conversation** to continue it.
 
-Choose **⋯ → Delete chat history** to discard a practice or inaccurate chat. This permanently removes the chat and any entries an earlier version saved automatically. Manage notes and results saved separately in the organization’s history.
+Choose **⋯ → Delete chat history** to discard a practice or inaccurate chat and its older automatic entries.
+
+### When you’re finished
+
+Once the last pending service result is saved, the chat asks **What would you like to do next?**
+
+- **Keep chat open** returns you to the conversation.
+- **Add to memory library** files the entire conversation as one item you can open later.
+- **Delete chat and notes** permanently removes the conversation and feedback linked to it after you confirm. This includes the notes, results and ratings saved from that chat. Use Manage memory for any older standalone notes.
+
+Use **Case options → Finish conversation** when you’re done with a chat that has no service result.
 
 ### Find an organization’s history
 
@@ -107,11 +117,11 @@ Look beneath the service follow-up for **Undo note**, **Undo result**, or **Undo
 
 Open **View details**. At the top, review **Your notes & results** before the provider details. The bottom has three actions:
 
-- **Select this service** keeps it selected and takes you to **Contact & follow up**.
+- **Use this service** opens a follow-up card in chat with the listed phone and email.
 - **Ask more about this card** opens the assistant with this service selected.
 - **Provider page** opens the listed provider website.
 
-After contacting or trying the service, choose **Worked** or **Didn't work**, add an optional rating and comment, then choose **Save result**. You can also use these buttons beside the selected service in chat. Selecting or copying a contact does not save a result by itself.
+After trying the service, choose **Worked** or **Didn’t work** in the chat. Add a note or rating if useful, then choose **Save result**. Use **Not yet** when a follow-up is still pending.
 
 The saved result appears at the top of the card and in **Manage memory**. Use **Edit** to change its result, rating or comment; use **Delete** to remove it after confirmation. Your service notes and summaries stay available in a new conversation and after reopening the app. Keep a backup when moving computers. Notes save automatically; the result form has its own Save result button.
 

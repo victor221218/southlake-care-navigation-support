@@ -3,12 +3,12 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const row=id=>`[data-case-row="${id}"]`;
   const menu='#case-action-menu:popover-open';
   const send=async text=>{type('message',text);click('#send-button');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));};
-  // Use the shipping score form, then its saved-input Undo and Redo controls.
+  // Seed one isolated result and use the provider history's Undo and Redo controls.
   click('[data-action="known-services"]');await wait(()=>document.querySelector(`.service-row[data-service-id="${serviceCard.id}"]`));
+  const rating=await request('save-service-result',{card_id:serviceCard.id,outcome:'worked',
+    rating:5,body:'Practice score to correct with Undo and Redo.'});
   click(`.service-row[data-service-id="${serviceCard.id}"] [data-action="open-card"]`);await wait(()=>document.getElementById('card-note'));
-  click('#service-contacts [data-action="record-service-result"][data-outcome="worked"]');await wait(()=>document.getElementById('result-note'));
-  filter('result-rating','5');type('result-note','Practice score to correct with Undo and Redo.');click('#save-service-result');await wait(()=>document.getElementById('service-history-status').textContent.includes('Worked saved'));
-  let service=await request('get-card',{id:serviceCard.id});const rating=service.comments.find(n=>n.body==='Practice score to correct with Undo and Redo.');assert(rating?.rating===5);
+  await wait(()=>document.querySelector('#card-history [data-action="undo-input"]:enabled:not([hidden])'));
   click('#card-history [data-action="undo-input"]');await wait(()=>document.querySelector('#card-history [data-action="redo-input"]:enabled:not([hidden])')&&!document.querySelector(`.saved-note[data-note-id="${rating.id}"]`));
   assert(!(await request('get-card',{id:serviceCard.id})).comments.some(n=>n.id===rating.id));
   click('#card-history [data-action="redo-input"]');await wait(()=>document.querySelector(`.saved-note[data-note-id="${rating.id}"]`));assert((await request('get-card',{id:serviceCard.id})).comments.find(n=>n.id===rating.id).rating===5);
@@ -39,8 +39,8 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const previousResultCount=(await request('get-card',{id:chosenId})).experience.not_worked;
   click(`.answer-card[data-id="${chosenId}"] [data-action="open-card"]`);
   await wait(()=>document.querySelector('#modal [data-action="use-service-from-details"]'));
-  click('#modal [data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
-  click(`.answer-card[data-id="${chosenId}"] [data-action="chat-followup-start"]`);
+  assert(!document.querySelector('#modal #service-contacts,#modal [data-outcome]'),'Comparing a recommendation should not show early result controls.');
+  click('#modal [data-action="use-service-from-details"]');
   await wait(()=>document.querySelector('.chat-followup .followup-contact')&&document.body.dataset.caseChanging==='false');
   assert(!document.getElementById('modal').open,'Choosing a card must start follow-up inside chat.');
   const contactSection=document.querySelector('.chat-followup .followup-known-contact');
@@ -100,6 +100,9 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const returnedNote=document.querySelector('.chat-followup textarea');
   assert(returnedNote?.value===noteText&&document.querySelector('.chat-followup select')?.value==='2','Returning to the topic must restore the feedback draft.');
   click('.chat-followup [data-step="save"]');await wait(()=>document.querySelector('.followup-saved')&&document.body.dataset.caseChanging==='false');
+  const steps='.case-next-steps';
+  assert(document.querySelector(steps+' h4')?.textContent==='What would you like to do next?');
+  assert(document.querySelectorAll(steps+' button').length===3);
   const recorded=(await request('get-card',{id:chosenId})).comments.find(note=>note.body===noteText);
   assert(recorded?.rating===2&&recorded.outcome==='not_worked','The note and rating must save to the selected provider.');
   click('.chat-followup [data-action="chat-followup-options"]');
@@ -107,6 +110,7 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert(document.querySelector('.chat-followup [data-step="undo"]').textContent==='Undo result');
   click('.chat-followup [data-step="undo"]');await wait(()=>document.querySelector('.chat-followup [data-outcome="not_worked"]')&&document.body.dataset.caseChanging==='false');
   assert(!(await request('get-card',{id:chosenId})).comments.some(note=>note.id===recorded.id));
+  assert(!document.querySelector(steps),'Undo must return the service to follow-up.');
   await wait(()=>document.querySelector(row(a)+'[data-feedback="needed"]'));
   assert(document.querySelector('.chat-followup [data-step="redo"]').textContent==='Redo result');
   click('.chat-followup [data-step="redo"]');await wait(()=>document.querySelector('.followup-saved')&&document.body.dataset.caseChanging==='false');
@@ -118,7 +122,8 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const deleteChoice=document.querySelector(menu+' [data-action="delete-case"]');
   assert(saveChoice?.textContent.startsWith('Add to memory library')&&saveChoice.querySelector('small')?.textContent.includes('one item'));
   assert(deleteChoice?.textContent.startsWith('Delete chat history')&&deleteChoice.querySelector('small')?.textContent.includes('inaccurate'));
-  click(menu+' [data-action="archive-case"]');await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
+  document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  click(steps+' [data-action="archive-case"]');await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
   const archived=(await request('get-case',{id:a}));assert(archived.status==='archived'&&archived.message_count===5);const archiveCard=archived.archive_card_id;
   assert(!(await request('list-memory',{query:'walker requirement'})).items.some(i=>i.kind==='message'),'Saving the case should consolidate its automatic message cards.');
   click(row(b)+' [data-action="case-menu"]');window.confirm=()=>false;click(menu+' [data-action="delete-case"]');assert((await request('get-case',{id:b})).status==='active');
@@ -135,9 +140,31 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click(`.memory-record[data-memory-id="${archiveCard}"] [data-action="open-card"]`);await wait(()=>document.body.dataset.view==='workspace'&&!document.getElementById('case-archived-banner').hidden);assert(document.getElementById('composer').hidden&&document.getElementById('messages').textContent.includes('walker requirement'));
   click('#case-archived-banner [data-action="reopen-case"]');await wait(()=>!document.getElementById('composer').hidden&&document.getElementById('message').value==='Draft retained with the long-running case.');
   assert((await request('list-memory',{kind:'chats'})).total===0,'Reopened conversations should return to Case chats.');
-  click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('#modal [data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
+  click(row(a)+' [data-action="case-menu"]');click(menu+' [data-action="archive-case"]');
+  await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
+  assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
+
+  click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+  const deletedWithNotes=(await request('snapshot')).active_case.id;
+  const practiceNote='Isolated note for the delete chat and notes check.';
+  await send('Remember that '+practiceNote);
+  assert((await request('list-memory',{query:practiceNote,kind:'notes'})).total===1);
+  click('#case-options-button');await wait(()=>document.querySelector('#modal [data-action="finish-conversation"]'));
+  click('#modal [data-action="finish-conversation"]');
+  await wait(()=>document.querySelector(steps+' [data-action="delete-case"][data-include-notes="true"]'));
+  let confirmation='';
+  window.confirm=message=>{confirmation=message;return false;};
+  click(steps+' [data-action="delete-case"]');
+  assert(confirmation.includes('notes, ratings and service results')&&document.querySelector(row(deletedWithNotes)));
+  assert((await request('list-memory',{query:practiceNote,kind:'notes'})).total===1);
+  window.confirm=()=>true;click(steps+' [data-action="delete-case"]');
+  await wait(()=>!document.querySelector(row(deletedWithNotes))&&document.body.dataset.caseChanging==='false');
+  window.confirm=originalConfirm;
+  assert((await request('list-memory',{query:practiceNote,kind:'notes'})).total===0);
+  assert((await request('get-case',{id:a})).status==='archived');
   click(`[data-case-row="${originalCase}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent===(document.querySelector(`[data-case-row="${originalCase}"] strong`)?.textContent));
   return{weekly_case_sidebar:true,case_feedback_filter:true,sidebar_feedback_jump:true,suggested_case_title:true,close_case_from_sidebar:true,
     save_or_delete_case_choices:true,saved_conversation_grouped_by_organization:true,
+    completion_actions_in_chat:true,archive_from_completion:true,delete_chat_with_notes:true,
     compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,known_contacts_above_followup:true,independent_chat_note:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
 }

@@ -229,6 +229,22 @@
 .followup-corrections button { color: #3b6279; }
 #card-history .input-tools:not(:has(button:not([hidden]))) { display: none; }
 .latest-messages { display: block; margin: 10px auto 0; font-size: 11px; }
+.case-next-steps {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #d9e6ec;
+  border-radius: 10px;
+  background: #f5f9fb;
+}
+.case-next-steps h4 { margin: 0 0 10px; color: #243f55; font-size: 14px; }
+.case-next-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.case-next-actions button { text-align: left; padding: 8px 9px; font-size: 11px; overflow-wrap: anywhere; }
+.case-next-actions small { display: block; margin-top: 4px; font-size: 10px; font-weight: 400; line-height: 1.4; }
+.completion-summary { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.floating-chat .case-next-actions { grid-template-columns: minmax(0,1fr); }
+@media (max-width: 1050px) {
+  .case-next-actions { grid-template-columns: minmax(0,1fr); }
+}
 
 .memory-groups {
   display: flex;

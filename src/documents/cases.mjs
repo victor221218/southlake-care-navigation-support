@@ -6,6 +6,13 @@ const clean=(value,max=80)=>String(value??'').replace(/\u0000/g,'').trim().slice
 const cardRef=card=>({id:card.id,...(card.card_reason?{card_reason:clean(card.card_reason,220)}:{}),...(card.card_confirm?{card_confirm:clean(card.card_confirm,260)}:{})});
 const presentation=value=>['service-options','answer'].includes(value)?value:undefined;
 const unpack=row=>({...row,payload:JSON.parse(row.payload_json||'{}')});
+const followupJoins = `
+  LEFT JOIN personal_cards provider ON provider.owner_id=c.owner_id AND provider.archived=0
+    AND provider.document_id IS NOT NULL AND m.role='assistant' AND m.state='complete'
+    AND provider.id=json_extract(m.payload_json,'$.followup.card_id')
+  LEFT JOIN personal_comments result ON result.owner_id=c.owner_id AND result.card_id=provider.id
+    AND result.outcome IS NOT NULL AND result.id=json_extract(m.payload_json,'$.followup.result_id')`;
+
 export class DocumentCases {
   constructor({store}){this.store=store;}
   db(){return this.store.db();} owner(){return this.store.owner();}
@@ -19,11 +26,7 @@ export class DocumentCases {
         MAX(CASE WHEN provider.id IS NOT NULL AND result.id IS NULL THEN m.sequence END) AS feedback_sequence
       FROM personal_cases c
       LEFT JOIN personal_case_messages m ON m.case_id=c.id AND m.owner_id=c.owner_id
-      LEFT JOIN personal_cards provider ON provider.owner_id=c.owner_id AND provider.archived=0
-        AND provider.document_id IS NOT NULL AND m.role='assistant' AND m.state='complete'
-        AND provider.id=json_extract(m.payload_json,'$.followup.card_id')
-      LEFT JOIN personal_comments result ON result.owner_id=c.owner_id AND result.card_id=provider.id
-        AND result.outcome IS NOT NULL AND result.id=json_extract(m.payload_json,'$.followup.result_id')
+      ${followupJoins}
       WHERE c.owner_id=? AND c.status='active'
       GROUP BY c.id
       ORDER BY activity_at DESC, c.id
@@ -34,6 +37,22 @@ export class DocumentCases {
       feedback: row.feedback_sequence != null ? 'needed' : row.selection_count ? 'recorded' : 'unselected'
     })).filter(row => row.title.toLowerCase().includes(term) && (!feedback || row.feedback === feedback));
     return {total:items.length, items:items.slice(0, Math.min(200,Math.max(1,Number(limit)||100)))};
+  }
+  async completion(row) {
+    if (row.status !== 'active') return null;
+    const {results} = await this.db().prepare(`
+      SELECT m.id AS message_id, provider.title, result.id AS result_id, result.outcome, result.rating,
+        json_extract(m.payload_json,'$.followup.keep_chat') AS kept,
+        json_extract(m.payload_json,'$.followup.note_open') AS note_open
+      FROM personal_cases c
+      JOIN personal_case_messages m ON m.case_id=c.id AND m.owner_id=c.owner_id
+      ${followupJoins}
+      WHERE c.id=? AND c.owner_id=? AND provider.id IS NOT NULL
+      ORDER BY result.created_at DESC, m.sequence DESC
+    `).bind(row.id,row.owner_id).all();
+    if (!results.length || results.some(result=>!result.result_id || result.note_open)) return null;
+    const {kept,note_open,result_id,...latest} = results[0];
+    return kept ? null : latest;
   }
   async activate(id){const row=await this.row(id);if(row.status!=='active')throw new Error('Reopen this saved case before continuing.');await this.db().prepare('INSERT INTO personal_case_workspace(owner_id,active_case_id) VALUES (?,?) ON CONFLICT(owner_id) DO UPDATE SET active_case_id=excluded.active_case_id').bind(this.owner(),id).run();await this.db().prepare('UPDATE personal_cases SET updated_at=? WHERE id=? AND owner_id=?').bind(stamp(),id,this.owner()).run();return row;}
   async create(title='New topic'){title=clean(title)||'New topic';return this.db().transaction(async()=>{const id=randomUUID(),time=stamp();await this.db().prepare('INSERT INTO personal_cases(id,owner_id,origin_id,title,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id,this.owner(),id,title,time,time).run();await this.activate(id);return this.changed(await this.row(id));});}
@@ -52,7 +71,7 @@ export class DocumentCases {
       (cutoff!=null?'AND sequence<? ':'') + 'ORDER BY sequence DESC LIMIT ?'
     ).bind(this.owner(),id,...(cutoff!=null?[Number(cutoff)]:[]),count+1).all()).results;
     return {...row,messages:values.slice(0,count).reverse().map(unpack),has_more:values.length>count,
-      has_newer:values.length > 0 && values[0].sequence < last_sequence,message_count};
+      has_newer:values.length > 0 && values[0].sequence < last_sequence,message_count,completion:await this.completion(row)};
   }
   async suggestedTitle(id) {
     await this.row(id);
@@ -83,7 +102,55 @@ export class DocumentCases {
   async hydrate(record){for(const message of record.messages){const cards=[];for(const ref of message.payload.cards||[]){try{const card=await this.store.get(ref.id,{case_id:record.id});cards.push({...card,...cardRef(ref),body:card.body.slice(0,650),fields:undefined,comments:undefined});}catch{}}message.payload.cards=cards;
       if(message.payload.followup)message.payload.followup=await hydrateFollowup(message.payload.followup,this.store,record.id);
       if(message.state==='pending'){message.body=message.body||'This answer was interrupted. Retry the question to continue.';message.payload.error=true;message.payload.source='error';await this.db().prepare("UPDATE personal_case_messages SET state='error',body=? WHERE id=? AND owner_id=?").bind(message.body,message.id,this.owner()).run();message.state='error';}}return record;}
-  async removeAutomatic(id){const refs=(await this.db().prepare('SELECT * FROM personal_case_memory WHERE case_id=? AND owner_id=?').bind(id,this.owner()).all()).results;for(const ref of refs){await this.db().prepare('DELETE FROM personal_input_history WHERE owner_id=? AND ((entry_type=? AND entry_id=?) OR before_json LIKE ? OR after_json LIKE ?)').bind(this.owner(),ref.entry_type,ref.entry_id,'%'+ref.entry_id+'%','%'+ref.entry_id+'%').run();if(ref.entry_type==='comment')await this.db().prepare('DELETE FROM personal_comments WHERE id=? AND owner_id=? AND outcome IS NULL').bind(ref.entry_id,this.owner()).run();else await this.db().prepare("DELETE FROM personal_cards WHERE id=? AND owner_id=? AND document_id IS NULL AND kind='message'").bind(ref.entry_id,this.owner()).run();}await this.db().prepare('DELETE FROM personal_case_memory WHERE case_id=? AND owner_id=?').bind(id,this.owner()).run();}
+  async legacyFeedback(row) {
+    // Earlier versions stored the references on the follow-up message only.
+    const {results} = await this.db().prepare(`
+      WITH followups AS (
+        SELECT json_extract(payload_json,'$.followup.card_id') AS card_id,
+          json_extract(payload_json,'$.followup.result_id') AS result_id,
+          json_extract(payload_json,'$.followup.note_ids') AS note_ids
+        FROM personal_case_messages WHERE case_id=? AND owner_id=? AND role='assistant'
+        AND json_type(payload_json,'$.followup.card_id')='text'
+      ), linked AS (
+        SELECT card_id, result_id AS entry_id FROM followups WHERE result_id IS NOT NULL
+        UNION
+        SELECT f.card_id, item.value FROM followups f, json_each(f.note_ids) item WHERE item.type='text'
+      )
+      SELECT 'comment' AS entry_type, l.entry_id, l.card_id, 'explicit' AS retention
+      FROM linked l
+      WHERE EXISTS (SELECT 1 FROM personal_comments n WHERE n.owner_id=? AND n.id=l.entry_id AND n.card_id=l.card_id)
+        OR EXISTS (SELECT 1 FROM personal_input_history h WHERE h.owner_id=? AND h.entry_type='comment'
+          AND h.entry_id=l.entry_id AND h.card_id=l.card_id)
+    `).bind(row.id,row.owner_id,row.owner_id,row.owner_id).all();
+    return results;
+  }
+  async removeCaseMemory(row, includeNotes=false) {
+    const automaticOnly = includeNotes ? '' : " AND retention='automatic'";
+    const {results} = await this.db().prepare('SELECT entry_type,entry_id,retention FROM personal_case_memory WHERE case_id=? AND owner_id=?'+automaticOnly)
+      .bind(row.id,row.owner_id).all();
+    const refs = new Map(results.map(ref=>[ref.entry_type+':'+ref.entry_id,ref]));
+    if (includeNotes) {
+      for (const ref of await this.legacyFeedback(row)) {
+        refs.set(ref.entry_type+':'+ref.entry_id,ref);
+      }
+    }
+    for (const {entry_type,entry_id,retention,card_id} of refs.values()) {
+      await this.db().prepare(`DELETE FROM personal_input_history WHERE owner_id=? AND
+        ((entry_type=? AND entry_id=?) OR instr(before_json,?)>0 OR instr(after_json,?)>0)`)
+        .bind(row.owner_id,entry_type,entry_id,entry_id,entry_id).run();
+      if (entry_type === 'comment') {
+        await this.db().prepare('DELETE FROM personal_comments WHERE id=? AND owner_id=?' +
+          (retention==='automatic'?' AND outcome IS NULL':'') + (card_id?' AND card_id=?':''))
+          .bind(entry_id,row.owner_id,...(card_id?[card_id]:[])).run();
+      } else {
+        const kinds = retention==='automatic' ? "('message')" : "('note','message')";
+        await this.db().prepare('DELETE FROM personal_cards WHERE id=? AND owner_id=? AND document_id IS NULL AND kind IN '+kinds)
+          .bind(entry_id,row.owner_id).run();
+      }
+    }
+    await this.db().prepare('DELETE FROM personal_case_memory WHERE case_id=? AND owner_id=?'+automaticOnly)
+      .bind(row.id,row.owner_id).run();
+  }
   async archive({id,expected_version}) {
     return this.db().transaction(async()=>{
       const row = await this.row(id);
@@ -102,7 +169,7 @@ export class DocumentCases {
         await this.db().prepare('UPDATE personal_cards SET body=?,updated_at=?,version=version+1 WHERE id=? AND owner_id=?')
           .bind(preview,stamp(),card_id,this.owner()).run();
       }
-      await this.removeAutomatic(id);
+      await this.removeCaseMemory(row);
       await this.db().prepare("UPDATE personal_cases SET status='archived',archive_card_id=?,version=version+1,updated_at=? WHERE id=? AND owner_id=?")
         .bind(card_id,stamp(),id,this.owner()).run();
       await this.current();
@@ -110,10 +177,20 @@ export class DocumentCases {
     });
   }
   async reopen(id){const row=await this.row(id);await this.db().prepare("UPDATE personal_cases SET status='active',version=version+1,updated_at=? WHERE id=? AND owner_id=?").bind(stamp(),id,this.owner()).run();await this.activate(id);return this.changed(await this.row(id));}
-  async delete({id,expected_version}){return this.db().transaction(async()=>{const row=await this.row(id);if(row.version!==expected_version)throw new Error('This case changed. Reopen its options.');await this.removeAutomatic(id);if(row.archive_card_id)await this.store.forgetCard(row.archive_card_id);await this.db().prepare('DELETE FROM personal_cases WHERE id=? AND owner_id=?').bind(id,this.owner()).run();await this.current();return this.changed({deleted:true});});}
+  async delete({id,expected_version,include_notes=false}) {
+    return this.db().transaction(async()=>{
+      const row = await this.row(id);
+      if (row.version!==expected_version) throw new Error('This case changed. Reopen its options.');
+      await this.removeCaseMemory(row,include_notes===true);
+      if (row.archive_card_id) await this.store.forgetCard(row.archive_card_id);
+      await this.db().prepare('DELETE FROM personal_cases WHERE id=? AND owner_id=?').bind(id,this.owner()).run();
+      await this.current();
+      return this.changed({deleted:true});
+    });
+  }
   async export(){const tables={cases:'personal_cases',case_messages:'personal_case_messages',case_memory:'personal_case_memory'};const result={};for(const [key,table] of Object.entries(tables))result[key]=(await this.db().prepare('SELECT * FROM '+table+' WHERE owner_id=?').bind(this.owner()).all()).results.map(({owner_id,...row})=>row);return result;}
   async restore(data,{cards,comments}){if(!data.cases)return; if(!Array.isArray(data.cases)||data.cases.length>2000||!Array.isArray(data.case_messages)||data.case_messages.length>100000||!Array.isArray(data.case_memory))throw new Error('The backup contains invalid case chats.');const map=new Map();for(const c of data.cases){if(!['active','archived'].includes(c.status)||typeof c.id!=='string'||!clean(c.title))throw new Error('The backup contains an invalid case.');const existing=await this.db().prepare('SELECT id FROM personal_cases WHERE owner_id=? AND origin_id=?').bind(this.owner(),c.origin_id||c.id).first();const id=existing?.id||randomUUID();map.set(c.id,id);if(!existing)await this.db().prepare('INSERT INTO personal_cases(id,owner_id,origin_id,title,status,selected_card_id,archive_card_id,draft,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id,this.owner(),clean(c.origin_id||c.id,100),clean(c.title),c.status,cards.get(c.selected_card_id)||null,cards.get(c.archive_card_id)||null,clean(c.draft,12000),clean(c.created_at,40),clean(c.updated_at,40),Number(c.version)||1).run();}
     for(const m of data.case_messages){if(!map.has(m.case_id)||!['user','assistant'].includes(m.role)||!Number.isInteger(m.sequence)||m.sequence<1||typeof m.body!=='string')throw new Error('The backup contains an invalid chat message.');const caseId=map.get(m.case_id),origin=clean(m.origin_id||m.id,100);if(await this.db().prepare('SELECT id FROM personal_case_messages WHERE case_id=? AND origin_id=?').bind(caseId,origin).first())continue;const raw=JSON.parse(m.payload_json||'{}'),payload={source:raw.source,error:Boolean(raw.error),saved:Boolean(raw.saved),context_card_id:m.role==='user'?cards.get(raw.context_card_id):undefined,presentation:presentation(raw.presentation),followup:m.role==='assistant'?restoreFollowup(raw.followup,{cards,comments}):undefined,cards:(raw.cards||[]).slice(0,6).map(c=>({...cardRef(c),id:cards.get(c.id)})).filter(c=>c.id),calculations:Array.isArray(raw.calculations)?raw.calculations.slice(0,10):[]};await this.db().prepare('INSERT INTO personal_case_messages(id,owner_id,case_id,origin_id,sequence,role,body,payload_json,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(randomUUID(),this.owner(),caseId,origin,m.sequence,m.role,clean(m.body,60000),JSON.stringify(payload),['complete','error','pending'].includes(m.state)?m.state:'complete',clean(m.created_at,40),clean(m.updated_at,40)).run();}
-    for(const ref of data.case_memory){const entry=ref.entry_type==='card'?cards.get(ref.entry_id):comments.get(ref.entry_id);if(map.has(ref.case_id)&&entry)await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id) VALUES (?,?,?,?)').bind(map.get(ref.case_id),this.owner(),ref.entry_type,entry).run();}
+    for(const ref of data.case_memory){const entry=ref.entry_type==='card'?cards.get(ref.entry_id):comments.get(ref.entry_id);if(map.has(ref.case_id)&&entry)await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id,retention) VALUES (?,?,?,?,?)').bind(map.get(ref.case_id),this.owner(),ref.entry_type,entry,ref.retention==='explicit'?'explicit':'automatic').run();}
   }
 }

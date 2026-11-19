@@ -2,24 +2,24 @@
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.12.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.13.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.12 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. Version 2.13 uses the same Windows install and data locations.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Care-Navigation-Support-Handoff-2.12.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.13.0/Care-Navigation-Support-Handoff-2.13.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Care-Navigation-Support-Setup-2.12.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Care-Navigation-Support-Handoff-2.12.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.13.0/Care-Navigation-Support-Setup-2.13.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.13.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.13.0/Care-Navigation-Support-Handoff-2.13.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.12.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.13.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -55,7 +55,7 @@ Service recommendations show all returned cards together, without a separate wri
 
 ![Compact service choices](docs/compact-choices.png)
 
-Click a recommendation or **Use this service** to open its contact and result choices in the chat. **Known contact** shows the listed phone and email at the top. Choose **Add a note** to save an independent note to the provider card. The latest note appears in the chat. **View details** opens the full provider card. Choose **Worked**, **Didn’t work** or **Not yet**. Worked and Didn’t work open an optional note and rating. **Save result** adds the feedback to the service card and shows it in the chat. **See other options** returns to the original choices if the service didn’t work.
+Choose **View details** to compare a provider’s coverage, access requirements and recorded history. Choose **Use this service** when you’re ready to follow up. The chat then shows the phone and email when listed, **Add a note**, and the choices **Worked**, **Didn’t work** and **Not yet**. Save the result with an optional note and rating.
 
 ![Known contact and a saved note in the topic](docs/chat-followup.png)
 
@@ -67,7 +67,9 @@ Choose **New topic** for a separate discussion. A detailed request gets a short 
 
 - **⋯ → Record feedback** jumps to the latest service that still needs a result, even if newer messages follow it.
 - **⋯ → Add to memory library** keeps a useful conversation as one item. Find it under the linked organization or use **Manage memory → Saved conversations**. Open it and choose **Reopen conversation** to continue.
-- **⋯ → Delete chat history** permanently discards an inaccurate or practice conversation and any automatic entries from an earlier version. Manage separately saved results and notes in the organization’s history.
+- **⋯ → Delete chat history** permanently discards a practice or inaccurate conversation and its older automatic entries.
+
+When the last pending result and its notes are saved, the chat asks **What would you like to do next?** Choose **Keep chat open**, **Add to memory library**, or **Delete chat and notes**. The last option asks for confirmation and removes the conversation and its linked notes, ratings and results. Review older standalone notes in **Manage memory**. For other conversations, use **Case options → Finish conversation** to open the same choices.
 
 ![A saved conversation grouped under its organization](docs/case-library.png)
 
@@ -77,11 +79,11 @@ Services that match the search/category are ordered using the current user's sav
 
 ### Use a service and record what happened
 
-A service card has three footer actions: **Select this service**, **Ask more about this card**, and **Provider page**. Selecting keeps the card open and moves to **Contact & follow up**, where the listed phone/email can be copied. Asking opens the assistant with that service selected.
+A service preview offers **Use this service**, **Ask more about this card**, and **Provider page**. **Use this service** opens the follow-up in chat, including when you select a service from the directory.
 
 Your saved notes, reported results and optional ratings appear above Category and the provider facts. Known services also shows your latest note and a compact result summary above the category. These observations stay separate from the public provider information.
 
-After following up, choose **Worked** or **Didn't work**, add an optional **1–5 rating** and explanation, then **Save result**. The same result buttons appear beside the selected service in chat. Opening a provider page, copying a contact, or selecting a service does not create an outcome. A second click while saving does not create another result.
+After following up, choose **Worked** or **Didn’t work** in the chat, add an optional rating and note, then choose **Save result**. Use **Not yet** to come back later.
 
 ![Service card with personal history above provider details](docs/service-card.png)
 
@@ -98,7 +100,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Care-Navigation-Support-Setup-2.12.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Care-Navigation-Support-Setup-2.13.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -152,12 +154,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.12`.
+Extract the ZIP first, then open **START-HERE.html** inside the Care-Navigation-Support-Windows-2.13 folder.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Care-Navigation-Support-Setup-2.12.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-2.13.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -212,7 +214,7 @@ The finished installer does not require these developer tools.
 ## What has been checked
 
 - **105 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior, service-result edits/deletions, rating summaries, older-database upgrades and backup compatibility.
-- **Native Windows checks passed** for organization grouping, search, expandable memory, explicit note saving, saving or deleting a conversation, reopening saved history, service feedback, document import, and the existing workspace controls.
+- **Native Windows checks passed** for clean service previews, contact and feedback after selection, all three completion choices, confirmed deletion of linked notes, saved conversation reopening, memory search, and the existing document workflow.
 - **77 extracted installer files matched** the prepared Windows application.
 - Installer and handoff SHA-256 checksums are published in the release’s `SHA256.txt` and `Verification.json`.
 

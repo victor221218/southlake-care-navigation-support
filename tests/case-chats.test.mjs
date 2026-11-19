@@ -137,6 +137,84 @@ test('opening pending feedback can jump to an older page without losing access t
   } finally { await f.close(); }
 });
 
+test('directory selection starts follow-up and next steps wait for all results and note drafts', async () => {
+  const f=await fixture();
+  try {
+    const firstProvider=await service(f);
+    const {items}=await f.store.list({collection:'services',query:'Better Living'});
+    const secondProvider=items.find(item=>item.id!==firstProvider.id);
+    const chat=await f.cases.create();
+    const followups=followupsFor(f);
+    const first=await followups.start({case_id:chat.id,card_id:firstProvider.id});
+    const second=await followups.start({case_id:chat.id,card_id:secondProvider.id});
+    assert(first.payload.followup.card.contacts.length);
+    assert.equal((await followups.start({case_id:chat.id,card_id:firstProvider.id})).id,first.id);
+    const step=(message,action,args={})=>followups.update({case_id:chat.id,message_id:message.id,step:action,...args});
+    await step(first,'choose',{outcome:'worked'});
+    assert.equal((await step(first,'save',{rating:4})).completion,null);
+    await step(second,'later');
+    assert.equal((await f.cases.read(chat.id,{limit:1})).completion,null);
+    await step(second,'resume');
+    await step(second,'choose',{outcome:'not_worked'});
+    const completed=await step(second,'save',{rating:2});
+    assert.equal(completed.completion.message_id,second.id);
+    assert.equal(completed.completion.rating,2);
+    assert.equal((await step(first,'open-note')).completion,null);
+    assert.equal((await step(first,'cancel-note')).completion.message_id,second.id);
+    assert.equal((await step(second,'keep-chat')).completion,null);
+    await f.reopen();
+    assert.equal((await f.cases.read(chat.id)).completion,null);
+    assert.equal((await f.store.get(secondProvider.id)).experience.not_worked,1);
+  } finally { await f.close(); }
+});
+
+test('deleting a chat with notes removes linked feedback after archive and backup, with no effect on other notes', async () => {
+  const f=await fixture();
+  try {
+    const provider=await service(f);
+    await f.store.comment({card_id:provider.id,body:'Independent service guidance.'});
+    const first=await f.cases.create('Practice conversation to discard');
+    const other=await f.cases.create('Another conversation to keep');
+    const assistant=local(f);
+    const remember=(case_id,text,card_id=null)=>assistant.chat({case_id,text:'Remember that '+text,card_id,remember:false,capture_note:true});
+    await remember(other.id,'Review eligibility with the intake team.',provider.id);
+    await remember(first.id,'The practice note to discard.',provider.id);
+    await remember(first.id,'The practice personal memory to discard.');
+    const followups=followupsFor(f);
+    const reply=await followups.start({case_id:first.id,card_id:provider.id});
+    const step=(action,args={})=>followups.update({case_id:first.id,message_id:reply.id,step:action,...args});
+    await step('choose',{outcome:'worked'});
+    const result=(await step('save',{rating:5})).payload.followup.result;
+    // Simulate a result saved by an older build that linked it through the follow-up only.
+    await f.store.db().prepare('DELETE FROM personal_case_memory WHERE owner_id=? AND entry_id=?').bind(f.store.owner(),result.id).run();
+    await step('open-note');
+    await followups.saveDrafts({case_id:first.id,drafts:[{message_id:reply.id,note_draft:'Practice note recorded through the follow-up.'}]});
+    const extra=(await step('save-note')).payload.followup;
+    await step('undo',{change_id:extra.history.undo.id});
+    const archive=await f.cases.archive({id:first.id,expected_version:(await f.cases.row(first.id)).version});
+    const backup=await f.store.export();
+    await f.cases.delete({id:first.id,expected_version:(await f.cases.row(first.id)).version,include_notes:true});
+    assert.equal((await f.inputs.state()).redo,null);
+    assert.equal((await f.store.get(provider.id)).experience.worked,0);
+    assert.deepEqual((await f.store.get(provider.id)).comments.map(n=>n.body).sort(),
+      ['Independent service guidance.','Review eligibility with the intake team.'].sort());
+    await assert.rejects(f.store.get(archive.card_id),/active workspace/);
+    assert.equal((await f.store.memories({query:'practice personal memory'})).total,0);
+
+    f.switch('restored completion');
+    await ensureKnownServices(f.store);
+    await f.store.restore(backup);
+    const restoredCard=(await f.store.memories({kind:'chats'})).items[0];
+    const restored=(await f.store.get(restoredCard.id)).case_info;
+    await f.cases.delete({id:restored.id,expected_version:restored.version,include_notes:true});
+    const restoredProvider=await service(f);
+    assert.equal((await f.store.get(restoredProvider.id)).experience.worked,0);
+    assert.deepEqual((await f.store.get(restoredProvider.id)).comments.map(n=>n.body).sort(),
+      ['Independent service guidance.','Review eligibility with the intake team.'].sort());
+    assert.equal((await f.store.memories({query:'practice personal memory'})).total,0);
+  } finally { await f.close(); }
+});
+
 test('the memory library groups service notes, results and one saved conversation by organization', async () => {
   const f = await fixture();
   try {

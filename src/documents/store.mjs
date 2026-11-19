@@ -78,7 +78,7 @@ export class DocumentStore {
       (SELECT AVG(rating) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id AND outcome IS NOT NULL) AS rating_average
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
-      ${case_id?'AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=c.owner_id AND cm.entry_type=\'card\' AND cm.entry_id=c.id AND cm.case_id<>?)':''}
+      ${case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=c.owner_id AND cm.retention='automatic' AND cm.entry_type='card' AND cm.entry_id=c.id AND cm.case_id<>?)":''}
       ${collection === 'services' ? "AND d.format='service-directory'" : collection === 'personal' ? "AND (d.format IS NULL OR d.format<>'service-directory')" : ''}
       ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : []),...(case_id?[case_id]:[])).all()).results;
     const terms = tokens(query);
@@ -103,13 +103,13 @@ export class DocumentStore {
       AND (c.kind<>'conversation' OR EXISTS (
         SELECT 1 FROM personal_cases chat WHERE chat.archive_card_id=c.id AND chat.owner_id=c.owner_id AND chat.status='archived'
       ))
-      ${grouped?"AND c.id NOT IN (SELECT entry_id FROM personal_case_memory WHERE owner_id=? AND entry_type='card')":''}
+      ${grouped?"AND c.id NOT IN (SELECT entry_id FROM personal_case_memory WHERE owner_id=? AND retention='automatic' AND entry_type='card')":''}
       ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(grouped?[owner]:[]),...(document_id?[document_id]:[])).all()).results
       .map(card=>({...card,entry_type:'card',memory_type:card.kind==='conversation'?'chats':card.document_id?'documents':'notes'}));
     const notes=(await this.db().prepare(`SELECT n.id,n.card_id,n.body,n.outcome,n.rating,n.updated_at,n.version,c.title,c.fields_json,c.document_id,c.archived,d.filename,d.format AS source_format
       FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id AND c.owner_id=n.owner_id LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE n.owner_id=? ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}
-      ${grouped?"AND n.id NOT IN (SELECT entry_id FROM personal_case_memory WHERE owner_id=? AND entry_type='comment')":''}`)
+      ${grouped?"AND n.id NOT IN (SELECT entry_id FROM personal_case_memory WHERE owner_id=? AND retention='automatic' AND entry_type='comment')":''}`)
       .bind(owner,...(document_id?[document_id]:[]),...(grouped?[owner]:[])).all()).results
       .map(note=>({...note,entry_type:'comment',memory_type:'feedback'}));
     const terms=tokens(query);
@@ -151,14 +151,21 @@ export class DocumentStore {
   async get(id,{case_id=null}={}) {
     const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
     if (!card) throw new Error('This card is not in your active workspace.');
-    if(case_id&&await this.db().prepare("SELECT 1 FROM personal_case_memory WHERE owner_id=? AND entry_type='card' AND entry_id=? AND case_id<>?").bind(this.owner(),id,case_id).first())throw new Error('This automatically saved message belongs to another case.');
-    const comments = (await this.db().prepare('SELECT id,body,outcome,rating,created_at,updated_at,version FROM personal_comments n WHERE card_id=? AND owner_id=? '+(case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=n.owner_id AND cm.entry_type='comment' AND cm.entry_id=n.id AND cm.case_id<>?) ":'')+'ORDER BY created_at').bind(id, this.owner(),...(case_id?[case_id]:[])).all()).results;
+    if(case_id&&await this.db().prepare("SELECT 1 FROM personal_case_memory WHERE owner_id=? AND retention='automatic' AND entry_type='card' AND entry_id=? AND case_id<>?").bind(this.owner(),id,case_id).first())throw new Error('This automatically saved message belongs to another case.');
+    const comments = (await this.db().prepare('SELECT id,body,outcome,rating,created_at,updated_at,version FROM personal_comments n WHERE card_id=? AND owner_id=? '+(case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=n.owner_id AND cm.retention='automatic' AND cm.entry_type='comment' AND cm.entry_id=n.id AND cm.case_id<>?) ":'')+'ORDER BY created_at').bind(id, this.owner(),...(case_id?[case_id]:[])).all()).results;
     delete card.fields_json; delete card.contacts_json; delete card.links_json;
     const latest=[...comments].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)||b.id.localeCompare(a.id))[0];
     const case_info=card.kind==='conversation'?await this.db().prepare('SELECT id,title,status,version FROM personal_cases WHERE archive_card_id=? AND owner_id=?').bind(id,this.owner()).first():null;
     return { ...card, case_info, category: card.fields.Category || '', comments, comment_count:comments.length, latest_note:latest?.body.slice(0,180)||'', experience:experience(comments) };
   }
-  async linkCaseMemory(case_id,type,id){if(!case_id)return;const value=await this.db().prepare("SELECT 1 FROM personal_cases WHERE id=? AND owner_id=? AND status='active'").bind(case_id,this.owner()).first();if(!value)throw new Error('This case is not available in your account.');await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id) VALUES (?,?,?,?)').bind(case_id,this.owner(),type,id).run();}
+  async linkCaseMemory(caseId, type, id, retention='automatic') {
+    if (!caseId) return;
+    const active = await this.db().prepare("SELECT 1 FROM personal_cases WHERE id=? AND owner_id=? AND status='active'")
+      .bind(caseId,this.owner()).first();
+    if (!active) throw new Error('This case is not available in your account.');
+    await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id,retention) VALUES (?,?,?,?,?)')
+      .bind(caseId,this.owner(),type,id,retention).run();
+  }
   async note({ title, body, organization, id = null, expected_version = null, kind = 'note', case_id = null }) {
     body = clean(body, 12000); title = clean(title || body.split('\n')[0], 140);
     if (!body || !title) throw new Error('Add some text to save this note.');

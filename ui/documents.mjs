@@ -11,6 +11,7 @@ const feedbackLabels = {
 };
 let caseFeedback = '', caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHistory = null;
 let expandedMemoryGroup = '', memoryHistoryOffset = 0;
+let manualWrapUp = false;
 const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
 const deleteChatHelp = 'Discard a practice or inaccurate conversation.';
 const date=value=>{try{return new Date(value).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch{return value;}};
@@ -35,7 +36,7 @@ function answerCardHTML(card, reply) {
     ${card.card_reason ? `<span class="card-reason"><b>Why consider</b>${e(card.card_reason)}</span>` :
       `<span class="card-excerpt">${e(card.body?.split('\n')[0]?.slice(0,120) || 'Open to see details')}</span>`}
     ${card.card_confirm || service ? `<span class="card-confirm"><b>Confirm</b>${e(card.card_confirm || 'Eligibility, service area, accessibility, fees and current capacity with intake.')}</span>` : ''}
-    <span class="answer-card-bottom">${contact ? `<span>${e(contact.value)}</span>` : ''}
+    <span class="answer-card-bottom">${contact && !service && !pickable ? `<span>${e(contact.value)}</span>` : ''}
       ${summary?.rating_count ? `<small>${Number(summary.rating_average).toFixed(1)}/5 · ${summary.rating_count} rating${summary.rating_count === 1 ? '' : 's'}</small>` :
         card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count === 1 ? '' : 's'}</small>` : ''}</span>`;
   if (!pickable) {
@@ -50,6 +51,18 @@ function answerCardHTML(card, reply) {
       ${button('open-card','View details','answer-card-details',`${details} data-reply-id="${e(reply.id)}" aria-label="View details for ${e(card.title)}"`)}
     </div></article>`;
 }
+function nextSteps(completion) {
+  const attrs = `data-id="${e(activeCase.id)}" data-version="${activeCase.version}"`;
+  return `<section class="case-next-steps" aria-label="Conversation next steps">
+    <h4 tabindex="-1">What would you like to do next?</h4>
+    <div class="case-next-actions">
+      ${button('keep-case-open','Keep chat open<small>Return to this conversation later.</small>','secondary',
+        `${attrs} data-message-id-for-completion="${e(completion?.message_id || '')}"`)}
+      ${button('archive-case','Add to memory library<small>Save the conversation as one item.</small>','primary',attrs)}
+      ${button('delete-case','Delete chat and notes<small>Remove this chat and the feedback saved from it.</small>','secondary danger',
+        `${attrs} data-include-notes="true"`)}
+    </div></section>`;
+}
 function renderChatFollowup(message) {
   const followup = message.followup;
   const available = followup.card && !followup.unavailable;
@@ -58,7 +71,7 @@ function renderChatFollowup(message) {
   const cardId = `data-id="${e(followup.card_id)}"`;
   const stepButton = (step, label, style, extra = '') =>
     button('chat-followup-step', label, style, `data-step="${step}" ${extra}`);
-  const viewDetails = available ? button('open-card','View details','quiet',cardId) : '';
+  const viewDetails = available ? button('open-card','View details','quiet',cardId+' data-from-followup="true"') : '';
   const otherOptions = messages.some(reply => reply.sequence === followup.reply_sequence && reply.cards?.length > 1)
     ? button('chat-followup-options','See other options','secondary',`data-sequence="${followup.reply_sequence}" ${cardId}`) : '';
   const listedContacts = available ? (followup.card.contacts || []) : [];
@@ -91,8 +104,7 @@ function renderChatFollowup(message) {
     const result = followup.result;
     const note = result.body !== resultLabel(result.outcome) + '.' ? `<p class="followup-note">${textHTML(result.body)}</p>` : '';
     content = `<div class="followup-saved" role="status"><span>✓ Result saved</span>${resultBadge(result)}</div>${note}
-      <div class="followup-actions">${result.outcome === 'not_worked' ? otherOptions : ''}${viewDetails}
-      ${!archived ? button('new-chat','New topic','quiet') : ''}</div>`;
+      <div class="followup-actions">${result.outcome === 'not_worked' ? otherOptions : ''}${viewDetails}</div>`;
   } else if (archived) {
     content = `<p>Result pending. Reopen this topic to finish it.</p><div class="followup-actions">${viewDetails}</div>`;
   } else if (followup.deferred) {
@@ -123,7 +135,9 @@ function renderChatFollowup(message) {
         <h3 id="followup-${e(message.id)}" tabindex="-1">${e(title)}</h3>${addNote}
       </div>
       ${contacts}${savedNote}${content}${available && !archived ? followupInputTools(followup.history, stepButton) : ''}
-    </section></article>`;
+    </section>
+    ${!busy && !manualWrapUp && !archived && followup.result && activeCase?.completion?.message_id === message.id
+      ? nextSteps(activeCase.completion) : ''}</article>`;
 }
 function renderModel(){const selected=state?.models?.selected,item=state?.models?.items?.find(m=>m.id===selected);$('model-status').textContent=selected?'AI model: '+(item?.name||selected):state?.account.sharing?'ChatGPT · model selected when you ask':'Connect ChatGPT for AI answers';}
 function serviceRowHTML(card){const contact=card.contacts?.[0];return `<article class="service-row" data-service-id="${e(card.id)}"><div class="service-row-info">${card.comment_count?`<div class="service-experience-preview">${experienceHTML(card.experience)}<small>Your latest note: ${e(card.latest_note)}</small></div>`:''}<span class="card-kicker">${e(card.category||'Known service')}</span>${button('open-card',e(card.title),'service-title',`data-id="${e(card.id)}"`)}<p>${e(card.body?.split('\n')[0]||'')}</p><span class="service-area">${e(card.area||'Confirm the service area with intake')}</span></div><div class="service-row-contact"><strong>${e(contact?.name||'Program contact')}</strong><span>${e(contact?.value||'See provider details')}</span>${card.comment_count?`<small>${card.comment_count} saved note${card.comment_count===1?'':'s'} / result${card.comment_count===1?'':'s'}</small>`:''}</div><div class="service-row-actions">${button('open-card','View details','secondary',`data-id="${e(card.id)}"`)}${button('ask-service','Ask assistant','quiet',`data-id="${e(card.id)}"`)}</div></article>`;}
@@ -339,6 +353,8 @@ async function actOnFollowup(action, target) {
     await flushCaseDraft();
     result = await api(starting ? 'start-service-followup' : 'update-service-followup', args);
     if (activeCase?.id !== args.case_id) return;
+    activeCase.completion = result.completion;
+    if (starting) manualWrapUp = false;
     if (starting && selected) {
       selected = null;
       context();
@@ -357,6 +373,12 @@ async function actOnFollowup(action, target) {
     lockCase(false);
   }
   const reply = $('messages').querySelector(`[data-message-id="${CSS.escape(result.id)}"]`);
+  const wrapUp = reply?.querySelector('.case-next-steps');
+  if (wrapUp && ['save','save-note','redo'].includes(args.step)) {
+    wrapUp.scrollIntoView({block:'nearest',behavior:'instant'});
+    wrapUp.querySelector('h4')?.focus({preventScroll:true});
+    return;
+  }
   reply?.scrollIntoView({block:'nearest',behavior:'instant'});
   const opposite = args.step === 'undo' ? 'redo' : args.step === 'redo' ? 'undo' : null;
   const correction = opposite && reply?.querySelector(`[data-step="${opposite}"]`);
@@ -370,13 +392,15 @@ function showFollowupOptions(target) {
   other?.focus({preventScroll:true});
 }
 function lockCase(value){caseChanging=value;document.body.dataset.caseChanging=String(value);$('chat-panel').setAttribute('aria-busy',String(value));$('send-button').disabled=value;$('message').disabled=busy||value;$('voice-button').disabled=busy||value;$('add-document').disabled=busy||value||importing;renderUndo();updateFollowupControls();}
-async function loadCase(id,{activate=true,focus=null}={}){if(busy)throw new Error('Choose Stop or wait for this answer before changing cases.');const sequence=++caseSequence;lockCase(true);try{await flushNote();await flushCaseDraft();await pauseVoice();const record=await api(activate?'select-case':'get-case',{id,focus});if(sequence!==caseSequence)return;activeCase=record;caseHasMore=record.has_more;caseHasNewer=record.has_newer;messages=record.messages.map(fromCaseMessage);selected=null;if(record.selected_card_id){try{selected=await api('get-card',{id:record.selected_card_id});}catch{}}$('message').value=record.draft||'';context();renderCaseTitle();renderMessages(true);renderCases();}finally{if(sequence===caseSequence)lockCase(false);}}
+async function loadCase(id,{activate=true,focus=null}={}){if(busy)throw new Error('Choose Stop or wait for this answer before changing cases.');const sequence=++caseSequence;lockCase(true);try{await flushNote();await flushCaseDraft();await pauseVoice();const record=await api(activate?'select-case':'get-case',{id,focus});if(sequence!==caseSequence)return;activeCase=record;manualWrapUp=false;caseHasMore=record.has_more;caseHasNewer=record.has_newer;messages=record.messages.map(fromCaseMessage);selected=null;if(record.selected_card_id){try{selected=await api('get-card',{id:record.selected_card_id});}catch{}}$('message').value=record.draft||'';context();renderCaseTitle();renderMessages(true);renderCases();}finally{if(sequence===caseSequence)lockCase(false);}}
 async function newCase(){if(busy)throw new Error('Choose Stop or wait for this answer before starting a new topic.');if(caseChanging)return;const navigation=navigationSequence;lockCase(true);try{await flushNote();await flushCaseDraft();const record=await api('new-case');if(navigation===navigationSequence)await changeLibraryMode('workspace');await loadCase(record.id);await refresh();$('message').focus();}finally{lockCase(false);}}
 async function caseOptions(id=activeCase?.id,{renameOnly=false}={}) {
   if (!id) return;
   const record = await api('get-case',{id,limit:1});
   const attrs = `data-id="${e(id)}" data-version="${record.version}"`;
   const caseActions = renameOnly ? '' : `<section class="detail-section case-choices">
+    ${record.status === 'active' && record.message_count
+      ? `<div>${button('finish-conversation','Finish conversation','secondary',attrs)}<p>Review what to do with this chat.</p></div>` : ''}
     ${record.status === 'active'
       ? `<div>${button('archive-case','Add to memory library','secondary',attrs+(record.message_count?'':' disabled'))}
         <p>${record.message_count?keepChatHelp:'Send a message to save this conversation.'}</p></div>`
@@ -391,6 +415,32 @@ async function caseOptions(id=activeCase?.id,{renameOnly=false}={}) {
     ${record.message_count ? button('suggest-case-title','Suggest a title','quiet',attrs) : ''}</div>
     ${caseActions}</div>`,'case-options-dialog');
   if (renameOnly) $('case-title-input').select();
+}
+async function finishConversation(id) {
+  if (modal.open&&!await closeModal()) return;
+  await loadCase(id);
+  manualWrapUp=true;
+  renderMessages();
+  const heading=$('messages').querySelector('.case-next-steps h4');
+  heading?.parentElement.scrollIntoView({block:'nearest',behavior:'instant'});
+  heading?.focus({preventScroll:true});
+}
+async function keepCaseOpen(target) {
+  const id=target.dataset.id;
+  if (busy||caseChanging||activeCase?.id!==id) return;
+  lockCase(true);
+  try {
+    const messageId=target.dataset.messageIdForCompletion;
+    if (messageId) {
+      const reply=await api('update-service-followup',{case_id:id,message_id:messageId,step:'keep-chat'});
+      activeCase.completion=reply.completion;
+    }
+    manualWrapUp=false;
+    renderMessages();
+    $('message').focus({preventScroll:true});
+  } finally {
+    lockCase(false);
+  }
 }
 async function applyInputHistory(direction, target) {
   if (busy || caseChanging || !noteEditor) return;
@@ -470,7 +520,7 @@ async function changeMemoryHistory(target) {
 }
 function shell(){
   $('app').innerHTML=`<aside class="sidebar"><div class="brand"><img class="brand-mark" src="care-navigation-logo.png" alt=""><div><strong>Care Navigation Support</strong><span>Personal assistant</span></div></div><nav>${button('workspace','◫ &nbsp; Workspace','nav-item active','data-library-mode="workspace"')}${button('known-services','▤ &nbsp; Known services','nav-item','data-library-mode="services"')}${button('manage-memory','▧ &nbsp; Manage memory','nav-item','data-library-mode="memory"')}</nav><section class="case-sidebar"><div class="case-sidebar-heading"><h2>Case chats</h2>${button('new-chat','＋ New topic','quiet')}</div><label class="sr-only" for="case-search">Search case chats</label><input id="case-search" placeholder="Search case chats"><label class="sr-only" for="case-feedback-filter">Filter chats by feedback status</label>
-      <select id="case-feedback-filter"><option value="">All conversations</option><option value="needed">Feedback needed</option><option value="unselected">No service selected</option><option value="recorded">Feedback recorded</option></select><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.12</span></div></aside>
+      <select id="case-feedback-filter"><option value="">All conversations</option><option value="needed">Feedback needed</option><option value="unselected">No service selected</option><option value="recorded">Feedback recorded</option></select><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.13</span></div></aside>
   <div id="case-action-menu" class="case-action-menu" popover="auto" aria-label="Conversation actions"></div>
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
@@ -514,7 +564,12 @@ function renderMessages(forceScroll=false){
     const answer=pending?'<div class="answer-summary answer-pending" role="status">Finding the useful details…</div>':cardsOnly?'':`<div class="${m.role==='assistant'?'answer-summary'+(m.error?' answer-error':''):'message-text'}">${textHTML(m.text||'No answer is available. Please retry.')}</div>`;
     return `<article class="message ${m.role}" data-message-sequence="${m.sequence||''}"><div class="message-label">${m.role==='user'?'YOU':'ASSISTANT'}${m.source?`<span>${e(m.source==='chatgpt'?'ChatGPT':m.source==='local'?'Saved information':m.source==='error'?'Connection interrupted':m.source)}</span>`:''}${m.saved?'<span class="saved-marker">Saved to memory</span>':''}</div>${answer}${!pending&&m.cards?.length?`<div class="answer-cards">${m.cards.map(c=>answerCardHTML(c,m)).join('')}</div>`:''}${!pending&&m.calculations?.length?`<div class="calculation-proof">${m.calculations.map(c=>`<div>Calculated from ${e(c.matched_rows)} matching row(s) · ${e(c.operation)}${c.column?' of '+e(c.column):''}${c.value!==undefined?' = '+e(c.value??'No numeric values'):''}</div>`).join('')}</div>`:''}${m.role==='assistant'&&m.error?button('retry','Retry question','quiet',`data-index="${index}"`):''}</article>`;
   }).join(''):`<div class="chat-welcome"><img class="welcome-icon" src="care-navigation-logo.png" alt=""><h2>A clearer way to work<br>with your information.</h2><p>Ask a question, add a document, or keep a case conversation for later.</p><div class="prompt-chips">${button('prompt','Find a local service','prompt',`data-prompt="Find transportation services in North York. Show the service cards and contact details."`)}${button('prompt','Summarize a document','prompt',`data-prompt="Summarize my latest imported document. Highlight anything I should follow up on."`)}${button('prompt','Recall my notes','prompt',`data-prompt="What have I saved in my personal notes? Show the matching cards."`)}</div><small>Use a case title without patient names or identifiers.</small></div>`)
-    +(caseHasNewer ? button('latest-messages','↓ Latest messages','quiet latest-messages') : '');
+    +(caseHasNewer ? button('latest-messages','↓ Latest messages','quiet latest-messages') : '')
+    +(!busy && activeCase?.status === 'active' &&
+      (manualWrapUp || (activeCase.completion && !messages.some(message=>message.id===activeCase.completion.message_id)))
+      ? `<article class="message assistant"><div class="message-label">ASSISTANT</div>
+        ${!manualWrapUp ? `<div class="completion-summary"><strong>${e(activeCase.completion.title)}</strong>
+          ${resultBadge(activeCase.completion)}</div>` : ''}${nextSteps(activeCase.completion)}</article>` : '');
   updateFollowupControls();
   if(forceScroll){const last=viewport.querySelector('.message:last-of-type');viewport.scrollTo({top:last?last.getBoundingClientRect().top-viewport.getBoundingClientRect().top+viewport.scrollTop:viewport.scrollHeight,behavior:'instant'});}else viewport.scrollTop=follow?viewport.scrollHeight:previous;
 }
@@ -527,47 +582,92 @@ async function sendMessage(retryText=null,retryTurnId=null){
     const text=(retryText||$('message').value).trim();if(!text)return;
     if(activeCase?.status==='archived')throw new Error('Reopen this saved case to continue.');
     await flushCaseDraft();
+    manualWrapUp=false;
     messages.push({role:'user',text});response={role:'assistant',text:''};messages.push(response);$('message').value='';renderMessages(true);
     const answer=await api('chat',{text,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer);response.error=answer.source==='error';await refresh();
   }catch(error){if(response){response.text=error.message;response.error=true;response.source='error';}else fail(error);}
   finally{if(response&&response.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}setBusy(false);renderMessages(true);$('message').focus();}
 }
-function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div>${isService(selected)?`<div class="context-actions"><span>After following up:</span>${resultButtons(selected.id)}</div>`:''}</div>`:'';}
-function resultButtons(id){return button('record-service-result','✓ Worked','secondary result-choice',`data-id="${e(id)}" data-outcome="worked"`)+button('record-service-result',"Didn't work",'secondary result-choice',`data-id="${e(id)}" data-outcome="not_worked"`);}
+function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div></div>`:'';}
 function resultDraft(){return feedbackEditor?{outcome:feedbackEditor.outcome,rating:$('result-rating')?.value||'',body:$('result-note')?.value||''}:null;}
 function discardResult(){return !feedbackEditor||JSON.stringify(resultDraft())===feedbackEditor.initial||confirm('Discard this unsaved service result? Choose Cancel to keep editing.');}
 async function openModal(content,kind=''){if(feedbackSaving)throw new Error('Wait for the service result to finish saving.');if(!discardResult())throw new Error('Save the result or choose Cancel result before leaving.');await flushNote();noteEditor=null;feedbackEditor=null;cardHistory=null;modal.className=kind;modal.innerHTML=content;if(!modal.open)modal.showModal();}
 function modalHead(title,subtitle=''){return`<div class="modal-heading"><div><h2 id="modal-title">${e(title)}</h2>${subtitle?`<p>${e(subtitle)}</p>`:''}</div>${button('close-modal','×','icon-button','aria-label="Close panel"')}</div>`;}
 async function closeModal(){if(feedbackSaving)throw new Error('Wait for the service result to finish saving.');if(!discardResult())return false;await flushNote();noteEditor=null;feedbackEditor=null;cardHistory=null;modal.close();modal.replaceChildren();return true;}
-async function openCard(id, {replyId=null}={}){
-  await flushNote();const card=await api('get-card',{id}),service=isService(card),hasResults=service||card.comments.some(note=>note.outcome);if(card.case_info){if(modal.open&&!await closeModal())return;await loadCase(card.case_info.id,{activate:false});await changeLibraryMode('workspace');return;}
-  const notes=`<section class="detail-section ${service?'service-history':''}" id="card-history"><div class="section-title"><h3>${service?'Your notes & results':'Your notes & corrections'}</h3><span class="subtle">Saved on this card</span>${service?button('focus-card-note','Add a note','quiet'):''}</div>${hasResults?`<div id="service-experience">${experienceHTML(card.experience)}</div><p class="subtle history-help">Your observations and ratings, kept with this service.</p><p id="service-history-status" class="saved-status" role="status"></p>`:''}${inputTools()}<div id="card-notes">${notesHTML(card.comments)}</div><div id="card-note-editor" ${service?'hidden':''}><label class="sr-only" for="card-note">Add a note or correction</label><textarea id="card-note" rows="2" maxlength="12000" placeholder="Add a note. Your words stay with this card."></textarea><div class="note-status"><span id="note-status">Notes save automatically when you pause.</span>${button('new-card-note','New note','quiet')}</div></div></section>`;
-  const contacts=`<section class="detail-section" id="service-contacts" tabindex="-1"><div class="section-title"><h3>${service?'Contact & follow up':'Contacts in the source'}</h3>${service?`<span id="service-use-state" class="subtle">${selected?.id===card.id?'Selected service':'Choose this service using the button below'}</span>`:''}</div>${card.contacts?.map(contact=>`<div class="contact-row"><div><strong>${e(contact.name||'Listed '+contact.kind)}</strong><span>${e(contact.value)}</span></div>${button('copy-contact','Copy','quiet',`data-id="${e(card.id)}" data-value="${e(contact.value)}"`)}</div>`).join('')||'<p class="subtle">Use the provider page to confirm the contact details.</p>'}${service?`<div class="service-result-prompt"><div><strong>Did this service work?</strong><p>Record what happened after following up.</p></div><div class="result-buttons">${resultButtons(card.id)}</div></div>`:''}${hasResults?'<div id="service-result-editor" hidden></div>':''}</section>`;
-  const fields=Object.keys(card.fields||{}).length?`<dl class="field-list" id="card-fields">${Object.entries(card.fields).map(([key,value])=>`<div><dt>${e(key)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>`:`<div class="source-text">${textHTML(card.body)}</div>`;
-  const links=card.links?.length?`<section class="detail-section"><h3>Source links</h3>${card.links.map(url=>button('open-link',e(url)+' ↗','source-link',`data-url="${e(url)}"`)).join('')}</section>`:'';
-  const useFromChat = replyId ? button('use-service-from-details','Use this service','primary',
-    `data-id="${e(card.id)}" data-reply-id="${e(replyId)}"`) : '';
-  const pick = useFromChat || button('select-service',selected?.id===card.id?'Selected service ✓':'Select this service','primary',`data-id="${e(card.id)}"`);
-  const footer=service?pick+button('use-card','Ask more about this card','secondary',`data-id="${e(card.id)}"`)+button('open-link','Provider page ↗','secondary',`data-url="${e(card.fields['Provider page'])}"`):useFromChat+button('use-card','Ask about this card',useFromChat?'secondary':'primary',`data-id="${e(card.id)}"`)+button('focus-card-note','Add a note','secondary')+(card.document_id?button('open-original','Open original file ↗','secondary',`data-id="${e(card.document_id)}"`):button('edit-note','Edit note','secondary',`data-id="${e(card.id)}"`))+button('delete-card','Delete card','danger quiet',`data-id="${e(card.id)}"`);
-  await openModal(modalHead(card.title,fileLabel(card))+`<div class="detail-body">${card.archived?'<p class="callout">This row was removed in a newer import. Its notes have been kept.</p>':''}${service?notes+contacts+fields:fields+(card.contacts?.length||hasResults?contacts:'')}${links}${service?'':notes}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
+async function openCard(id, {replyId=null,fromFollowup=false}={}) {
+  await flushNote();
+  const card=await api('get-card',{id});
+  if (card.case_info) {
+    if (modal.open&&!await closeModal()) return;
+    await loadCase(card.case_info.id,{activate:false});
+    await changeLibraryMode('workspace');
+    return;
+  }
+  const service=isService(card);
+  const servicePreview=service||Boolean(replyId)||fromFollowup;
+  const addFromDetails=!replyId&&!fromFollowup;
+  const hasResults=servicePreview||card.comments.some(note=>note.outcome);
+  const idAttr=`data-id="${e(card.id)}"`;
+  const fields=Object.entries(card.fields||{}).filter(([key])=>!servicePreview||
+    !/\b(?:phone|telephone|email|e-mail|fax|contact|tel)\b/i.test(key));
+  const cardFields=fields.length?`<dl class="field-list" id="card-fields">${fields.map(([key,value])=>
+    `<div><dt>${e(key)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>`:
+    `<div class="source-text">${textHTML(servicePreview?card.body.split('\n')[0]:card.body)}</div>`;
+  const notes=`<section class="detail-section ${servicePreview?'service-history':''}" id="card-history"
+    ${addFromDetails||card.comments.length?'':'hidden'}>
+    <div class="section-title"><h3>${hasResults?'Your notes & results':'Your notes & corrections'}</h3>
+    ${servicePreview&&addFromDetails?button('focus-card-note','Add a note','quiet'):''}</div>
+    ${hasResults?`<div id="service-experience">${experienceHTML(card.experience)}</div>
+      <p id="service-history-status" class="saved-status" role="status"></p>`:''}
+    ${inputTools()}<div id="card-notes">${notesHTML(card.comments)}</div>
+    ${hasResults?'<div id="service-result-editor" hidden></div>':''}
+    <div id="card-note-editor" ${servicePreview?'hidden':''}>
+      <label class="sr-only" for="card-note">Add a note or correction</label>
+      <textarea id="card-note" rows="2" maxlength="12000" placeholder="Add a note"></textarea>
+      <div class="note-status"><span id="note-status">Notes save automatically when you pause.</span>
+      ${button('new-card-note','New note','quiet')}</div>
+    </div></section>`;
+  const contacts=!servicePreview&&card.contacts?.length?`<section class="detail-section" id="service-contacts">
+    <h3>Contacts in the source</h3>${card.contacts.map(contact=>`<div class="contact-row">
+      <div><strong>${e(contact.name||'Listed '+contact.kind)}</strong><span>${e(contact.value)}</span></div>
+      ${button('copy-contact','Copy','quiet',`${idAttr} data-value="${e(contact.value)}"`)}</div>`).join('')}</section>`:'';
+  const links=card.links?.length?`<section class="detail-section"><h3>Source links</h3>${card.links.map(url=>
+    button('open-link',e(url)+' ↗','source-link',`data-url="${e(url)}"`)).join('')}</section>`:'';
+  const pick=servicePreview&&!fromFollowup&&!card.archived?button('use-service-from-details','Use this service','primary',
+    `${idAttr} data-reply-id="${e(replyId||'')}"`):'';
+  const footer=service?pick+button('use-card','Ask more about this card','secondary',idAttr)+
+    button('open-link','Provider page ↗','secondary',`data-url="${e(card.fields['Provider page'])}"`):
+    pick+button('use-card','Ask about this card',pick?'secondary':'primary',idAttr)+
+    (addFromDetails?button('focus-card-note','Add a note','secondary'):'')+
+    (card.document_id?button('open-original','Open original file ↗','secondary',`data-id="${e(card.document_id)}"`):
+      button('edit-note','Edit note','secondary',idAttr))+button('delete-card','Delete card','danger quiet',idAttr);
+  await openModal(modalHead(card.title,fileLabel(card))+`<div class="detail-body">
+    ${card.archived?'<p class="callout">This row was removed in a newer import. Its notes have been kept.</p>':''}
+    ${servicePreview?notes+cardFields:cardFields+contacts+notes}${links}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
   noteEditor={cardId:id,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};
   $('card-note').addEventListener('input',()=>{noteEditor.body=$('card-note').value;$('note-status').textContent='Saving…';clearTimeout(noteTimer);noteTimer=setTimeout(()=>flushNote().catch(fail),800);});
   await refreshCardHistoryControls(id);
 }
 function notesHTML(comments){return comments?.length?[...comments].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)||b.id.localeCompare(a.id)).map(n=>`<div class="saved-note" data-note-id="${e(n.id)}">${resultBadge(n)}<p>${textHTML(n.body)}</p><div class="note-actions"><small>${e(date(n.updated_at))}</small>${button('edit-card-comment','Edit','quiet',`data-id="${e(n.id)}"`)}${button('delete-card-comment','Delete','quiet danger',`data-id="${e(n.id)}"`)}</div></div>`).join(''):'<p class="subtle no-notes">No notes yet.</p>';}
 function updateCardHistory(card){$('card-notes').innerHTML=notesHTML(card.comments);if($('service-experience'))$('service-experience').innerHTML=experienceHTML(card.experience);}
-async function startServiceResult(id,outcome=null,editId=null){
+async function startServiceResult(id,editId) {
   if(busy)throw new Error('Wait for this answer or choose Stop before recording a result.');
   if(feedbackSaving)throw new Error('Wait for the current result to save.');
   if(!modal.open||noteEditor?.cardId!==id)await openCard(id);
-  await flushNote();$('card-note-editor').hidden=true;const card=await api('get-card',{id}),note=editId?card.comments.find(n=>n.id===editId&&n.outcome):null;
-  if(editId?!note:!isService(card))throw new Error('This service result is no longer available. Reopen the card.');
+  await flushNote();$('card-note-editor').hidden=true;const card=await api('get-card',{id}),note=card.comments.find(n=>n.id===editId&&n.outcome);
+  if(!note)throw new Error('This service result is no longer available. Reopen the card.');
   if(feedbackEditor&&!discardResult())return;
-  feedbackEditor={cardId:id,id:note?.id||null,version:note?.version||null,outcome:note?.outcome||outcome||null};
-  $('service-result-editor').innerHTML=`<div class="result-editor-heading"><h3>${note?'Edit service result':'Record a service result'}</h3><small>Choose a result, then Save result.</small></div><fieldset class="result-outcomes"><legend>What happened?</legend>${button('choose-service-result','✓ Worked','secondary',`data-outcome="worked" aria-pressed="${feedbackEditor.outcome==='worked'}"`)}${button('choose-service-result',"Didn't work",'secondary',`data-outcome="not_worked" aria-pressed="${feedbackEditor.outcome==='not_worked'}"`)}</fieldset><label for="result-rating">Your rating (optional)<select id="result-rating"><option value="">No rating</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${note?.rating===n?'selected':''}>${n}/5${n===1?' · Poor':n===5?' · Excellent':''}</option>`).join('')}</select></label><label for="result-note">What happened? (optional)<textarea id="result-note" rows="3" maxlength="12000" placeholder="For example: no accessible vehicle for Tuesday, or the ride was completed.">${e(note?.body===resultLabel(note?.outcome)+'.'?'':note?.body||'')}</textarea></label><div class="result-editor-actions">${button('save-service-result',note?'Save changes':'Save result','primary','id="save-service-result"')}${button('cancel-service-result','Cancel result','quiet')}</div><p id="result-status" class="saved-status" role="status">This result has not been saved yet.</p>`;
+  feedbackEditor={cardId:id,id:note.id,version:note.version,outcome:note.outcome};
+  $('service-result-editor').innerHTML=`<div class="result-editor-heading"><h3>Edit service result</h3></div>
+    <fieldset class="result-outcomes"><legend>What happened?</legend>
+    ${button('choose-service-result','✓ Worked','secondary',`data-outcome="worked" aria-pressed="${note.outcome==='worked'}"`)}
+    ${button('choose-service-result',"Didn't work",'secondary',`data-outcome="not_worked" aria-pressed="${note.outcome==='not_worked'}"`)}</fieldset>
+    <label for="result-rating">Your rating (optional)<select id="result-rating"><option value="">No rating</option>
+    ${[1,2,3,4,5].map(n=>`<option value="${n}" ${note.rating===n?'selected':''}>${n}/5${n===1?' · Poor':n===5?' · Excellent':''}</option>`).join('')}</select></label>
+    <label for="result-note">What happened? (optional)<textarea id="result-note" rows="3" maxlength="12000">${e(note.body===resultLabel(note.outcome)+'.'?'':note.body)}</textarea></label>
+    <div class="result-editor-actions">${button('save-service-result','Save changes','primary','id="save-service-result"')}
+    ${button('cancel-service-result','Cancel result','quiet')}</div><p id="result-status" class="saved-status" role="status"></p>`;
   $('service-result-editor').hidden=false;feedbackEditor.initial=JSON.stringify(resultDraft());
-  // A new result with a preselected outcome still needs an explicit save.
-  if(!note)feedbackEditor.initial=JSON.stringify({outcome:null,rating:'',body:''});
   $('service-result-editor').scrollIntoView({block:'center',behavior:'instant'});$('result-note').focus({preventScroll:true});
 }
 async function saveServiceResult(){
@@ -617,7 +717,7 @@ async function editMemory(target){
   const card=await api('get-card',{id:target.dataset.cardId});if(card.case_info){await caseOptions(card.case_info.id);return;}
   if(target.dataset.entryType==='comment'){
     const note=card.comments.find(n=>n.id===target.dataset.id);if(!note)throw new Error('This memory is no longer available. Refresh the list.');
-    if(note.outcome){await startServiceResult(card.id,null,note.id);return;}
+    if(note.outcome){await startServiceResult(card.id,note.id);return;}
     await openModal(modalHead('Edit saved feedback',card.title)+`<form class="detail-body"><label>Saved information<textarea id="memory-comment-body" rows="8" maxlength="12000" required>${e(note.body)}</textarea></label><p class="subtle">This changes your saved note. The provider or document source stays intact.</p><div class="modal-footer">${button('save-memory-comment','Save changes','primary',`data-id="${e(note.id)}" data-card-id="${e(card.id)}" data-version="${note.version}"`)}</div></form>`);$('memory-comment-body').focus();
   }else if(card.document_id){await openCard(card.id);$('card-note').scrollIntoView({block:'center'});$('card-note').focus();}
   else await noteForm(card.id);
@@ -643,7 +743,7 @@ const voice=new Voice({status:text=>{if($('voice-status'))$('voice-status').text
 function fail(error){notice(error.message||String(error),true);}
 document.addEventListener('click',async event=>{const target=event.target.closest('[data-action]');if(!target)return;event.preventDefault();const action=target.dataset.action;
   if(target.closest('#case-action-menu'))hideCaseMenu();
-  if(caseChanging && ['open-case','case-menu','review-case-feedback','case-options','settings','archive-case','delete-case','reopen-case','latest-messages'].includes(action))return;
+  if(caseChanging && ['open-case','case-menu','review-case-feedback','case-options','settings','archive-case','delete-case','reopen-case','latest-messages','finish-conversation','keep-case-open'].includes(action))return;
   try{
     if(action==='send')await sendMessage();
     else if(action==='case-menu')showCaseMenu(target);
@@ -672,18 +772,24 @@ document.addEventListener('click',async event=>{const target=event.target.closes
       await refresh();
       notice('Conversation title updated.');
     }
+    else if(action==='finish-conversation')await finishConversation(target.dataset.id);
+    else if(action==='keep-case-open')await keepCaseOpen(target);
     else if(action==='archive-case'||action==='delete-case'){
       const id=target.dataset.id;
-      if(action==='delete-case'&&!confirm('Permanently delete this conversation and any messages it saved automatically? You can manage separately recorded notes and results in the memory library.'))return;
+      const include_notes=target.dataset.includeNotes==='true';
+      if(action==='delete-case'&&!confirm(include_notes?
+        'Permanently delete this conversation and the notes, ratings and service results saved from it?':
+        'Permanently delete this conversation and any messages it saved automatically? You can manage separately recorded notes and results in the memory library.'))return;
       if(busy)throw new Error('Wait for the answer or choose Stop before choosing what to do with this conversation.');
       lockCase(true);
       try{
         await flushCaseDraft();
-        await api(action,{id,expected_version:Number(target.dataset.version)});
+        await api(action,{id,expected_version:Number(target.dataset.version),include_notes});
         if(modal.open)await closeModal();
         if(activeCase?.id===id){activeCase=null;selected=null;messages=[];context();}
         await refresh();
-        notice(action==='archive-case'?'Conversation added to the memory library.':'Chat history deleted.');
+        notice(action==='archive-case'?'Conversation added to the memory library.':
+          include_notes?'Conversation and its saved notes and results deleted.':'Chat history deleted.');
       }finally{lockCase(false);}
     }
     else if(action==='reopen-case'){if(modal.open&&!await closeModal())return;await api('reopen-case',{id:target.dataset.id});await loadCase(target.dataset.id);await changeLibraryMode('workspace');await refresh();}
@@ -710,11 +816,13 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='chat-followup-start'||action==='chat-followup-step')await actOnFollowup(action,target);
     else if(action==='chat-followup-options')showFollowupOptions(target);
     else if(action==='use-service-from-details'){
-      if(!caseChanging&&!busy&&await closeModal())await actOnFollowup('chat-followup-start',target);
+      if(caseChanging||busy||!await closeModal())return;
+      if(activeCase?.status!=='active')await loadCase(state.active_case.id);
+      if(libraryMode==='memory')await changeLibraryMode('workspace');
+      if(libraryMode==='services'&&!serviceChatOpen)openServiceChat($('service-chat-launcher'));
+      await actOnFollowup('chat-followup-start',target);
     }
-    else if(action==='open-card')await openCard(target.dataset.id,{replyId:target.dataset.replyId});
-    else if(action==='select-service'){if(busy)throw new Error('Wait for the answer or choose Stop before selecting a service.');$('service-use-state').textContent='Selecting service…';await flushNote();selected=await api('get-card',{id:target.dataset.id});context();await flushCaseDraft();$('card-note-editor').hidden=true;target.textContent='Selected service ✓';$('service-use-state').textContent='Selected service';$('service-contacts').scrollIntoView({block:'start',behavior:'smooth'});$('service-contacts').focus({preventScroll:true});notice('Service selected. Use the contact details, then record whether it worked.');}
-    else if(action==='record-service-result')await startServiceResult(target.dataset.id,target.dataset.outcome);
+    else if(action==='open-card')await openCard(target.dataset.id,{replyId:target.dataset.replyId,fromFollowup:target.dataset.fromFollowup==='true'});
     else if(action==='choose-service-result'){if(feedbackSaving)return;feedbackEditor.outcome=target.dataset.outcome;document.querySelectorAll('.result-outcomes [data-outcome]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.outcome===feedbackEditor.outcome)));}
     else if(action==='save-service-result')await saveServiceResult();
     else if(action==='cancel-service-result'){if(feedbackSaving)return;if(!discardResult())return;feedbackEditor=null;$('service-result-editor').hidden=true;}
@@ -722,7 +830,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='focus-card-note'){$('card-note-editor').hidden=false;$('card-note').scrollIntoView({block:'center',behavior:'smooth'});$('card-note').focus({preventScroll:true});}
     else if(action==='use-card'||action==='ask-service'){if(busy)throw new Error('Wait for this answer or choose Stop before switching cards.');const id=target.dataset.id,sequence=navigationSequence;if(modal.open&&!await closeModal())return;const card=await api('get-card',{id});if(sequence!==navigationSequence)return;selected=card;context();await flushCaseDraft();if(sequence!==navigationSequence)return;if(libraryMode==='memory')await changeLibraryMode('workspace');if(libraryMode==='services')openServiceChat(target);else if(libraryMode==='workspace')$('message').focus({preventScroll:true});}
     else if(action==='new-card-note'){await flushNote();$('card-note-editor').hidden=false;noteEditor={cardId:noteEditor.cardId,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};$('card-note').value='';$('note-status').textContent='Notes save automatically when you pause.';$('card-note').focus();}
-    else if(action==='edit-card-comment'){await flushNote();const card=await api('get-card',{id:noteEditor.cardId}),note=card.comments.find(n=>n.id===target.dataset.id);if(!note)throw new Error('This note is no longer available.');if(note.outcome){await startServiceResult(card.id,null,note.id);return;}noteEditor={cardId:card.id,id:note.id,version:note.version,body:note.body,saved:note.body,queue:Promise.resolve()};$('card-note-editor').hidden=false;$('card-note').value=note.body;$('note-status').textContent='Editing saved note. Changes save when you pause.';$('card-note').focus();}
+    else if(action==='edit-card-comment'){await flushNote();const card=await api('get-card',{id:noteEditor.cardId}),note=card.comments.find(n=>n.id===target.dataset.id);if(!note)throw new Error('This note is no longer available.');if(note.outcome){await startServiceResult(card.id,note.id);return;}noteEditor={cardId:card.id,id:note.id,version:note.version,body:note.body,saved:note.body,queue:Promise.resolve()};$('card-note-editor').hidden=false;$('card-note').value=note.body;$('note-status').textContent='Editing saved note. Changes save when you pause.';$('card-note').focus();}
     else if(action==='delete-card-comment'){if(feedbackEditor?.id===target.dataset.id){notice('Finish or cancel editing this result before deleting it.',true);return;}if(!confirm('Delete this saved note or result?'))return;await flushNote();const cardId=noteEditor.cardId;await api('forget-comment',{id:target.dataset.id,card_id:cardId});if(noteEditor.id===target.dataset.id){noteEditor={cardId,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};$('card-note').value='';}updateCardHistory(await api('get-card',{id:cardId}));await refreshCardHistoryControls(cardId);$('note-status').textContent='Note or result deleted.';if($('service-history-status'))$('service-history-status').textContent='Saved note or result deleted.';await refresh();}
     else if(action==='documents')await manageDocuments();
     else if(action==='filter-document'||action==='previous-rows'){libraryMode='memory';documentFilter=target.dataset.id;includeArchived=action==='previous-rows';offset=0;await closeModal();$('document-filter').value=documentFilter;renderLibraryMode();await loadCards();}

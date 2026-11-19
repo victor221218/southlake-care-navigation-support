@@ -14,7 +14,7 @@ const historyScope = followup => ({
 });
 
 function followupData(value) {
-  if (!validId(value?.card_id) || !Number.isInteger(value.reply_sequence) || value.reply_sequence < 1) return null;
+  if (!validId(value?.card_id) || !Number.isInteger(value.reply_sequence) || value.reply_sequence < 0) return null;
   return {
     card_id: value.card_id,
     reply_sequence: value.reply_sequence,
@@ -23,6 +23,7 @@ function followupData(value) {
     body: noteText(value.body),
     rating: validRating(value.rating) ? value.rating : null,
     result_id: validId(value.result_id) ? value.result_id : null,
+    keep_chat: value.keep_chat === true,
     note_open: value.note_open === true,
     note_draft: noteText(value.note_draft),
     note_ids: recentNoteIds(value.note_ids)
@@ -90,23 +91,25 @@ export class CaseFollowups {
   async start({case_id, reply_id, card_id}) {
     const row = await this.db().transaction(async () => {
       const current = await this.activeCase(case_id);
-      const reply = await this.message(case_id, reply_id, current.owner_id);
+      const reply = reply_id ? await this.message(case_id, reply_id, current.owner_id) : null;
       const payload = JSON.parse(reply?.payload_json || '{}');
-      if (!payload.cards?.some(card => card.id === card_id)) throw new Error('Choose a service card from this topic.');
+      if (reply_id && !payload.cards?.some(card => card.id === card_id)) throw new Error('Choose a service card from this topic.');
       const card = await this.store.get(card_id, {case_id});
       if (!card.document_id || card.archived ||
           (card.source_format !== 'service-directory' && payload.presentation !== 'service-options')) {
         throw new Error('Choose a current service recommendation.');
       }
+      // Sequence zero identifies selections that started in Known services.
+      const replySequence = reply?.sequence ?? 0;
       const existing = await this.db().prepare(
-        "SELECT * FROM personal_case_messages WHERE case_id=? AND owner_id=? AND json_extract(payload_json,'$.followup.card_id')=? AND json_extract(payload_json,'$.followup.reply_sequence')=?"
-      ).bind(case_id, current.owner_id, card_id, reply.sequence).first();
+        "SELECT * FROM personal_case_messages WHERE case_id=? AND owner_id=? AND json_extract(payload_json,'$.followup.card_id')=? AND json_extract(payload_json,'$.followup.reply_sequence')=? ORDER BY sequence DESC LIMIT 1"
+      ).bind(case_id, current.owner_id, card_id, replySequence).first();
       if (existing) return existing;
       const {next} = await this.db().prepare(
         'SELECT COALESCE(MAX(sequence),0)+1 AS next FROM personal_case_messages WHERE case_id=? AND owner_id=?'
       ).bind(case_id, current.owner_id).first();
       const id = randomUUID(), time = timestamp();
-      const followup = followupData({card_id, reply_sequence: reply.sequence});
+      const followup = followupData({card_id, reply_sequence: replySequence});
       const body = 'Service selected for follow-up: ' + card.title;
       await this.db().prepare(
         "INSERT INTO personal_case_messages(id,owner_id,case_id,origin_id,sequence,role,body,payload_json,created_at,updated_at) VALUES (?,?,?,?,?,'assistant',?,?,?,?)"
@@ -125,6 +128,13 @@ export class CaseFollowups {
       if (!followup) throw new Error('This service follow-up is unavailable in this topic.');
       const card = await this.store.get(followup.card_id, {case_id});
       if (!card.document_id || card.archived) throw new Error('This service card is no longer available.');
+      if (step === 'keep-chat') {
+        const completion = await this.cases.completion(current);
+        if (completion?.message_id !== message_id) return message;
+        followup.keep_chat = true;
+        await this.write(message,followup,message.updated_at);
+        return this.message(case_id,message_id,current.owner_id);
+      }
       if (step === 'undo' || step === 'redo') {
         await this.inputHistory.apply(step, {scope:historyScope(followup), expected_id:change_id});
         const time = timestamp();
@@ -153,6 +163,7 @@ export class CaseFollowups {
             {type: 'comment', card_id: card.id, label: 'Add service note'},
             () => this.store.comment({card_id: card.id, body: followup.note_draft})
           );
+          await this.store.linkCaseMemory(case_id,'comment',note.id,'explicit');
           followup.note_ids = recentNoteIds([...followup.note_ids, note.id]);
           followup.note_open = false;
           followup.note_draft = '';
@@ -184,7 +195,9 @@ export class CaseFollowups {
             {type: 'comment', card_id: card.id, label: 'Record service result'},
             () => this.store.serviceResult(serviceResult, {fromCaseSuggestion: true})
           );
+          await this.store.linkCaseMemory(case_id,'comment',saved.id,'explicit');
           followup.result_id = saved.id;
+          followup.keep_chat = false;
           followup.body = '';
           followup.rating = null;
           break;
@@ -240,7 +253,8 @@ export class CaseFollowups {
     const value = JSON.parse(row.payload_json).followup;
     return {
       id: row.id, role: row.role, body: row.body, sequence: row.sequence, state: row.state,
-      payload: {followup: await hydrateFollowup(value, this.store, row.case_id)}
+      payload: {followup: await hydrateFollowup(value, this.store, row.case_id)},
+      completion: await this.cases.completion(await this.cases.row(row.case_id))
     };
   }
 }

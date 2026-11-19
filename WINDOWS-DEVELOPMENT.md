@@ -1,4 +1,4 @@
-# Windows development — version 2.12.0
+# Windows development — version 2.13.0
 
 These steps cover development and installer builds. End users use the finished Windows installer and need none of these tools.
 
@@ -41,7 +41,7 @@ python scripts/prepare-windows.py
 & 'C:/build-tools/Inno Setup/ISCC.exe' scripts/windows-installer.iss
 ```
 
-Adjust only the compiler path to its approved installation. The result is `release/setup/Care-Navigation-Support-Setup-2.12.0.exe`. Version and app identity are defined in package.json and scripts/windows-installer.iss. Keep them consistent. The hoisted pinned dependencies provide the Windows resource editor used during staging. `assets/care-navigation-logo.png` is the supplied artwork and `assets/hive.ico` contains the Windows icon sizes. It installs per Windows user and retains separate app-data files on upgrade/uninstall.
+Adjust only the compiler path to its approved installation. The result is `release/setup/Care-Navigation-Support-Setup-2.13.0.exe`. Version and app identity are defined in package.json and scripts/windows-installer.iss. Keep them consistent. The hoisted pinned dependencies provide the Windows resource editor used during staging. `assets/care-navigation-logo.png` is the supplied artwork and `assets/hive.ico` contains the Windows icon sizes. It installs per Windows user and retains separate app-data files on upgrade/uninstall.
 
 The packager collects dependency license notices. Keep the bundled Vosk model source manifest, Apache license and notices with the assets. The OpenAI demonstration DevKit is not bundled; this app implements the published protocol independently.
 
@@ -52,7 +52,7 @@ After build/package and runtime configuration:
 ```powershell
 node scripts/prepare-document-smoke.mjs
 python scripts/prepare-windows.py --document-smoke
-& '.runtime/document-smoke-2.12.0/Care Navigation Support Test.exe'
+& '.runtime/document-smoke-2.13.0/Care Navigation Support Test.exe'
 ```
 
 Run this from a normal Windows desktop session. It uses its own isolated test profile and fictional files, exercises the shipping main/renderer/IPC, checks all three bundled Office/PDF readers, and relaunches to verify pending notes are saved before closing. It writes `document-smoke-result.json` in its test directory. It does not sign in, perform live AI requests, read existing user data or open the microphone. The test preload/bootstrap and fixtures are **not** part of the shipping installer.
@@ -60,7 +60,7 @@ Run this from a normal Windows desktop session. It uses its own isolated test pr
 For an extraction-only installer check, use a fresh test directory:
 
 ```powershell
-& 'release/setup/Care-Navigation-Support-Setup-2.12.0.exe' /PORTABLE=1 /DIR="C:/build-tests/care-navigation-support-2.12.0" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+& 'release/setup/Care-Navigation-Support-Setup-2.13.0.exe' /PORTABLE=1 /DIR="C:/build-tests/care-navigation-support-2.13.0" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
 This copies application files without normal shortcuts/uninstall registration. It does not prove the UI, account connection or AI work. Do not disable Chromium sandboxing or bypass OS protection to make a build launch.
@@ -75,7 +75,7 @@ Legacy service-navigation and Mac development notes are retained in BUILDING.md;
 
 ## Service directory and app identity
 
-`src/documents/services.mjs` builds the 27 public cards from the earlier researched catalog, with source dates and targeted contact updates. Initialization uses stable source keys, avoids duplicate imports, and retains notes when the public snapshot is updated. `src/app-identity.mjs` preserves the legacy Windows data folder independently of the displayed product name. Production runtime files stage into `release/windows-app-2.12.0`. Keep the Inno Setup application ID unchanged when publishing upgrades.
+`src/documents/services.mjs` builds the 27 public cards from the earlier researched catalog, with source dates and targeted contact updates. Initialization uses stable source keys, avoids duplicate imports, and retains notes when the public snapshot is updated. `src/app-identity.mjs` preserves the legacy Windows data folder independently of the displayed product name. Production runtime files stage into `release/windows-app-2.13.0`. Keep the Inno Setup application ID unchanged when publishing upgrades.
 
 ## Version 2.7 interface checks
 
@@ -131,3 +131,9 @@ Undo and Redo in a follow-up use that message’s linked note and result IDs and
 The app stores normal chat turns in the case transcript. An explicit note request writes one note to the selected card or personal notes. Grouped queries omit legacy automatic copies linked to a chat while retaining the transcript. The archive action keeps one conversation, and the existing delete action removes its transcript and case-linked automatic copies.
 
 The memory library groups relevant items by service provider, explicit organization field, or imported file. Saved conversations use selected card references from the transcript. Queries page organization groups and their history independently. Context-card references are remapped during backup restore. The storage schema stays compatible with earlier profiles.
+
+## Service selection and completion in 2.13
+
+Selections from recommendations and Known services use the same follow-up flow. The completion prompt looks across the entire case for saved results and open note drafts. Keep chat open dismisses the prompt for the saved result. Finish conversation opens the prompt on demand.
+
+Migration 0006 distinguishes explicit feedback links from older automatic entries in personal case memory. The full-delete action removes referenced feedback and its correction history in one transaction. Explicit feedback links carry through backups. Older results and in-chat notes with existing follow-up references are also resolved when deleting. An older standalone note without a case link is managed in the library.
