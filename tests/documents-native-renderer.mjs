@@ -15,7 +15,7 @@ const memoryRow=id=>`.memory-record[data-memory-id="${id}"]`;
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.8.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.9.0'));
   const phase=await window.hiveSmoke.phase();
   const title='Care Navigation Support';
   assert(phase.windowTitle===title&&document.title===title&&document.querySelector('.brand strong')?.textContent===title,'The current name must appear in the Windows title and sidebar.');
@@ -25,7 +25,7 @@ async function run(){try{
     const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==27)throw new Error('Documents or service cards changed after reopening.');
     const card=await request('get-card',{id:phase.cold.card_id});
     for(const text of [firstNote,feedback,closingNote])if(!card.comments.some(n=>n.body===text))throw new Error('A document note was lost on reopening.');
-    const archived=await request('get-case',{id:phase.cold.archived_case_id});assert(archived.status==='archived'&&archived.message_count===4&&archived.messages.some(m=>m.body.includes('walker requirement')),'Saved case history was lost after reopening.');
+    const archived=await request('get-case',{id:phase.cold.archived_case_id});assert(archived.status==='archived'&&archived.message_count===5&&archived.messages.some(m=>m.body.includes('walker requirement')),'Saved case history was lost after reopening.');
     const service=await request('get-card',{id:phase.cold.service_card_id});if(!service.comments.some(n=>n.body===serviceNote))throw new Error('Service memory was lost on reopening.');
     assert(service.experience.not_worked===1&&service.experience.worked===0&&service.experience.rating_average===2&&service.comments.some(n=>n.body==='No vehicle for the requested Tuesday.'),'Reported service outcome/rating was lost after reopening.');
     click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(card.id)));

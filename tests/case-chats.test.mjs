@@ -5,6 +5,7 @@ import {mkdir,mkdtemp} from 'node:fs/promises';
 import {openDatabase} from '../src/database.mjs';
 import {DocumentStore} from '../src/documents/store.mjs';
 import {DocumentCases} from '../src/documents/cases.mjs';
+import {CaseFollowups} from '../src/documents/case-followups.mjs';
 import {InputHistory} from '../src/documents/input-history.mjs';
 import {DocumentAssistant} from '../src/documents/assistant.mjs';
 import {ensureKnownServices} from '../src/documents/services.mjs';
@@ -13,6 +14,118 @@ import {parseDocument} from '../src/documents/parse.mjs';
 async function fixture(){await mkdir('.runtime/tests',{recursive:true});const dir=await mkdtemp(path.resolve('.runtime/tests/cases-')),options={filename:path.join(dir,'memory.sqlite'),wasm:path.resolve('node_modules/sql.js/dist/sql-wasm.wasm'),migrations:path.resolve('drizzle'),catalog:[]};let db=await openDatabase(options),owner='one';const store=new DocumentStore({database:()=>db,owner:()=>owner}),cases=new DocumentCases({store}),inputs=new InputHistory({store});return{store,cases,inputs,switch:value=>owner=value,reopen:async()=>{await db.close();db=await openDatabase(options);},close:()=>db.close()};}
 async function service(f){await ensureKnownServices(f.store);return(await f.store.list({collection:'services',query:'North York Seniors'})).items[0];}
 const local=f=>new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:false})}});
+const northYorkRequest = 'I need transportation in North York for an older adult who uses a walker. Show me suitable service cards.';
+const followupsFor = fixture => new CaseFollowups({cases:fixture.cases,store:fixture.store,inputHistory:fixture.inputs});
+async function recommendedRide(fixture) {
+  await ensureKnownServices(fixture.store);
+  const topic = await fixture.cases.create();
+  const reply = await local(fixture).chat({case_id:topic.id,text:northYorkRequest,remember:false});
+  const service = reply.cards.find(card => card.source_format === 'service-directory');
+  assert(service, 'The real test prompt must return a selectable service from the directory.');
+  const args = {case_id:topic.id,reply_id:reply.turn_id,card_id:service.id};
+  return {topic,reply,service,args,followups:followupsFor(fixture)};
+}
+
+test('a detailed service request has a short topic title and local category and area matches',async()=>{
+  const f=await fixture();
+  try {
+    const {topic,reply}=await recommendedRide(f);
+    const original=await f.cases.row(topic.id);
+    assert.equal(original.title,'Transportation in North York');
+    assert(reply.cards.length>=3);
+    assert(reply.cards.every(card=>card.category==='Transportation'));
+    await f.cases.rename({id:topic.id,title:'Return trip planning',expected_version:original.version});
+    await local(f).chat({case_id:topic.id,text:'Confirm a pickup with the operator.',remember:false});
+    assert.equal((await f.cases.row(topic.id)).title,'Return trip planning');
+    const next=await f.cases.create();
+    await local(f).chat({case_id:next.id,text:'Please find meal delivery in Aurora.',remember:false});
+    assert.equal((await f.cases.row(next.id)).title,'Meal support in Aurora');
+    assert.equal((await f.cases.read(topic.id)).message_count,4);
+  } finally { await f.close(); }
+});
+
+test('selecting, deferring and preparing a chat result retain the right provider and private draft after a restart',async()=>{
+  const f=await fixture();
+  try {
+    const {topic,service,args,followups}=await recommendedRide(f);
+    const first=await followups.start(args);
+    const duplicate=await followups.start(args);
+    assert.equal(duplicate.id,first.id);
+    assert(first.payload.followup.card.contacts.length);
+    const step={case_id:topic.id,message_id:first.id};
+    assert((await followups.update({...step,step:'later'})).payload.followup.deferred);
+    await followups.update({...step,step:'resume'});
+    await followups.update({...step,step:'choose',outcome:'not_worked'});
+    await followups.saveDrafts({case_id:topic.id,drafts:[{message_id:first.id,body:'Practice note to finish later.',rating:2}]});
+    const next=await f.cases.create('Other topic');
+    assert.equal((await f.store.get(service.id)).comments.length,0);
+    await f.reopen();
+    const saved=(await f.cases.hydrate(await f.cases.read(topic.id))).messages.at(-1).payload.followup;
+    assert.equal(saved.outcome,'not_worked');
+    assert.equal(saved.body,'Practice note to finish later.');
+    assert.equal(saved.rating,2);
+    await assert.rejects(followups.update({case_id:next.id,message_id:first.id,step:'save'}),/unavailable in this topic/);
+    f.switch('another-account');
+    await assert.rejects(followups.start(args),/active account/);
+  } finally { await f.close(); }
+});
+
+test('saving a chat result twice records one outcome that follows Undo, Redo and a memory backup',async()=>{
+  const f=await fixture();
+  try {
+    const {topic,service,args,followups}=await recommendedRide(f);
+    const {id}=await followups.start(args);
+    const step={case_id:topic.id,message_id:id};
+    await followups.update({...step,step:'choose',outcome:'worked'});
+    const save={...step,step:'save',body:'Boarding with a walker went smoothly in this practice case.',rating:5};
+    const [one,two]=await Promise.all([followups.update(save),followups.update(save)]);
+    assert.equal(one.payload.followup.result.id,two.payload.followup.result.id);
+    assert.equal((await f.store.get(service.id)).experience.worked,1);
+    const last=async caseId=>(await f.cases.hydrate(await f.cases.read(caseId))).messages.at(-1).payload.followup;
+    await f.inputs.apply('undo');
+    assert.equal((await last(topic.id)).result,null);
+    assert.equal((await last(topic.id)).outcome,null);
+    await f.inputs.apply('redo');
+    assert.equal((await last(topic.id)).result.rating,5);
+    const backup=await f.store.export();
+    await f.cases.delete({id:topic.id,expected_version:(await f.cases.row(topic.id)).version});
+    assert.equal((await f.store.get(service.id)).experience.worked,1,'Deleting a chat must retain an explicit provider result.');
+    f.switch('restored');
+    await ensureKnownServices(f.store);
+    await f.store.restore(backup);
+    const restored=(await f.cases.list()).items.find(item=>item.title==='Transportation in North York');
+    const saved=await last(restored.id);
+    assert.notEqual(saved.card_id,service.id);
+    assert.equal(saved.result.body,save.body);
+    assert.equal(saved.result.rating,5);
+    assert.equal((await f.store.get(saved.card_id)).experience.worked,1);
+  } finally { await f.close(); }
+});
+
+test('only service recommendations can add chat results to imported cards, with an optional note and rating',async()=>{
+  const f=await fixture();
+  try {
+    const imported=await f.store.import(await parseDocument(Buffer.from('ID,Service,Area\nA,Practice ride,Practice area'),'practice.csv'));
+    const card=(await f.store.list({document_id:imported.document_id})).items[0];
+    const topic=await f.cases.create('Imported directory');
+    const first=await f.cases.begin({id:topic.id,text:'Summarize the document.'});
+    await f.cases.finish(first,{text:'A practice ride.',source:'chatgpt',cards:[card],presentation:'answer'});
+    const followups=followupsFor(f);
+    const args={case_id:topic.id,card_id:card.id};
+    await assert.rejects(followups.start({...args,reply_id:first.assistant_id}),/service recommendation/);
+    const next=await f.cases.begin({id:topic.id,text:'Recommend a ride in the practice area.'});
+    await f.cases.finish(next,{text:'Practice ride.',source:'chatgpt',cards:[card],presentation:'service-options'});
+    const selected=await followups.start({...args,reply_id:next.assistant_id});
+    const step={case_id:topic.id,message_id:selected.id};
+    await followups.update({...step,step:'choose',outcome:'worked'});
+    const saved=(await followups.update({...step,step:'save'})).payload.followup.result;
+    assert.equal(saved.body,'Worked.');
+    assert.equal(saved.rating,null);
+    const edit=await f.store.serviceResult({card_id:card.id,id:saved.id,expected_version:saved.version,outcome:'not_worked',body:'Corrected practice result.'});
+    assert.equal(edit.id,saved.id);
+    assert.equal((await f.store.get(card.id)).experience.not_worked,1);
+  } finally { await f.close(); }
+});
 const streamed=output=>new Response('data: '+JSON.stringify({type:'response.completed',response:{output}})+'\n\n');
 const showOptions=options=>({type:'function_call',name:'present_service_options',call_id:'present',arguments:JSON.stringify({options})});
 const option=id=>({id,reason:'A possible match for this request.',confirm:'Confirm the pickup address and boarding help with intake.'});

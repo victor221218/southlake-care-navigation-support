@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.8 prototype
+# Care Navigation Support — Windows 2.9 prototype
 
-Open **Care-Navigation-Support-Setup-2.8.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.9.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -26,7 +26,7 @@ On a service card, choose **Add a note** near the top. Notes and corrections sav
 
 **Editing and deleting memory:** choose Edit beside a saved message or feedback entry, change its text and save. Choose Delete to remove it. Document cards offer Add correction so the original source remains intact. Deleting feedback leaves its source service/document card in place. Completed changes affect subsequent AI answers; already displayed answers remain a record of that earlier conversation.
 
-**New case** starts a separate discussion and selected-card context. Earlier case chats, drafts and saved records remain available. Conversations persist in this app; this does not train the AI model or read your ChatGPT Memory.
+**New topic** starts a separate discussion and selected-card context. Earlier case chats, drafts and saved records remain available. Conversations persist in this app; this does not train the AI model or read your ChatGPT Memory.
 
 ## Which model is answering?
 
@@ -74,7 +74,7 @@ Close the current app and open the new installer. After installation, open **Car
 
 ## Keep a case conversation
 
-1. Choose **New case** in the sidebar. Ask your first question; its words provide an initial title.
+1. Choose **New topic** in the sidebar or chat header. A request about transportation in North York becomes **Transportation in North York**.
 2. Open **Case options** to give it a short, non-identifying name, such as **North York return ride**.
 3. Click that title in **Case chats** whenever you want to return. Its messages, selected card and draft are kept after closing the app.
 4. Use **Earlier messages** to read older discussion. The assistant can also search earlier messages in the current case.
@@ -91,7 +91,15 @@ Open **Case options**. **Save to memory & remove chat** keeps the complete conve
 
 After saving, use **Undo** to reverse the most recent saved rating/result/note change. Use **Redo** to put it back. These buttons are in the sidebar and card history. Inside a text box, Ctrl+Z/Ctrl+Y still edit the text normally. A new saved edit after Undo clears the redo option.
 
-## Select a service and record the result
+## Follow up from a service card in chat
+
+1. Ask “I need transportation in North York for an older adult who uses a walker. Show me suitable service cards.”
+2. Click a recommendation or **Use this service**. The provider contact and result choices appear in the conversation. **View details** opens the full card.
+3. After trying the service, choose **Worked** or **Didn’t work**. Use **Not yet** to return later.
+4. Add an optional note or rating and choose **Save result**. A blank note and rating are fine. **Finish later** keeps a draft with the topic. Saved feedback is also available on the service card.
+5. If it didn’t work, choose **See other options** to return to the choices. Choose **New topic** when the subject changes. Reopen earlier chats from the sidebar.
+
+## Record a result from Known services
 
 Open **View details**. At the top, review **Your notes & results** before the provider details. The bottom has three actions:
 

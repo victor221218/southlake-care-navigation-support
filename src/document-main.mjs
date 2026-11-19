@@ -8,6 +8,7 @@ import { DocumentStore } from './documents/store.mjs';
 import { DocumentImporter } from './documents/importer.mjs';
 import { DocumentAssistant } from './documents/assistant.mjs';
 import {DocumentCases} from './documents/cases.mjs';
+import {CaseFollowups} from './documents/case-followups.mjs';
 import {InputHistory} from './documents/input-history.mjs';
 import { cspForPath } from './security.mjs';
 import { APP_NAME, windowsDataDirectory } from './app-identity.mjs';
@@ -20,7 +21,7 @@ if(process.platform==='win32')app.setAppUserModelId('org.team26.southlakehive');
 protocol.registerSchemesAsPrivileged([{scheme:'hive',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
 const hasLock=app.requestSingleInstanceLock();if(!hasLock)app.quit();
 const dataDir=app.getPath('userData');
-let window,db,store,importer,assistant,cases,inputHistory,connection,micAllowedUntil=0,ready=false,closing=false,pickerBusy=false;
+let window,db,store,importer,assistant,cases,followups,inputHistory,connection,micAllowedUntil=0,ready=false,closing=false,pickerBusy=false;
 let account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'},accountError='',modelList={items:[],selected:null};
 const owner=()=>account.connected?account.profileId:'device';
 const emit=value=>{if(window&&!window.isDestroyed())window.webContents.send('hive:event',value);};
@@ -52,6 +53,14 @@ async function invoke(method,args){
   if(method==='new-case'){idle();assistant.clear();return cases.create(args.title);}
   if(method==='rename-case'){idle();return cases.rename(args);}
   if(method==='case-context')return cases.context(args);
+  if(method==='start-service-followup'){idle();return followups.start(args);}
+  if(method==='update-service-followup'){
+    idle();
+    const reply = await followups.update(args);
+    if(args.step==='save')assistant.clear();
+    return reply;
+  }
+  if(method==='save-followup-drafts')return followups.saveDrafts(args);
   if(method==='archive-case'){idle();assistant.clear();return cases.archive(args);}
   if(method==='delete-case'){idle();assistant.clear();return cases.delete(args);}
   if(method==='reopen-case'){idle();assistant.clear();return cases.reopen(args.id);}
@@ -83,7 +92,7 @@ async function invoke(method,args){
   if(method==='clear-chat')return assistant.clear();
   if(method==='calculate')return store.calculate(args);
   if(method==='export'){
-    idle();pickerBusy=true;try{const selected=await dialog.showSaveDialog(window,{title:'Save a private memory backup',defaultPath:'Southlake-Care-Navigation-Support-memory-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'Personal memory backup',extensions:['json']}]});
+    idle();pickerBusy=true;try{const selected=await dialog.showSaveDialog(window,{title:'Save a private memory backup',defaultPath:'Care-Navigation-Support-memory-'+new Date().toISOString().slice(0,10)+'.json',filters:[{name:'Personal memory backup',extensions:['json']}]});
     if(selected.canceled)return{cancelled:true};await writeFile(selected.filePath,JSON.stringify(await store.export(),null,2),{mode:0o600});return{exported:true};}finally{pickerBusy=false;}
   }
   if(method==='restore'){
@@ -119,6 +128,7 @@ async function boot(){
   connection=new ChatGPTConnection({vault:new Vault(path.join(dataDir,'account'),encryption),openExternal:url=>shell.openExternal(url),onChange:()=>{assistant?.reset();emit({type:'account-changed'});}});
   store=new DocumentStore({database:()=>db,owner,emit});
   cases=new DocumentCases({store});inputHistory=new InputHistory({store});
+  followups = new CaseFollowups({cases, store, inputHistory});
   importer=new DocumentImporter({store,directory:path.join(dataDir,'documents'),worker:path.join(root,'dist/document-worker.cjs'),pdfWorker:path.join(root,'dist/pdf.worker.mjs')});
   assistant=new DocumentAssistant({store,connection,cases,emit});
   protocol.handle('hive',async request=>{

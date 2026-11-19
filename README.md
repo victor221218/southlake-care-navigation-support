@@ -2,24 +2,24 @@
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.8.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.9.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.8 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.9 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Care-Navigation-Support-Handoff-2.8.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Care-Navigation-Support-Handoff-2.9.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Care-Navigation-Support-Setup-2.8.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Care-Navigation-Support-Handoff-2.8.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Care-Navigation-Support-Setup-2.9.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Care-Navigation-Support-Handoff-2.9.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.8.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.9.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -35,7 +35,7 @@ The current deliverable is a Windows app. To connect it to ChatGPT, open the app
 
 ## Known services are ready on first launch
 
-The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Messages save automatically; there is no Keep this message checkbox. New case starts a separate discussion while the earlier case remains in the sidebar.
+The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Messages save automatically; there is no Keep this message checkbox. New topic starts a separate discussion while the earlier case remains in the sidebar.
 
 Choose **Known services** to browse the 27 researched pathways as full-width horizontal rows. Category filtering and search appear above the directory; the assistant opens in a floating panel on the right. Open View details for contact details, access requirements, source links and research dates, or choose Ask assistant beneath View details to open the floating chat with that provider selected. A named person appears only when listed in the public source. Confirm eligibility, boundaries, costs and current capacity before referring.
 
@@ -55,7 +55,11 @@ Service recommendations show all returned cards together, without a separate wri
 
 ![Compact service choices](docs/compact-choices.png)
 
-**Case chats** in the sidebar keeps separate named discussions. Choose **New case** for a new situation, rename it through **Case options**, and click a previous title to reopen it. Messages, selected card and the unsent draft stay with that case after the app closes. Use non-identifying titles. Earlier messages load in pages; the assistant can search older discussion within the current case.
+Click a recommendation or **Use this service** to open its contact and result choices in the chat. **View details** opens the full provider card. Choose **Worked**, **Didn’t work** or **Not yet**. Worked and Didn’t work open an optional note and rating. **Save result** adds the feedback to the service card and shows it in the chat. **See other options** returns to the original choices if the service didn’t work.
+
+![Optional service feedback in the topic](docs/chat-followup.png)
+
+**Case chats** in the sidebar keeps separate named discussions. Choose **New topic** when the subject changes. A first request about a service becomes a short title such as **Transportation in North York**. Rename it through **Case options** or click an earlier title to return. Messages, selected card and the unsent draft stay with that case after the app closes. Use non-identifying titles. Earlier messages load in pages; the assistant can search older discussion within the current case.
 
 ![Named case chats](docs/case-chats.png)
 
@@ -93,7 +97,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Care-Navigation-Support-Setup-2.8.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Care-Navigation-Support-Setup-2.9.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -111,7 +115,7 @@ Choose a card to see the original fields, worksheet/row or page reference, any c
 ## How memory works
 
 - Imported information is stored as cards separately from the chat.
-- **New case** starts another chat with its own selected card and draft. Earlier cases stay in the sidebar.
+- **New topic** starts another chat with its own selected card and draft. Earlier cases stay in the sidebar.
 - Messages save automatically when sent. Use **Manage memory** to edit or delete them; retrying an AI request does not create another saved message.
 - With a selected card, messages become notes on that card. Otherwise, they become personal message cards.
 - Card notes save automatically when you pause. They can be edited or deleted using the controls on that card.
@@ -147,12 +151,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.8`.
+Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.9`.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Care-Navigation-Support-Setup-2.8.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-2.9.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -172,6 +176,7 @@ These files are for developers. End users do not need to open or run them.
 | `src/documents/services.mjs` | Preloaded public service cards, dated contact/source checks and repeat-safe initialization |
 | `src/app-identity.mjs` | Current app name and preserved Windows data location |
 | `src/documents/store.mjs` | Persistent source cards, comments, searches, spreadsheet calculations and backup/restore |
+| `src/documents/case-followups.mjs`, `topic.mjs` | In-chat service selection, saved feedback drafts and short topic titles |
 | `src/documents/assistant.mjs` | AI conversation, source lookup and calculation tools, kept messages and error handling |
 | `src/auth.mjs` | ChatGPT sign-in, verified account identity and protected credential handling |
 | `src/responses.mjs` | Streaming AI text/tool responses and confirmed completion handling |

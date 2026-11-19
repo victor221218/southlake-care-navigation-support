@@ -1,4 +1,4 @@
-# Windows development — version 2.8.0
+# Windows development — version 2.9.0
 
 These steps cover development and installer builds. End users use the finished Windows installer and need none of these tools.
 
@@ -41,7 +41,7 @@ python scripts/prepare-windows.py
 & 'C:/build-tools/Inno Setup/ISCC.exe' scripts/windows-installer.iss
 ```
 
-Adjust only the compiler path to its approved installation. The result is `release/setup/Care-Navigation-Support-Setup-2.8.0.exe`. Version and app identity are defined in package.json and scripts/windows-installer.iss. Keep them consistent. The hoisted pinned dependencies provide the Windows resource editor used during staging. `assets/care-navigation-logo.png` is the supplied artwork and `assets/hive.ico` contains the Windows icon sizes. It installs per Windows user and retains separate app-data files on upgrade/uninstall.
+Adjust only the compiler path to its approved installation. The result is `release/setup/Care-Navigation-Support-Setup-2.9.0.exe`. Version and app identity are defined in package.json and scripts/windows-installer.iss. Keep them consistent. The hoisted pinned dependencies provide the Windows resource editor used during staging. `assets/care-navigation-logo.png` is the supplied artwork and `assets/hive.ico` contains the Windows icon sizes. It installs per Windows user and retains separate app-data files on upgrade/uninstall.
 
 The packager collects dependency license notices. Keep the bundled Vosk model source manifest, Apache license and notices with the assets. The OpenAI demonstration DevKit is not bundled; this app implements the published protocol independently.
 
@@ -52,7 +52,7 @@ After build/package and runtime configuration:
 ```powershell
 node scripts/prepare-document-smoke.mjs
 python scripts/prepare-windows.py --document-smoke
-& '.runtime/document-smoke-2.8.0/Care Navigation Support Test.exe'
+& '.runtime/document-smoke-2.9.0/Care Navigation Support Test.exe'
 ```
 
 Run this from a normal Windows desktop session. It uses its own isolated test profile and fictional files, exercises the shipping main/renderer/IPC, checks all three bundled Office/PDF readers, and relaunches to verify pending notes are saved before closing. It writes `document-smoke-result.json` in its test directory. It does not sign in, perform live AI requests, read existing user data or open the microphone. The test preload/bootstrap and fixtures are **not** part of the shipping installer.
@@ -60,7 +60,7 @@ Run this from a normal Windows desktop session. It uses its own isolated test pr
 For an extraction-only installer check, use a fresh test directory:
 
 ```powershell
-& 'release/setup/Care-Navigation-Support-Setup-2.8.0.exe' /PORTABLE=1 /DIR="C:/build-tests/care-navigation-support-2.8.0" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+& 'release/setup/Care-Navigation-Support-Setup-2.9.0.exe' /PORTABLE=1 /DIR="C:/build-tests/care-navigation-support-2.9.0" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
 This copies application files without normal shortcuts/uninstall registration. It does not prove the UI, account connection or AI work. Do not disable Chromium sandboxing or bypass OS protection to make a build launch.
@@ -75,7 +75,7 @@ Legacy service-navigation and Mac development notes are retained in BUILDING.md;
 
 ## Service directory and app identity
 
-`src/documents/services.mjs` builds the 27 public cards from the earlier researched catalog, with source dates and targeted contact updates. Initialization uses stable source keys, avoids duplicate imports, and retains notes when the public snapshot is updated. `src/app-identity.mjs` preserves the legacy Windows data folder independently of the displayed product name. Production runtime files stage into `release/windows-app-2.8.0`. Keep the Inno Setup application ID unchanged when publishing upgrades.
+`src/documents/services.mjs` builds the 27 public cards from the earlier researched catalog, with source dates and targeted contact updates. Initialization uses stable source keys, avoids duplicate imports, and retains notes when the public snapshot is updated. `src/app-identity.mjs` preserves the legacy Windows data folder independently of the displayed product name. Production runtime files stage into `release/windows-app-2.9.0`. Keep the Inno Setup application ID unchanged when publishing upgrades.
 
 ## Version 2.7 interface checks
 
@@ -108,3 +108,10 @@ Service search requires all search terms and applies the category filter first. 
 Case message JSON stores only source references and the short presentation fields. Reopening refreshes the source card while retaining that reply’s reason/check; other cases’ automatic notes are excluded. Backup restore remaps references and retains presentation fields. Deleted source cards are omitted; the historical answer remains readable when no cards remain. Existing case payloads need no schema migration.
 
 The renderer shows all returned cards, suppresses standalone service-recommendation prose and keeps provider checks inside each card. Pending responses show a status card rather than briefly flashing streamed prose. Non-service answers, calculations and errors remain readable; errors keep Retry. Normal Workspace uses three columns where space allows and two at smaller widths; the floating assistant uses two. Long replies open at their first card. Native checks verify all returned choices, the absence of narrative/expansion controls, checks inside cards and the first-card position, alongside the existing case, rating and correction workflow.
+
+
+## In-chat service follow-up and topic names
+
+`CaseFollowups` validates a service against the recommendation in its owning topic. Its prompt and optional draft live in existing case-message JSON. The final save writes a single provider result and an Undo entry in the same transaction. Reopening resolves the result from the provider record so Undo and Redo show the current state. Backup restore remaps provider and result references. These controls work locally.
+
+`topic.mjs` summarizes the first request for a new topic using directory service categories and areas. The service and area also provide a local lookup when a full prompt is too specific for a direct text match. The Windows check exercises the sample transportation prompt, feedback in chat, deferral, switching topics, returning to a draft and Undo/Redo.

@@ -153,11 +153,14 @@ export class DocumentStore {
       await this.linkCaseMemory(case_id,'comment',id);this.changed({ card_id }); return { saved: true, id, card_id };
     });
   }
-  async serviceResult({card_id,outcome,rating=null,body='',id=null,expected_version=null}) {
+  async serviceResult({card_id,outcome,rating=null,body='',id=null,expected_version=null}, {fromCaseSuggestion=false}={}) {
     validResult(outcome,rating);body=clean(body)||resultLabel(outcome)+'.';
     return this.db().transaction(async()=>{
       const card=await this.get(card_id);
-      if(card.source_format!=='service-directory')throw new Error('Choose a known service to record a service result.');
+      if(!card.document_id || (!id && (card.archived ||
+          (card.source_format!=='service-directory' && !fromCaseSuggestion)))) {
+        throw new Error('Choose a known service to record a service result.');
+      }
       const stamp=now(),owner=this.owner();
       if(id){
         const old=await this.db().prepare('SELECT version,outcome FROM personal_comments WHERE id=? AND card_id=? AND owner_id=?').bind(id,card_id,owner).first();

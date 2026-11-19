@@ -1,7 +1,8 @@
-# Care Navigation Support 2.8.0
+# Care Navigation Support 2.9.0
 
-- The app, window title, installer and Windows shortcuts use the name **Care Navigation Support**.
-- The supplied logo appears in the sidebar and chat welcome screen and is used for the Windows icon.
-- Close the previous version and run **Care-Navigation-Support-Setup-2.8.0.exe**. The installer updates the existing app and its shortcuts. Your saved cases, documents, notes and account connections are available after the upgrade.
+- Click a recommended service to see its contact and follow-up choices in the chat. View details opens the full provider card.
+- Choose Worked, Didn’t work or Not yet. Add an optional note and rating, then save the result to the service card. A draft stays with the topic when you leave and return.
+- Choose See other options after an unsuccessful result, or New topic to start a separate chat. New chats use short titles such as Transportation in North York.
+- Close the previous app and open **Care-Navigation-Support-Setup-2.9.0.exe**. Existing topics, saved information and account connections carry over.
 
-The Windows verification report covers the renamed app, bundled logo, retained saved information and installer contents. The unsigned prototype still requires a check of Southlake's own ChatGPT connection and managed Windows deployment.
+The verification report covers the Windows workflow, saved feedback and Undo/Redo with practice records. The unsigned prototype still requires a check of Southlake's own ChatGPT connection and managed Windows deployment.
