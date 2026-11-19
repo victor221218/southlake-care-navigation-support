@@ -57,7 +57,7 @@ async function invoke(method,args){
   if(method==='update-service-followup'){
     idle();
     const reply = await followups.update(args);
-    if(args.step==='save')assistant.clear();
+    if(args.step==='save'||args.step==='save-note')assistant.clear();
     return reply;
   }
   if(method==='save-followup-drafts')return followups.saveDrafts(args);

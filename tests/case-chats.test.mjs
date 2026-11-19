@@ -70,6 +70,71 @@ test('selecting, deferring and preparing a chat result retain the right provider
   } finally { await f.close(); }
 });
 
+test('a standalone chat note saves once to its provider without recording an outcome', async () => {
+  const f = await fixture();
+  try {
+    const {topic, service, args, followups} = await recommendedRide(f);
+    const {id} = await followups.start(args);
+    const step = {case_id: topic.id, message_id: id};
+    const noteBody = 'Practice note: call intake on Thursday.';
+    await followups.update({...step, step: 'open-note'});
+    await followups.saveDrafts({case_id: topic.id, drafts: [{message_id: id, note_draft: noteBody}]});
+    await f.reopen();
+    const draft = (await followups.start(args)).payload.followup;
+    assert(draft.note_open);
+    assert.equal(draft.note_draft, noteBody);
+    assert.equal((await f.store.get(service.id)).comments.length, 0);
+
+    const save = {...step, step: 'save-note'};
+    const [one, two] = await Promise.all([followups.update(save), followups.update(save)]);
+    const note = one.payload.followup.latest_note;
+    assert.equal(note.id, two.payload.followup.latest_note.id);
+    assert.equal(note.body, noteBody);
+    assert.equal(one.payload.followup.outcome, null);
+    assert.equal(one.payload.followup.result, null);
+    assert.equal((await f.store.get(service.id)).comments.length, 1);
+    await f.inputs.apply('undo');
+    assert.equal((await followups.start(args)).payload.followup.latest_note, null);
+    await f.inputs.apply('redo');
+    assert.equal((await followups.start(args)).payload.followup.latest_note.body, noteBody);
+
+    await followups.update({...step, step: 'choose', outcome: 'worked'});
+    await followups.update({...step, step: 'save'});
+    await followups.update({...step, step: 'open-note'});
+    await followups.saveDrafts({case_id: topic.id, drafts: [{message_id: id, note_draft: 'Practice note after the result.'}]});
+    const completed = (await followups.update(save)).payload.followup;
+    assert.equal(completed.result.outcome, 'worked');
+    assert.equal(completed.latest_note.body, 'Practice note after the result.');
+    const backup = await f.store.export();
+    await f.cases.delete({id: topic.id, expected_version: (await f.cases.row(topic.id)).version});
+    assert((await f.store.get(service.id)).comments.some(comment => comment.id === note.id));
+    f.switch('note-backup');
+    await f.store.restore(backup);
+    const restored = (await f.cases.list()).items.find(item => item.title === 'Transportation in North York');
+    const restoredFollowup = (await f.cases.hydrate(await f.cases.read(restored.id))).messages.at(-1).payload.followup;
+    assert.equal(restoredFollowup.latest_note.body, completed.latest_note.body);
+    assert.notEqual(restoredFollowup.latest_note.id, completed.latest_note.id);
+  } finally { await f.close(); }
+});
+
+test('a second phone entry does not crowd the provider email out of the chat card', async () => {
+  const f = await fixture();
+  try {
+    const csv = 'ID,Service,Phone,Alternate Phone,Email,Contact name\nA,Practice ride,416-555-0101,416-555-0102,intake@example.invalid,Practice Intake';
+    const imported = await f.store.import(await parseDocument(Buffer.from(csv), 'practice-contacts.csv'));
+    const card = (await f.store.list({document_id: imported.document_id})).items[0];
+    assert.equal((await f.store.get(card.id)).contacts.filter(contact => contact.kind === 'phone').length, 2);
+    const topic = await f.cases.create('Practice contacts');
+    const turn = await f.cases.begin({id: topic.id, text: 'Recommend a ride.'});
+    await f.cases.finish(turn, {text: 'Practice ride.', source: 'chatgpt', cards: [card], presentation: 'service-options'});
+    const message = await followupsFor(f).start({case_id: topic.id, reply_id: turn.assistant_id, card_id: card.id});
+    assert.deepEqual(message.payload.followup.card.contacts, [
+      {kind: 'phone', value: '416-555-0101', name: 'Practice Intake'},
+      {kind: 'email', value: 'intake@example.invalid', name: 'Practice Intake'}
+    ]);
+  } finally { await f.close(); }
+});
+
 test('saving a chat result twice records one outcome that follows Undo, Redo and a memory backup',async()=>{
   const f=await fixture();
   try {

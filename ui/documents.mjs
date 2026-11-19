@@ -52,13 +52,32 @@ function renderChatFollowup(message) {
   const viewDetails = available ? button('open-card','View details','quiet',cardId) : '';
   const otherOptions = messages.some(reply => reply.sequence === followup.reply_sequence && reply.cards?.length > 1)
     ? button('chat-followup-options','See other options','secondary',`data-sequence="${followup.reply_sequence}" ${cardId}`) : '';
-  const contacts = followup.card?.contacts?.map(contact => `<div class="followup-contact">
-    <div>${contact.name ? `<small>${e(contact.name)}</small>` : ''}<strong>${e(contact.value)}</strong></div>
-    ${button('copy-contact','Copy','quiet',`${cardId} data-value="${e(contact.value)}" aria-label="Copy ${e(contact.kind)}"`)}
-  </div>`).join('') || '';
+  const listedContacts = available ? (followup.card.contacts || []) : [];
+  const contactName = listedContacts.find(contact => contact.name)?.name;
+  const contacts = listedContacts.length ? `<section class="followup-known-contact" aria-label="Known contact">
+    <div class="followup-contact-heading"><h4>Known contact</h4>${contactName ? `<span>${e(contactName)}</span>` : ''}</div>
+    <div class="followup-contact-list">${listedContacts.map(contact => {
+      const label = contact.kind === 'email' ? 'Email' : 'Phone';
+      return `<div class="followup-contact">
+        <div><small>${label}</small><strong>${e(contact.value)}</strong></div>
+        ${button('copy-contact','Copy','quiet',`${cardId} data-value="${e(contact.value)}" aria-label="Copy ${label.toLowerCase()}"`)}
+      </div>`;
+    }).join('')}</div>
+  </section>` : '';
+  const latestNote = followup.latest_note;
+  const savedNote = available && latestNote ? `<div class="followup-note-preview" role="status">
+    <h4>Latest note</h4><p>${textHTML(latestNote.body)}</p>
+  </div>` : '';
+  const editingNote = available && !archived && followup.note_open;
+  const addNote = available && !archived && !editingNote ? stepButton('open-note','Add a note','secondary followup-add-note') : '';
   let content;
   if (!available) {
     content = '<p>This service card is no longer available.</p>';
+  } else if (editingNote) {
+    content = `<div class="followup-fields followup-note-editor">
+      <label>Note for this service<textarea data-followup-field="note_draft" rows="2" maxlength="2000" placeholder="For example: Call intake again on Thursday.">${e(followup.note_draft || '')}</textarea></label>
+    </div>
+    <div class="followup-actions">${stepButton('save-note','Save note','primary')}${stepButton('cancel-note','Cancel','quiet')}</div>`;
   } else if (followup.result) {
     const result = followup.result;
     const note = result.body !== resultLabel(result.outcome) + '.' ? `<p class="followup-note">${textHTML(result.body)}</p>` : '';
@@ -81,7 +100,7 @@ function renderChatFollowup(message) {
       </div>
       <div class="followup-actions">${stepButton('save','Save result','primary')}${stepButton('change','Change result','quiet')}${stepButton('later','Finish later','quiet')}</div>`;
   } else {
-    content = `${contacts}<p class="followup-prompt">After you follow up, did this service work?</p>
+    content = `<p class="followup-prompt">After you follow up, did this service work?</p>
       <div class="followup-actions">
         ${stepButton('choose','✓ Worked','primary','data-outcome="worked"')}
         ${stepButton('choose','Didn’t work','secondary','data-outcome="not_worked"')}
@@ -91,7 +110,10 @@ function renderChatFollowup(message) {
   return `<article class="message assistant followup-message" data-message-id="${e(message.id)}" data-message-sequence="${message.sequence}">
     <div class="message-label">ASSISTANT</div>
     <section class="chat-followup" aria-labelledby="followup-${e(message.id)}">
-      <h3 id="followup-${e(message.id)}" tabindex="-1">${e(title)}</h3>${content}
+      <div class="followup-heading">
+        <h3 id="followup-${e(message.id)}" tabindex="-1">${e(title)}</h3>${addNote}
+      </div>
+      ${contacts}${savedNote}${content}
     </section></article>`;
 }
 function renderModel(){const selected=state?.models?.selected,item=state?.models?.items?.find(m=>m.id===selected);$('model-status').textContent=selected?'AI model: '+(item?.name||selected):state?.account.sharing?'ChatGPT · model selected when you ask':'Connect ChatGPT for AI answers';}
@@ -112,8 +134,9 @@ async function flushCaseDraft() {
   const changedFeedback = [...feedbackDrafts.values()].filter(entry => entry.case_id === args.id);
   caseDraftQueue = caseDraftQueue.catch(() => {}).then(async () => {
     await api('case-context', args);
-    for (let start = 0; start < changedFeedback.length; start += 40) {
-      const entries = changedFeedback.slice(start, start + 40);
+    const draftsPerRequest = 4;
+    for (let start = 0; start < changedFeedback.length; start += draftsPerRequest) {
+      const entries = changedFeedback.slice(start, start + draftsPerRequest);
       await api('save-followup-drafts', {case_id: args.id, drafts: entries});
       for (const entry of entries) {
         if (feedbackDrafts.get(entry.message_id) === entry) feedbackDrafts.delete(entry.message_id);
@@ -135,10 +158,16 @@ function rememberFeedbackDraft(target) {
   if (!target.matches('[data-followup-field]') || !activeCase || caseChanging || busy) return;
   const messageId = target.closest('[data-message-id]')?.dataset.messageId;
   const feedback = messages.find(message => message.id === messageId)?.followup;
-  if (!feedback?.outcome || feedback.result || feedback.deferred) return;
   const field = target.dataset.followupField;
-  feedback[field] = field === 'rating' ? (Number(target.value) || null) : target.value;
-  feedbackDrafts.set(messageId, {case_id:activeCase.id,message_id:messageId,body:feedback.body,rating:feedback.rating});
+  if (!feedback) return;
+  if (field === 'note_draft') {
+    if (!feedback.note_open) return;
+  } else if (!feedback.outcome || feedback.result || feedback.deferred) return;
+  feedback[field] = field === 'rating' ? (Number(target.value) || null) : target.value.slice(0, 2000);
+  feedbackDrafts.set(messageId, {
+    case_id: activeCase.id, message_id: messageId,
+    body: feedback.body, rating: feedback.rating, note_draft: feedback.note_draft
+  });
   scheduleCaseDraft();
 }
 async function actOnFollowup(action, target) {
@@ -150,9 +179,13 @@ async function actOnFollowup(action, target) {
     Object.assign(args, {reply_id: target.dataset.replyId, card_id: target.dataset.id});
   } else {
     const fields = target.closest('.chat-followup');
+    if (target.dataset.step === 'save-note') {
+      const textArea = fields.querySelector('[data-followup-field="note_draft"]');
+      if (textArea) rememberFeedbackDraft(textArea);
+    }
     Object.assign(args, {
       message_id: messageId, step: target.dataset.step, outcome: target.dataset.outcome,
-      body: fields.querySelector('textarea')?.value || '', rating: Number(fields.querySelector('select')?.value) || null
+      body: fields.querySelector('textarea[data-followup-field="body"]')?.value || '', rating: Number(fields.querySelector('select')?.value) || null
     });
   }
   lockCase(true);
@@ -169,7 +202,7 @@ async function actOnFollowup(action, target) {
     const existing = messages.findIndex(message => message.id === result.id);
     if (existing >= 0) messages[existing] = fromCaseMessage(result);
     else messages.push(fromCaseMessage(result));
-    if (result.payload.followup.result) {
+    if (args.step === 'save-note' || result.payload.followup.result) {
       state.input_history = await api('input-history');
     }
     renderMessages();
@@ -231,7 +264,7 @@ async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='w
   $('paging').innerHTML=result.total>30?button('previous','← Previous','quiet',offset===0?'disabled':'')+`<span>${offset+1}–${Math.min(offset+30,result.total)} of ${result.total}</span>`+button('next','Next →','quiet',offset+30>=result.total?'disabled':''):'';
 }
 function shell(){
-  $('app').innerHTML=`<aside class="sidebar"><div class="brand"><img class="brand-mark" src="care-navigation-logo.png" alt=""><div><strong>Care Navigation Support</strong><span>Personal assistant</span></div></div><nav>${button('workspace','◫ &nbsp; Workspace','nav-item active','data-library-mode="workspace"')}${button('known-services','▤ &nbsp; Known services','nav-item','data-library-mode="services"')}${button('manage-memory','▧ &nbsp; Manage memory','nav-item','data-library-mode="memory"')}</nav>${inputTools()}<section class="case-sidebar"><div class="case-sidebar-heading"><h2>Case chats</h2>${button('new-chat','＋ New topic','quiet')}</div><label class="sr-only" for="case-search">Search case chats</label><input id="case-search" placeholder="Search all cases"><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.9</span></div></aside>
+  $('app').innerHTML=`<aside class="sidebar"><div class="brand"><img class="brand-mark" src="care-navigation-logo.png" alt=""><div><strong>Care Navigation Support</strong><span>Personal assistant</span></div></div><nav>${button('workspace','◫ &nbsp; Workspace','nav-item active','data-library-mode="workspace"')}${button('known-services','▤ &nbsp; Known services','nav-item','data-library-mode="services"')}${button('manage-memory','▧ &nbsp; Manage memory','nav-item','data-library-mode="memory"')}</nav>${inputTools()}<section class="case-sidebar"><div class="case-sidebar-heading"><h2>Case chats</h2>${button('new-chat','＋ New topic','quiet')}</div><label class="sr-only" for="case-search">Search case chats</label><input id="case-search" placeholder="Search all cases"><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.10</span></div></aside>
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
   <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Messages & personal notes</option><option value="feedback">Feedback & card notes</option><option value="chats">Saved case chats</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Public service research · confirm current eligibility and capacity.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>

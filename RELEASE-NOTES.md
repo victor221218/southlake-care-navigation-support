@@ -1,8 +1,7 @@
-# Care Navigation Support 2.9.0
+# Care Navigation Support 2.10.0
 
-- Click a recommended service to see its contact and follow-up choices in the chat. View details opens the full provider card.
-- Choose Worked, Didn’t work or Not yet. Add an optional note and rating, then save the result to the service card. A draft stays with the topic when you leave and return.
-- Choose See other options after an unsuccessful result, or New topic to start a separate chat. New chats use short titles such as Transportation in North York.
-- Close the previous app and open **Care-Navigation-Support-Setup-2.9.0.exe**. Existing topics, saved information and account connections carry over.
+- The chat follow-up card starts with **Known contact**. It lists the phone number and email when available, with a Copy button for each.
+- **Add a note** opens an editor on the card. Save a note before or after recording a service result. The note appears on the provider card and the latest one appears in the chat.
+- Close the previous app and open **Care-Navigation-Support-Setup-2.10.0.exe** to update. Saved topics, notes, ratings and account connections carry over.
 
-The verification report covers the Windows workflow, saved feedback and Undo/Redo with practice records. The unsigned prototype still requires a check of Southlake's own ChatGPT connection and managed Windows deployment.
+The Windows checks cover contact placement, standalone notes and the existing result workflow. The unsigned prototype still requires Southlake to check its own ChatGPT connection and managed Windows deployment.

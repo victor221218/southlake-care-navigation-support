@@ -1,6 +1,6 @@
 # Share the Windows app
 
-Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.9.0). Users choose **Care-Navigation-Support-Setup-2.9.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
+Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.10.0). Users choose **Care-Navigation-Support-Setup-2.10.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
 
 A C: drive link works on this computer only. To send a download link, upload the installer and share that actual file page. The public GitHub release is verified separately after upload.
 
@@ -34,7 +34,7 @@ python scripts/prepare-windows.py
 
 The document tests exercise the built background reader, so build first. The Windows staging script expects the matching official Electron runtime manifest/cache; a new build machine must supply that runtime and Inno Setup. Third-party notices are in app.asar. The installer uses the same app ID and per-user directory, preserving user data on upgrade and uninstall. Never distribute developer QA stages, test profiles or credentials.
 
-## Version 2.9 upgrade
+## Version 2.10 upgrade
 
 The Windows app and shortcuts use the name Care Navigation Support and the supplied logo. The installer keeps the existing installation ID and the Windows data location `%APPDATA%\Southlake Hive` to retain saved accounts, documents and notes. Close the previous app before updating. Public starting cards are initialized separately in each account and do not transfer anyone’s comments to another account. No automatic updater is included.
 
@@ -64,3 +64,6 @@ All returned service choices appear together. Brief reasons and checks stay insi
 ## Service follow-up in chat
 
 A recommendation opens a result prompt in the same topic. It can be deferred and its optional note and rating can be drafted before saving. Choose New topic for a separate chat. Service requests get short titles based on the need and area. A saved result is a single provider feedback record, available in the conversation and on the provider card. Undo and Redo apply to that record. Backups retain the chat and its linked feedback. Existing conversations remain readable.
+
+
+The follow-up card shows its listed phone and email under Known contact. Add a note saves to the provider card without recording a result. The chat previews the latest note added there. Drafts and note references carry through backup restore.

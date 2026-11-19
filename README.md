@@ -2,24 +2,24 @@
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.9.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.10.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.9 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.10 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Care-Navigation-Support-Handoff-2.9.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.10.0/Care-Navigation-Support-Handoff-2.10.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Care-Navigation-Support-Setup-2.9.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.9.0/Care-Navigation-Support-Handoff-2.9.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.10.0/Care-Navigation-Support-Setup-2.10.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.10.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.10.0/Care-Navigation-Support-Handoff-2.10.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.9.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.10.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -55,9 +55,9 @@ Service recommendations show all returned cards together, without a separate wri
 
 ![Compact service choices](docs/compact-choices.png)
 
-Click a recommendation or **Use this service** to open its contact and result choices in the chat. **View details** opens the full provider card. Choose **Worked**, **Didn’t work** or **Not yet**. Worked and Didn’t work open an optional note and rating. **Save result** adds the feedback to the service card and shows it in the chat. **See other options** returns to the original choices if the service didn’t work.
+Click a recommendation or **Use this service** to open its contact and result choices in the chat. **Known contact** shows the listed phone and email at the top. Choose **Add a note** to save an independent note to the provider card. The latest note appears in the chat. **View details** opens the full provider card. Choose **Worked**, **Didn’t work** or **Not yet**. Worked and Didn’t work open an optional note and rating. **Save result** adds the feedback to the service card and shows it in the chat. **See other options** returns to the original choices if the service didn’t work.
 
-![Optional service feedback in the topic](docs/chat-followup.png)
+![Known contact and a saved note in the topic](docs/chat-followup.png)
 
 **Case chats** in the sidebar keeps separate named discussions. Choose **New topic** when the subject changes. A first request about a service becomes a short title such as **Transportation in North York**. Rename it through **Case options** or click an earlier title to return. Messages, selected card and the unsent draft stay with that case after the app closes. Use non-identifying titles. Earlier messages load in pages; the assistant can search older discussion within the current case.
 
@@ -97,7 +97,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Care-Navigation-Support-Setup-2.9.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Care-Navigation-Support-Setup-2.10.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -151,12 +151,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.9`.
+Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.10`.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Care-Navigation-Support-Setup-2.9.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-2.10.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |

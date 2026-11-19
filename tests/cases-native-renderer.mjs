@@ -25,7 +25,7 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert(boxes[0].top>=document.getElementById('messages').getBoundingClientRect().top,'Open a long reply at its first card, not halfway through the grid.');
   assert([...cards].filter(c=>c.querySelector('.card-confirm')).length>0,'Provider checks must remain inside their service cards.');
   await wait(()=>document.body.dataset.view==='workspace');assert([...cards].slice(0,2).every(c=>c.dataset.id!==serviceCard.id),'The low-rated matching service must follow unrated alternatives.');const compactChoicesCapture=await window.hiveSmoke.capture('compact-choices');
-  const selectedOption=[...cards].find(card=>card.dataset.id!==serviceCard.id&&card.querySelector('[data-action="chat-followup-start"]'));
+  const selectedOption=[...cards].find(card=>card.querySelector('strong')?.textContent.includes('Wheel-Trans')&&card.querySelector('[data-action="chat-followup-start"]'));
   assert(selectedOption,'There must be another selectable provider to try.');
   const chosenId=selectedOption.dataset.id;
   const previousResultCount=(await request('get-card',{id:chosenId})).experience.not_worked;
@@ -35,6 +35,22 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click(`.answer-card[data-id="${chosenId}"] [data-action="chat-followup-start"]`);
   await wait(()=>document.querySelector('.chat-followup .followup-contact')&&document.body.dataset.caseChanging==='false');
   assert(!document.getElementById('modal').open,'Choosing a card must start follow-up inside chat.');
+  const contactSection=document.querySelector('.chat-followup .followup-known-contact');
+  const labels=[...contactSection.querySelectorAll('.followup-contact small')].map(label=>label.textContent);
+  assert(contactSection.querySelector('h4')?.textContent==='Known contact'&&labels.join(',')==='Phone,Email','Show the listed phone and email together.');
+  assert(contactSection.getBoundingClientRect().top<document.querySelector('.followup-prompt').getBoundingClientRect().top,'Put known contacts above the result question.');
+  click('.chat-followup [data-step="open-note"]');
+  await wait(()=>document.querySelector('.chat-followup [data-followup-field="note_draft"]:enabled'));
+  assert(document.querySelector('.chat-followup .followup-known-contact'),'Keep contacts visible while writing a note.');
+  const standaloneNote='Practice note: call intake again on Thursday.';
+  const noteField=document.querySelector('.chat-followup [data-followup-field="note_draft"]');
+  noteField.value=standaloneNote;noteField.dispatchEvent(new Event('input',{bubbles:true}));
+  click('.chat-followup [data-step="save-note"]');
+  await wait(()=>document.querySelector('.followup-note-preview')?.textContent.includes(standaloneNote)&&document.body.dataset.caseChanging==='false');
+  assert(document.querySelector('.chat-followup [data-step="choose"]'),'Saving a note must leave the result question available.');
+  const withNote=await request('get-card',{id:chosenId});
+  assert(withNote.comments.some(comment=>comment.body===standaloneNote&&!comment.outcome));
+  assert(withNote.experience.not_worked===previousResultCount,'Saving a note must leave the provider result count unchanged.');
   const followupChoicesCapture=await window.hiveSmoke.capture('followup-choices');
   click('.chat-followup [data-step="later"]');await wait(()=>document.querySelector('.chat-followup [data-step="resume"]'));
   assert((await request('get-card',{id:chosenId})).experience.not_worked===previousResultCount,'Not yet must never record an outcome.');
@@ -80,5 +96,5 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click('#case-archived-banner [data-action="reopen-case"]');await wait(()=>!document.getElementById('composer').hidden&&document.getElementById('message').value==='Draft retained with the long-running case.');
   click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('[data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
   click(`[data-case-row="${originalCase}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent===(document.querySelector(`[data-case-row="${originalCase}"] strong`)?.textContent));
-  return{compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
+  return{compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,known_contacts_above_followup:true,independent_chat_note:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
 }

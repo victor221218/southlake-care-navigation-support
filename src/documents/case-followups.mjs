@@ -6,6 +6,7 @@ const timestamp = () => new Date().toISOString();
 const validRating = rating => Number.isInteger(rating) && rating >= 1 && rating <= 5;
 const noteText = body => typeof body === 'string' ? body.replace(/\u0000/g, '').slice(0, CHAT_NOTE_LIMIT) : '';
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= 100;
+const recentNoteIds = ids => Array.isArray(ids) ? [...new Set(ids.filter(validId))].slice(-20) : [];
 
 function followupData(value) {
   if (!validId(value?.card_id) || !Number.isInteger(value.reply_sequence) || value.reply_sequence < 1) return null;
@@ -16,7 +17,10 @@ function followupData(value) {
     outcome: outcomes.includes(value.outcome) ? value.outcome : null,
     body: noteText(value.body),
     rating: validRating(value.rating) ? value.rating : null,
-    result_id: validId(value.result_id) ? value.result_id : null
+    result_id: validId(value.result_id) ? value.result_id : null,
+    note_open: value.note_open === true,
+    note_draft: noteText(value.note_draft),
+    note_ids: recentNoteIds(value.note_ids)
   };
 }
 
@@ -26,7 +30,8 @@ export function restoreFollowup(value, {cards, comments}) {
   const resultId = comments.get(followup.result_id) || null;
   return {
     ...followup, card_id: cards.get(followup.card_id), result_id: resultId,
-    outcome: followup.result_id && !resultId ? null : followup.outcome
+    outcome: followup.result_id && !resultId ? null : followup.outcome,
+    note_ids: followup.note_ids.map(id => comments.get(id)).filter(Boolean)
   };
 }
 
@@ -40,17 +45,23 @@ export async function hydrateFollowup(value, store, caseId) {
     return {...followup, unavailable: true};
   }
   const result = card.comments.find(comment => comment.id === followup.result_id && comment.outcome);
+  const latestNote = followup.note_ids.slice().reverse()
+    .map(id => card.comments.find(comment => comment.id === id && !comment.outcome))
+    .find(Boolean);
+  const contacts = ['phone', 'email']
+    .map(kind => card.contacts?.find(contact => contact.kind === kind && contact.value))
+    .filter(Boolean);
   return {
     ...followup,
     ...(followup.result_id && !result ? {outcome: null, deferred: false} : {}),
-    card: {title: card.title, contacts: card.contacts?.slice(0, 2) || []},
+    card: {title: card.title, contacts},
+    latest_note: latestNote || null,
     result: result || null,
     unavailable: card.archived
   };
 }
 
-// Follow-up controls belong to the case transcript. Only the final save writes to
-// the provider's experience history, using the same Undo/Redo as the detail form.
+// Explicit note and result saves update the provider card and the chat together.
 export class CaseFollowups {
   constructor({cases, store, inputHistory}) {
     Object.assign(this, {cases, store, inputHistory});
@@ -108,12 +119,32 @@ export class CaseFollowups {
       if (!followup) throw new Error('This service follow-up is unavailable in this topic.');
       const card = await this.store.get(followup.card_id, {case_id});
       if (!card.document_id || card.archived) throw new Error('This service card is no longer available.');
-      if (followup.result_id) {
+      const editingNote = ['open-note', 'cancel-note', 'save-note'].includes(step);
+      if (followup.result_id && !editingNote) {
         if (card.comments.some(note => note.id === followup.result_id && note.outcome)) return message;
         followup.result_id = null;
         followup.outcome = null;
       }
       switch (step) {
+        case 'open-note':
+          followup.note_open = true;
+          break;
+        case 'cancel-note':
+          followup.note_open = false;
+          followup.note_draft = '';
+          break;
+        case 'save-note': {
+          if (!followup.note_open) return message;
+          if (!followup.note_draft.trim()) throw new Error('Write a note before saving.');
+          const note = await this.inputHistory.record(
+            {type: 'comment', card_id: card.id, label: 'Add service note'},
+            () => this.store.comment({card_id: card.id, body: followup.note_draft})
+          );
+          followup.note_ids = recentNoteIds([...followup.note_ids, note.id]);
+          followup.note_open = false;
+          followup.note_draft = '';
+          break;
+        }
         case 'choose':
           if (!outcomes.includes(outcome)) throw new Error('Choose Worked or Didn’t work.');
           followup.outcome = outcome;
@@ -164,8 +195,15 @@ export class CaseFollowups {
       for (const draft of drafts) {
         const message = await this.message(case_id, draft.message_id, current.owner_id);
         const followup = followupData(JSON.parse(message?.payload_json || '{}').followup);
-        if (!followup?.outcome || followup.result_id) continue;
-        await this.write(message, {...followup, body: noteText(draft.body), rating: validRating(draft.rating) ? draft.rating : null}, time);
+        if (!followup) continue;
+        if (followup.note_open && typeof draft.note_draft === 'string') {
+          followup.note_draft = noteText(draft.note_draft);
+        }
+        if (followup.outcome && !followup.result_id && typeof draft.body === 'string') {
+          followup.body = noteText(draft.body);
+          followup.rating = validRating(draft.rating) ? draft.rating : null;
+        }
+        await this.write(message, followup, time);
       }
     });
   }

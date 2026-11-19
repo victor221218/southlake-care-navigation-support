@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.9 prototype
+# Care Navigation Support — Windows 2.10 prototype
 
-Open **Care-Navigation-Support-Setup-2.9.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.10.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -94,7 +94,7 @@ After saving, use **Undo** to reverse the most recent saved rating/result/note c
 ## Follow up from a service card in chat
 
 1. Ask “I need transportation in North York for an older adult who uses a walker. Show me suitable service cards.”
-2. Click a recommendation or **Use this service**. The provider contact and result choices appear in the conversation. **View details** opens the full card.
+2. Click a recommendation or **Use this service**. The listed phone and email appear under **Known contact** at the top. Choose **Add a note** and **Save note** to record information before or after a result. The note also saves to the provider card. **View details** opens the full card.
 3. After trying the service, choose **Worked** or **Didn’t work**. Use **Not yet** to return later.
 4. Add an optional note or rating and choose **Save result**. A blank note and rating are fine. **Finish later** keeps a draft with the topic. Saved feedback is also available on the service card.
 5. If it didn’t work, choose **See other options** to return to the choices. Choose **New topic** when the subject changes. Reopen earlier chats from the sidebar.
