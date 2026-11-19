@@ -1,24 +1,30 @@
 # Southlake Care Navigation Support — Windows 2.1 prototype
 
-Open **Southlake-Care-Navigation-Support-Setup-2.1.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Southlake-Care-Navigation-Support-Setup-2.2.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
+## Start in Workspace
+
+Workspace is the default page and is a full-width chat. Add a document remains beside Speak. Messages save automatically; use Manage memory at the bottom of the sidebar to review, change or delete what has been saved.
+
 ## Known services are ready to browse
 
-Open **Known services** on the left for 27 researched service cards, with a category filter, search, public contact details and source links. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
+Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the assistant is below the directory. Open View details or choose Ask assistant on a row. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 
-Choose **Ask about this card** before leaving service feedback so it is saved on that card. Open **Workspace** to see imported documents and personal message cards.
+Choose **Ask about this card** before leaving service feedback so it is saved on that card. Open **Manage memory** to see imported document cards, saved messages and service feedback.
 
 ## Start with three steps
 
 1. **Connect ChatGPT.** Sign in on the official OpenAI page in your browser, review identity and plan-usage permission, then return to the app. Use your own account. Account, workspace and app eligibility are decided by OpenAI; signing in alone does not prove AI usage is available. The app never switches to API billing.
-2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Workspace → Try a fictional sample** in the empty personal card list. The sample contains no real services or contacts.
+2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Manage memory → Try a fictional sample** in the empty memory list. The sample contains no real services or contacts.
 3. **Ask a question.** Matching source cards appear below the answer. Open one for its exact fields, contacts, source links and notes. **Ask about this card** makes it the conversation's selected source.
 
 **Your notes & corrections** save automatically when you pause. Wait for **Saved on this card**. Choose **New note** for a separate entry. Closing the card or app also waits for a pending note to save.
 
-**Keep this message** saves the exact words you send. With a selected card, it becomes a note on that card; otherwise, it becomes a personal message card. Turn this off for questions you do not want to retain. Questions are labelled as your messages, not verified facts. AI replies do not automatically overwrite source records.
+**Messages save automatically.** With a selected card, the message becomes a note on that card; otherwise it becomes a personal message card. Use **Manage memory** to search saved information, edit messages/notes, or delete an item after confirmation. Retry question does not save a duplicate message. Questions stay labelled as messages; the app does not turn them into verified outcomes. AI replies do not overwrite source records.
+
+**Editing and deleting memory:** choose Edit beside a saved message or feedback entry, change its text and save. Choose Delete to remove it. Document cards offer Add correction so the original source remains intact. Deleting feedback leaves its source service/document card in place. Completed changes affect subsequent AI answers; already displayed answers remain a record of that earlier conversation.
 
 **New conversation** clears this conversation and selected card. Saved cards and notes remain. The full chat transcript is not stored. Later questions retrieve relevant saved information again. This uses your saved records; it does not train the AI model or read your ChatGPT Memory.
 
@@ -50,13 +56,13 @@ Only AI questions send your message and relevant saved text to OpenAI. Import, c
 
 ## Try this
 
-Choose Workspace and import the fictional sample. Open **Example Community Rides**, add **“Practice note: call before referring.”**, and wait for the saved indicator. Start a new conversation, search for **Practice note**, and reopen the card. Close and reopen the app to check it again.
+Choose Manage memory and import the fictional sample from an empty memory list. Open **Example Community Rides**, add **“Practice note: call before referring.”**, and wait for the saved indicator. Start a new conversation, search for **Practice note**, and reopen the card. Close and reopen the app to check it again.
 
 With an eligible ChatGPT connection, ask:
 
 > Using my imported sample, compare the two North York transportation options. Show their contacts and source cards. Sum their Available slots and tell me how many rows you used. Do not treat these as real services.
 
-Expected calculation: **7 slots across 2 matching rows**. Turn off **Keep this message** if you do not want the test question saved. If you imported before connecting, copy starter cards into your account first. Delete the fictional document through **Manage files** when finished.
+Expected calculation: **7 slots across 2 matching rows**. Delete the test question from **Manage memory** afterwards if you do not want to retain it. If you imported before connecting, copy starter cards into your account first. Delete the fictional document through **Manage files** when finished.
 
 Live ChatGPT sign-in and inference on the recipient's eligible account, and live microphone access, remain recipient checks. Automated local parser, persistence, calculation, account-isolation and simulated AI checks do not prove these live capabilities.
 
@@ -64,4 +70,4 @@ Official connection reference: https://developers.openai.com/cookbook/articles/s
 
 ## Updating from version 2.0
 
-Close Southlake Hive before running the version 2.1 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The new public directory is added without replacing personal files. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+Close Southlake Hive before running the version 2.2 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.

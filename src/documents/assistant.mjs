@@ -54,7 +54,7 @@ export class DocumentAssistant {
         'Use calculate_table for arithmetic over spreadsheet records. Report the matched-row count, exact filters, source and any excluded nonnumeric values. Imported formulas have cached values only. Do not treat PDF text as a reliably structured spreadsheet. '+
         'The app displays clickable source cards below the answer. Refer to their titles and source filename/row/page. You may use short paragraphs or bullets; do not print JSON or internal IDs. Only text answers: no read-aloud. '+
         'Memory is private to the active app workspace and stored separately from chat. New conversation clears this chat only. You have no access to the person’s ChatGPT chats or ChatGPT Memory. '+
-        (saved?'The current user message was saved verbatim '+(selected?'as a note on '+selected.title:'as a personal message card')+'. Do not claim you changed other records or learned verified facts. ':'The user chose not to save this message. Do not claim it was saved. ')+
+        (saved?'The current user message was saved verbatim '+(selected?'as a note on '+selected.title:'as a personal message card')+'. Do not claim you changed other records or learned verified facts. ':'This request was not added to memory again. Do not claim a new saved memory was created. ')+
         'No write or delete tools are exposed to you. To correct source information, suggest adding a card note or reimporting an updated spreadsheet. '+
         'Today: '+new Date().toISOString().slice(0,10)+'. Documents: '+JSON.stringify(documents.map(d=>({id:d.id,filename:d.filename,cards:d.card_count,version:d.version,warnings:d.warnings})))+'.\nRetrieved source cards:\n'+JSON.stringify(context);
       let emptyRepair=false;
@@ -88,7 +88,7 @@ export class DocumentAssistant {
       }
       throw new Error('The analysis did not finish. Ask about one document or topic at a time.');
     }catch(error){
-      if(saved)return{text:(signal.aborted?'The answer stopped.':error.message)+' Your message was saved '+(card_id?'on the selected card.':'in your personal cards.')+' You can retry the question with “Keep this message” turned off.',source:'error',saved:true,saved_card_id:card_id||saved.id,cards:[...seen.values()].filter(c=>c.id!==saved.id).slice(0,6),calculations};
+      if(saved)return{text:(signal.aborted?'The answer stopped.':error.message)+' Your message was saved '+(card_id?'on the selected card.':'in Manage memory.')+' Retry the question; a retry will not save a duplicate message.',source:'error',saved:true,saved_card_id:card_id||saved.id,cards:[...seen.values()].filter(c=>c.id!==saved.id).slice(0,6),calculations};
       if(signal.aborted)throw connectionError('cancelled');throw error;
     }finally{this.busy=false;this.abort=null;}
   }

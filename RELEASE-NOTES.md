@@ -1,18 +1,16 @@
-# Southlake Care Navigation Support 2.1.0 — Windows update
+# Southlake Care Navigation Support 2.2.0 — full chat and editable memory
 
-- The app, window title, installer and shortcuts use Southlake Care Navigation Support.
-- Add a document sits beside Speak at the bottom of the chat.
-- Known services replaces the sidebar Add a note action. It opens 27 public service pathways with category filtering, search, phone/email or sourced named contact details, source links and review dates.
-- Workspace continues to show personal documents and saved messages. Notes and corrections stay on their selected card, including after a new conversation or restart. Public starting cards do not contain anyone's feedback or invented success rates.
-- Removed the sidebar line about documents/notes staying on the computer. The underlying personal storage behavior is preserved.
-- The chosen OpenAI model is visible after model selection or an AI request. Account-eligible model selection remains available in Connection & backup.
+- Workspace is the default page and opens as a full-width chat.
+- Known services uses full-width horizontal rows, category/search controls, and the assistant below the directory. All 27 researched service pathways remain available.
+- Removed the Keep this message checkbox. Messages save automatically; retrying a failed answer does not duplicate the saved message.
+- Manage memory is at the bottom of the sidebar. Search/filter saved messages, notes, imported document cards and service/document feedback. Edit or delete saved notes and messages. Delete requires confirmation. Imported source cards support attached corrections. Deleting feedback retains the source provider/document card.
+- Memory edits and deletions clear the assistant's earlier context so future answers retrieve the current saved records.
+- Document upload remains beside Speak. Existing Windows memory, accounts and notes use the same data location.
 
 ## Install or update
 
-Close the previous app. Download and run **Southlake-Care-Navigation-Support-Setup-2.1.0.exe**, then open **Southlake Care Navigation Support**. The installer preserves the previous installation identity and Windows app-data folder, keeping document memory and saved connections. It does not introduce automatic updates or shared-team memory.
+Close the old app before opening **Southlake-Care-Navigation-Support-Setup-2.2.0.exe**. Choose Install, then Finish. Open Southlake Care Navigation Support afterwards; Workspace appears by default. Existing records remain available. Updates require the new installer; no automatic updater is included.
 
 ## Validation and scope
 
-77 automated checks passed. Native Windows checks passed for first-run service preload, service filter/search, contact/source controls, renamed interface, document-upload placement, card-note persistence, Excel/Word/PDF readers, document import, selected-card feedback, new conversation, close-save and reopen behavior. The release verification file records installer extraction and file-hash checks separately.
-
-This is an unsigned prototype update. Real recipient ChatGPT eligibility/sign-in/inference, microphone behavior on that computer, publisher signing and Southlake deployment approval remain recipient/administrator checks. AI uses OpenAI's hosted models through the connected eligible account; it is not a separately bundled local LLM and does not read ChatGPT chat history or ChatGPT Memory.
+81 automated checks passed. Native Windows interface, automatic saving, memory editing/deletion, source retention, document readers/import and reopen checks are recorded in Verification.json. The installer remains an unsigned prototype. Real recipient ChatGPT eligibility/inference, live microphone capture on that computer, publisher signing and Southlake deployment approval remain separate recipient/administrator checks. No private documents, user notes or credentials are included in the download.

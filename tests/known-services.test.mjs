@@ -7,6 +7,7 @@ import { DocumentStore } from '../src/documents/store.mjs';
 import { DocumentAssistant } from '../src/documents/assistant.mjs';
 import { ensureKnownServices, knownServices, serviceDirectoryDocument, serviceCategories } from '../src/documents/services.mjs';
 import { APP_NAME, windowsDataDirectory } from '../src/app-identity.mjs';
+import { parseDocument } from '../src/documents/parse.mjs';
 
 async function fixture() {
   await mkdir('.runtime/tests', { recursive: true });
@@ -121,4 +122,68 @@ test('model selection reflects the actual eligible account list and resets betwe
   assert.equal(result.selected, 'eligible-instant'); assert.equal(assistant.modelItems.length, 2);
   assistant.model = 'eligible-standard'; assert.equal((await assistant.models()).selected, 'eligible-standard');
   assistant.reset(); assert.equal(assistant.model, null); assert.equal(assistant.modelItems.length, 0);
+});
+
+test('memory manager excludes public starting cards and includes personal messages and attached service feedback', async () => {
+  const f=await fixture();
+  try{
+    await ensureKnownServices(f.store);assert.equal((await f.store.memories()).total,0);
+    const service=(await f.store.list({collection:'services',query:'YSSN'})).items[0];
+    await f.store.comment({card_id:service.id,body:'Ask intake for the next appointment.'});
+    await f.store.note({body:'Use short answers.',kind:'message'});
+    const result=await f.store.memories();assert.equal(result.total,2);
+    assert(result.items.some(item=>item.entry_type==='comment'&&item.card_id===service.id&&item.title.includes('YSSN')));
+    assert.equal((await f.store.memories({kind:'notes'})).total,1);
+    assert.equal((await f.store.memories({kind:'feedback'})).total,1);
+    assert.equal((await f.store.memories({query:'next appointment'})).items[0].card_id,service.id);
+    f.switch('another-user');await ensureKnownServices(f.store);assert.equal((await f.store.memories()).total,0);
+  }finally{await f.close();}
+});
+
+test('memory edits and deletions affect future searches, persist after restart, and retain the source service', async () => {
+  const f=await fixture();
+  try{
+    await ensureKnownServices(f.store);
+    const service=(await f.store.list({collection:'services',query:'YSSN'})).items[0];
+    const note=await f.store.comment({card_id:service.id,body:'Old callback detail.'});
+    await f.store.comment({id:note.id,card_id:service.id,expected_version:1,body:'Corrected callback detail.'});
+    assert.equal((await f.store.memories({query:'Old callback'})).total,0);
+    assert.equal((await f.store.memories({query:'Corrected callback'})).total,1);
+    await assert.rejects(f.store.comment({id:note.id,card_id:service.id,expected_version:1,body:'Stale detail.'}),/changed/);
+    await f.store.forgetComment({id:note.id,card_id:service.id});await f.reopen();await ensureKnownServices(f.store);
+    assert.equal((await f.store.memories()).total,0);assert.equal((await f.store.get(service.id)).comments.length,0);
+    assert.equal((await f.store.list({collection:'services'})).total,27);
+  }finally{await f.close();}
+});
+
+test('memory manager filters document cards, paginates, and keeps full text available for editing', async () => {
+  const f=await fixture();
+  try{
+    const imported=await f.store.import(await parseDocument(Buffer.from('ID,Service,Area\nA,Example Rides,North York\nB,Example Visits,Aurora'),'test.csv'));
+    const long='Full editable information. '.repeat(80),personal=await f.store.note({title:'Preference',body:long});
+    const source=(await f.store.list({document_id:imported.document_id})).items[0];
+    await f.store.comment({card_id:source.id,body:'Check this document row again.'});
+    assert.equal((await f.store.memories()).total,4);
+    assert.equal((await f.store.memories({kind:'documents'})).total,2);
+    assert.equal((await f.store.memories({document_id:imported.document_id})).total,3);
+    const page1=await f.store.memories({limit:2}),page2=await f.store.memories({limit:2,offset:2});
+    assert.equal(new Set([...page1.items,...page2.items].map(item=>item.id)).size,4);
+    const item=(await f.store.memories({kind:'notes'})).items[0];assert(item.body.length<=650);
+    assert.equal((await f.store.get(personal.id)).body,long.trim());
+    await assert.rejects(f.store.memories({kind:'unsupported'}),/supported/);
+  }finally{await f.close();}
+});
+
+test('automatic message saving is editable without duplicating a retry or training a reported outcome', async () => {
+  const f=await fixture();
+  try{
+    const assistant=new DocumentAssistant({store:f.store,connection:{session:async()=>({sharing:false})}});
+    await assistant.chat({text:'Please remember I prefer a phone contact.'});
+    const saved=(await f.store.memories({kind:'notes'})).items[0];assert.equal(saved.kind,'message');
+    await assistant.chat({text:'Please remember I prefer a phone contact.',remember:false});assert.equal((await f.store.memories()).total,1);
+    await f.store.note({id:saved.id,expected_version:saved.version,title:'Contact preference',body:'Prefer email contacts.'});
+    assert.equal((await f.store.memories({query:'phone contact'})).total,0);
+    assert.equal((await f.store.memories({query:'email contacts'})).total,1);
+    await f.store.forgetCard(saved.id);await f.reopen();assert.equal((await f.store.memories()).total,0);
+  }finally{await f.close();}
 });

@@ -70,8 +70,26 @@ export class DocumentStore {
     const total = matches.length;
     return { total, items: matches.slice(Math.max(0,offset), Math.max(0,offset) + Math.max(1, Math.min(100,limit))).map(({ row }) => {
       const card = unpack(row); delete card.fields_json; delete card.contacts_json; delete card.links_json; delete card.comment_text;
-      return { ...card, body: card.body.slice(0, 650), category: card.fields.Category || '', fields: undefined };
+      return { ...card, body: card.body.slice(0, 650), category: card.fields.Category || '', area: card.fields['Service area'] || '', fields: undefined };
     }) };
+  }
+  async memories({query='',document_id=null,kind='all',include_archived=false,limit=30,offset=0}={}) {
+    if(!['all','notes','documents','feedback'].includes(kind))throw new Error('Choose a supported memory type.');
+    const owner=this.owner();
+    const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
+      FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
+      WHERE c.owner_id=? AND (d.format IS NULL OR d.format<>'service-directory')
+      ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
+      .map(card=>({...card,entry_type:'card',memory_type:card.document_id?'documents':'notes'}));
+    const notes=(await this.db().prepare(`SELECT n.id,n.card_id,n.body,n.updated_at,n.version,c.title,c.document_id,c.archived,d.filename,d.format AS source_format
+      FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id AND c.owner_id=n.owner_id LEFT JOIN personal_documents d ON d.id=c.document_id
+      WHERE n.owner_id=? ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
+      .map(note=>({...note,entry_type:'comment',memory_type:'feedback'}));
+    const terms=tokens(query);
+    const items=[...cards,...notes].filter(item=>(kind==='all'||item.memory_type===kind)&&terms.every(term=>norm(item.title+' '+item.body+' '+(item.filename||'')).includes(term)))
+      .sort((a,b)=>b.updated_at.localeCompare(a.updated_at)||a.id.localeCompare(b.id));
+    const start=Math.max(0,Number(offset)||0),count=Math.max(1,Math.min(100,Number(limit)||30));
+    return{total:items.length,items:items.slice(start,start+count).map(item=>({...item,body:item.body.slice(0,650)}))};
   }
   async get(id) {
     const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());

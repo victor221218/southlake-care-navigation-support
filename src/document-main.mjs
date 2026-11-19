@@ -42,9 +42,10 @@ async function invoke(method,args){
   if(method==='models'){modelList=await assistant.models();return modelList;}
   if(method==='select-model'){if(assistant.busy)throw new Error('Stop the current answer first.');if(!assistant.modelItems.some(m=>m.id===args.id))throw new Error('Choose an available model.');assistant.model=args.id;modelList={items:assistant.modelItems,selected:args.id};return modelList;}
   if(method==='list-cards')return store.list(args);
+  if(method==='list-memory')return store.memories(args);
   if(method==='get-card')return store.get(args.id);
-  if(method==='save-note')return store.note(args);
-  if(method==='save-comment')return store.comment(args);
+  if(method==='save-note'){idle();const result=await store.note(args);assistant.clear();return result;}
+  if(method==='save-comment'){idle();const result=await store.comment(args);assistant.clear();return result;}
   if(method==='forget-comment'){idle();const result=await store.forgetComment(args);assistant.clear();return result;}
   if(method==='forget-card'){idle();const result=await store.forgetCard(args.id);assistant.clear();return result;}
   if(method==='forget-document'){
