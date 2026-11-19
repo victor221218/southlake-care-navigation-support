@@ -1,18 +1,18 @@
 # Southlake Care Navigation Support — Windows 2.1 prototype
 
-Open **Southlake-Care-Navigation-Support-Setup-2.3.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Southlake-Care-Navigation-Support-Setup-2.4.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
 ## Start in Workspace
 
-Workspace is the default page and is a full-width chat. Add a document remains beside Speak. Messages save automatically; use Manage memory at the bottom of the sidebar to review, change or delete what has been saved.
+Workspace is the default page and is a full-width chat. Add a document remains beside Speak. Messages save automatically; use Manage memory directly beneath Known services in the sidebar to review, change or delete what has been saved.
 
 ## Known services are ready to browse
 
 Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 
-Choose **Ask assistant** beneath View details, or **Ask about this card** in its details, to open the floating assistant with that service selected. Its messages save on that service card. Use the right-side chat button to reopen chat, × or Escape to minimize, or **Open Workspace** for the full chat. Your draft and selected service remain available. Open **Manage memory** to see imported document cards, saved messages and service feedback.
+Choose **Ask assistant** beneath View details, or **Ask about this card** in its details, to open the floating assistant with that service selected. Its messages save on that service card. Use Ask assistant in the upper-right of the Known services heading to reopen chat, × or Escape to minimize, or **Open Workspace** for the full chat. Your draft and selected service remain available. Open **Manage memory** to see imported document cards, saved messages and service feedback.
 
 ## Start with three steps
 
@@ -70,8 +70,8 @@ Official connection reference: https://developers.openai.com/cookbook/articles/s
 
 ## Updating from version 2.0
 
-Close Southlake Hive before running the version 2.3 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+Close Southlake Hive before running the version 2.4 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
 
 ## Full-page services and floating chat
 
-Known services uses the whole page. No chat is shown below the directory. The floating chat button on the right opens the assistant, and Ask assistant stays underneath View details on every service row. The panel can be minimized without clearing a draft or changing the directory filters. Open Workspace continues the same conversation in the full chat.
+Known services uses the whole page. Ask assistant sits in the upper-right of its heading, clear of the service rows. No chat is shown below the directory. The Ask assistant button in the upper-right of the Known services heading opens the assistant, and Ask assistant stays underneath View details on every service row. The panel can be minimized without clearing a draft or changing the directory filters. Open Workspace continues the same conversation in the full chat.
