@@ -1,6 +1,6 @@
-# Southlake Care Navigation Support — Windows 2.1 prototype
+# Care Navigation Support — Windows 2.8 prototype
 
-Open **Southlake-Care-Navigation-Support-Setup-2.7.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.8.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -68,9 +68,9 @@ Live ChatGPT sign-in and inference on the recipient's eligible account, and live
 
 Official connection reference: https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt
 
-## Updating from version 2.0
+## Updating the app
 
-Close Southlake Hive before running the version 2.7 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+Close the current app and open the new installer. After installation, open **Care Navigation Support** from the desktop or Start menu. Your saved documents, notes, ratings, cases and connections are available in the same workspace. Use **Connection & backup** to move saved information to another computer.
 
 ## Keep a case conversation
 

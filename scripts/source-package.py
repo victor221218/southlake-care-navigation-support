@@ -7,10 +7,12 @@ import zipfile
 root = pathlib.Path(__file__).resolve().parent.parent
 output = root.parent.parent / 'outputs'
 output.mkdir(exist_ok=True)
-version = json.loads((root / 'package.json').read_text(encoding='utf-8-sig'))['version']
-output = output / ('Southlake-Care-Navigation-Support-Windows-' + '.'.join(version.split('.')[:2]))
+project = json.loads((root / 'package.json').read_text(encoding='utf-8-sig'))
+version = project['version']
+artifact_prefix = project['productName'].replace(' ', '-')
+output = output / (artifact_prefix + '-Windows-' + '.'.join(version.split('.')[:2]))
 output.mkdir(exist_ok=True)
-destination = output / f'Southlake-Care-Navigation-Support-Source-{version}.zip'
+destination = output / f'{artifact_prefix}-Source-{version}.zip'
 files = [root / name for name in (
     'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.gitignore',
     'README.md', 'RELEASE-NOTES.md', 'WINDOWS-DEVELOPMENT.md', 'START-HERE.md', 'SHARING.md', 'DIRECTORY-SOURCES.md', 'BUILDING.md', 'electron-builder.yml',

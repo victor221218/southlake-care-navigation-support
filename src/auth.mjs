@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypt
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { APP_NAME } from './app-identity.mjs';
 
 // Independently implemented from the published SIWC protocol. No DevKit code is bundled.
 export const ISSUER = 'https://auth.openai.com';
@@ -18,7 +19,7 @@ export class ConnectionError extends Error {
 }
 export function connectionError(code = 'connection_failed', requestId) {
   const messages = {
-    subscription_sharing_user_not_eligible: 'This account or workspace is not eligible to use its ChatGPT plan in Southlake Care Navigation Support. Your saved cards, document import, search and notes still work.',
+    subscription_sharing_user_not_eligible: `This account or workspace is not eligible to use its ChatGPT plan in ${APP_NAME}. Your saved cards, document import, search and notes still work.`,
     subscription_sharing_usage_limit_exceeded: 'The app reached a ChatGPT plan usage limit. Review Manage usage before trying again.',
     subscription_sharing_usage_unavailable: 'ChatGPT could not check usage right now. Please try again later.',
     subscription_sharing_user_unavailable: 'ChatGPT could not check the account right now. Please try again later.',
@@ -120,7 +121,7 @@ export class ChatGPTConnection {
         }
         used = true;
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        response.end('<!doctype html><title>Return to Southlake Care Navigation Support</title><body style="font:18px system-ui;padding:64px;color:#174b62"><h1>Return to Southlake Care Navigation Support</h1><p>Your sign-in response was received. The app will verify the connection.</p></body>');
+        response.end(`<!doctype html><title>Return to ${APP_NAME}</title><body style="font:18px system-ui;padding:64px;color:#174b62"><h1>Return to ${APP_NAME}</h1><p>Your sign-in response was received. The app will verify the connection.</p></body>`);
         if (url.searchParams.get('error')) fail(connectionError(url.searchParams.get('error')));
         else deliver({ code: url.searchParams.get('code'), clientId: url.searchParams.get('client_id') });
       });
@@ -130,7 +131,7 @@ export class ChatGPTConnection {
       auth.search = new URLSearchParams({ client_id: profile.clientId || 'dynamic_agent_client', ext_agent_host_id: saved.host,
         response_type: 'code', redirect_uri: redirect, scope: SCOPES, resource: RESOURCE, state, nonce,
         code_challenge_method: 'S256', code_challenge: createHash('sha256').update(verifier).digest('base64url') }).toString();
-      if (!profile.clientId) auth.searchParams.set('agent_name_hint', 'Southlake Care Navigation Support');
+      if (!profile.clientId) auth.searchParams.set('agent_name_hint', APP_NAME);
       else if (profile.credentials?.idToken) auth.searchParams.set('id_token_hint', profile.credentials.idToken);
       if (enablePlan) auth.searchParams.set('prompt', 'consent');
       timer = setTimeout(() => fail(new Error('Sign-in timed out. Continue with ChatGPT to try again.')), 600000);

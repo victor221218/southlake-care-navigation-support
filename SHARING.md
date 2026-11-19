@@ -1,12 +1,12 @@
 # Share the Windows app
 
-Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.7.0). Users choose **Southlake-Care-Navigation-Support-Setup-2.7.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
+Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.8.0). Users choose **Care-Navigation-Support-Setup-2.8.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
 
 A C: drive link works on this computer only. To send a download link, upload the installer and share that actual file page. The public GitHub release is verified separately after upload.
 
 Suggested message:
 
-> Download the Southlake Care Navigation Support installer from this shared folder. Open it, choose Install, then Finish. Open the app from the desktop afterwards. Connect your own eligible ChatGPT account, then use the full Workspace chat or Add a document beside Speak. The quick-start guide shows the first steps. Your saved cards and notes are private to your installation/account.
+> Download the Care Navigation Support installer from this shared folder. Open it, choose Install, then Finish. Open the app from the desktop afterwards. Connect your own eligible ChatGPT account, then use the full Workspace chat or Add a document beside Speak. The quick-start guide shows the first steps. Your saved cards and notes are private to your installation/account.
 
 ## Administrator checks
 
@@ -34,9 +34,9 @@ python scripts/prepare-windows.py
 
 The document tests exercise the built background reader, so build first. The Windows staging script expects the matching official Electron runtime manifest/cache; a new build machine must supply that runtime and Inno Setup. Third-party notices are in app.asar. The installer uses the same app ID and per-user directory, preserving user data on upgrade and uninstall. Never distribute developer QA stages, test profiles or credentials.
 
-## Version 2.7 upgrade
+## Version 2.8 upgrade
 
-The Windows application and shortcuts now use Southlake Care Navigation Support. The installer keeps the existing installation ID and the Windows data location `%APPDATA%\Southlake Hive` to retain saved accounts, documents and notes. Close the previous app before updating. Public starting cards are initialized separately in each account and do not transfer anyone’s comments to another account. No automatic updater is included.
+The Windows app and shortcuts use the name Care Navigation Support and the supplied logo. The installer keeps the existing installation ID and the Windows data location `%APPDATA%\Southlake Hive` to retain saved accounts, documents and notes. Close the previous app before updating. Public starting cards are initialized separately in each account and do not transfer anyone’s comments to another account. No automatic updater is included.
 
 ## Default pages and memory controls
 

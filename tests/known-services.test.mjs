@@ -107,7 +107,7 @@ test('service details expose sourced named contacts and phone-only contacts with
 });
 
 test('renaming the Windows app retains the previous data location and supports isolated QA', () => {
-  assert.equal(APP_NAME, 'Southlake Care Navigation Support');
+  assert.equal(APP_NAME, 'Care Navigation Support');
   const appData = path.resolve('.runtime/test-appdata');
   assert.equal(windowsDataDirectory(appData), path.join(appData, 'Southlake Hive'));
   assert.equal(windowsDataDirectory(appData, 'relative/path'), path.join(appData, 'Southlake Hive'));

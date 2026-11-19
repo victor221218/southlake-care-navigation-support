@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { voiceAssets } from './voice-assets.mjs';
+import { APP_NAME } from '../src/app-identity.mjs';
 await mkdir('dist/ui', { recursive: true });
 await build({ entryPoints: ['src/document-main.mjs'], platform: 'node', format: 'cjs', target: 'node24', bundle: true, outfile: 'dist/main.cjs', external: ['electron'],
   banner: { js: '/* Southlake Hive desktop. Auth implementation follows the public SIWC protocol. */\nif(process.env.HIVE_QA_DATA_DIR){try{require("node:fs").mkdirSync(process.env.HIVE_QA_DATA_DIR,{recursive:true});require("node:fs").appendFileSync(require("node:path").join(process.env.HIVE_QA_DATA_DIR,"startup-check.log"),"Main JavaScript started\\n");}catch{}}' } });
@@ -11,8 +12,9 @@ for (const folder of ['cmaps','standard_fonts','wasm']) await cp('node_modules/p
 await build({ entryPoints: ['ui/documents.mjs'], bundle: true, format: 'iife', target: 'chrome136', outfile: 'dist/ui/app.js' });
 await copyFile('ui/index.html', 'dist/ui/index.html');
 await copyFile('ui/documents.css', 'dist/ui/styles.css');
+await copyFile('assets/care-navigation-logo.png', 'dist/ui/care-navigation-logo.png');
 const speech = voiceAssets(await readFile('node_modules/vosk-browser/dist/vosk.js', 'utf8'));
 await writeFile('dist/ui/vosk.js', speech.client);
 await writeFile('dist/ui/voice-worker.js', speech.worker);
 await copyFile('node_modules/sql.js/dist/sql-wasm.wasm', 'dist/sql-wasm.wasm');
-console.log('Built the standalone Hive application.');
+console.log('Built ' + APP_NAME + '.');

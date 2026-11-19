@@ -2,6 +2,7 @@
 import json
 import pathlib
 import shutil
+import subprocess
 import zipfile
 import argparse
 
@@ -15,7 +16,16 @@ checks.add_argument('--document-smoke', action='store_true', help='Build an isol
 args = parser.parse_args()
 runtimes = json.loads((root / '.runtime/runtimes.json').read_text())
 runtime = next(item for item in runtimes if item['platform'] == 'win32' and item['arch'] == 'x64')
-version = json.loads((root / 'package.json').read_text())['version']
+project = json.loads((root / 'package.json').read_text(encoding='utf-8'))
+version = project['version']
+product_name = project['productName']
+executable = f'{product_name}.exe'
+if args.assistant_smoke:
+    executable = 'Southlake Hive Assistant Test.exe'
+elif args.voice_smoke:
+    executable = 'Southlake Hive Voice Test.exe'
+elif args.document_smoke:
+    executable = f'{product_name} Test.exe'
 stage = root / (f'.runtime/assistant-smoke-{version}' if args.assistant_smoke else f'.runtime/voice-smoke-{version}' if args.voice_smoke else '.runtime/desktop-qa' if args.qa else f'release/windows-app-{version}')
 if args.document_smoke:
     stage = root / f'.runtime/document-smoke-{version}'
@@ -28,9 +38,7 @@ with zipfile.ZipFile(runtime['path']) as archive:
         relative = pathlib.PurePosixPath(member.filename)
         if relative.is_absolute() or '..' in relative.parts:
             raise ValueError('Unexpected runtime archive path')
-        name = ('Southlake Hive Assistant Test.exe' if args.assistant_smoke else 'Southlake Hive Voice Test.exe' if args.voice_smoke else 'Southlake Care Navigation Support.exe') if member.filename == 'electron.exe' else member.filename
-        if args.document_smoke and member.filename == 'electron.exe':
-            name = 'Southlake Hive Document Test.exe'
+        name = executable if member.filename == 'electron.exe' else member.filename
         destination = stage / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         with archive.open(member) as source, destination.open('wb') as target:
@@ -40,5 +48,18 @@ shutil.copyfile(root / ('.runtime/document-smoke.asar' if args.document_smoke el
 shutil.copyfile(root / 'START-HERE.md', stage / 'START-HERE.md')
 shutil.copyfile(root / 'SHARING.md', stage / 'SHARING.md')
 shutil.copyfile(root / 'DIRECTORY-SOURCES.md', stage / 'DIRECTORY-SOURCES.md')
-shutil.copyfile(root / 'assets/hive.ico', stage / 'hive.ico')
+icon = root / 'assets/hive.ico'
+shutil.copyfile(icon, stage / 'hive.ico')
+if not (args.qa or args.assistant_smoke or args.voice_smoke):
+    # Use the resource editor already provided by the pinned Windows build dependencies.
+    editor = root / 'node_modules/electron-winstaller/vendor/rcedit.exe'
+    if not editor.is_file():
+        raise SystemExit('Install the pinned Windows build dependencies with the hoisted linker.')
+    subprocess.run([
+        str(editor), str(stage / executable), '--set-icon', str(icon),
+        '--set-version-string', 'ProductName', product_name,
+        '--set-version-string', 'FileDescription', product_name,
+        '--set-version-string', 'OriginalFilename', f'{product_name}.exe',
+        '--set-file-version', version, '--set-product-version', version,
+    ], check=True)
 print(stage)

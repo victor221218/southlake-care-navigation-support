@@ -1,31 +1,31 @@
-# Southlake Care Navigation Support
+# Care Navigation Support
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.7.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.8.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Southlake Care Navigation Support**. Version 2.7 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.8 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.7.0/Southlake-Care-Navigation-Support-Handoff-2.7.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Care-Navigation-Support-Handoff-2.8.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.7.0/Southlake-Care-Navigation-Support-Setup-2.7.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.7.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.7.0/Southlake-Care-Navigation-Support-Handoff-2.7.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Care-Navigation-Support-Setup-2.8.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.8.0/Care-Navigation-Support-Handoff-2.8.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.7.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.8.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
 ## What the app and ChatGPT each do
 
-**Southlake Care Navigation Support** is the Windows application. It imports files, creates source cards, stores personal notes, searches saved information, and manages backups.
+**Care Navigation Support** is the Windows application. It imports files, creates source cards, stores personal notes, searches saved information, and manages backups.
 
 **ChatGPT** supplies the AI that helps interpret questions and information, summarize records, and compare details. The app provides relevant saved text to the AI when you ask a question.
 
@@ -93,7 +93,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Southlake-Care-Navigation-Support-Setup-2.7.0.exe`, choose Install, then Finish. Later, open Southlake Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Care-Navigation-Support-Setup-2.8.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -147,12 +147,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Care-Navigation-Support-Windows-2.7`.
+Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.8`.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Southlake-Care-Navigation-Support-Setup-2.7.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-2.8.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -178,7 +178,7 @@ These files are for developers. End users do not need to open or run them.
 | `src/database.mjs`, `drizzle/` | Local SQLite database persistence and schema migrations |
 | `ui/documents.mjs`, `ui/documents.css` | Known services and personal workspace layout, card details, notes and conversation controls |
 | `ui/voice.mjs`, `scripts/voice-assets.mjs` | English speech input and bundled speech worker |
-| `assets/` | English voice model, sample/check files, icons and third-party notices |
+| `assets/` | English voice model, sample/check files, supplied logo artwork, Windows icons and third-party notices |
 | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` | Dependency versions and development commands |
 | `scripts/build.mjs`, `scripts/package.mjs` | Compile and package the application resources |
 | `scripts/prepare-windows.py`, `scripts/windows-installer.iss` | Stage the Windows runtime and create the installer |

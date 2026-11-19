@@ -136,7 +136,23 @@ async function boot(){
     try{return{ok:true,value:await invoke(request.method,request.args||{})};}catch(error){return{ok:false,error:safeError(error)};}
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},{label:'View',submenu:[{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]}]));
-  window=new BrowserWindow({width:1420,height:920,minWidth:980,minHeight:720,title:APP_NAME,backgroundColor:'#f4f8fa',autoHideMenuBar:true,webPreferences:{preload:path.join(root,'dist/preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}});
+  window = new BrowserWindow({
+    width: 1420,
+    height: 920,
+    minWidth: 980,
+    minHeight: 720,
+    title: APP_NAME,
+    icon: path.join(root, 'assets', 'hive.ico'),
+    backgroundColor: '#f4f8fa',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(root, 'dist/preload.cjs'),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true
+    }
+  });
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith(uiOrigin+'/'))event.preventDefault();});
   window.on('close',event=>{if(ready&&!closing&&!window.webContents.isCrashed()){event.preventDefault();emit({type:'closing-requested'});}});
   window.on('closed',()=>{window=null;});await window.loadURL(uiOrigin+'/index.html');

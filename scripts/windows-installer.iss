@@ -1,5 +1,6 @@
-#define AppName "Southlake Care Navigation Support"
-#define AppVersion "2.7.0"
+#define AppName "Care Navigation Support"
+#define AppVersion "2.8.0"
+#define AppUserModelId "org.team26.southlakehive"
 
 [Setup]
 AppId={{DD39358A-679C-4ED1-A8F0-163CBE2DCED6}
@@ -8,6 +9,7 @@ AppVersion={#AppVersion}
 AppPublisher=Team 26
 DefaultDirName={localappdata}\Programs\Southlake Hive
 DefaultGroupName={#AppName}
+UsePreviousGroup=no
 PrivilegesRequired=lowest
 SetupArchitecture=x64
 ArchitecturesAllowed=x64compatible
@@ -17,7 +19,7 @@ DisableProgramGroupPage=yes
 DisableDirPage=yes
 DisableWelcomePage=no
 OutputDir=..\release\setup
-OutputBaseFilename=Southlake-Care-Navigation-Support-Setup-2.7.0
+OutputBaseFilename=Care-Navigation-Support-Setup-{#AppVersion}
 SetupIconFile=..\assets\hive.ico
 UninstallDisplayIcon={app}\hive.ico
 Compression=lzma2/fast
@@ -34,15 +36,18 @@ Source: "..\release\windows-app-{#AppVersion}\*"; DestDir: "{app}"; Flags: ignor
 
 [InstallDelete]
 Type: files; Name: "{app}\Southlake Hive.exe"
+Type: files; Name: "{app}\Southlake Care Navigation Support.exe"
 Type: files; Name: "{autodesktop}\Southlake Hive.lnk"; Check: not PortableCheck
 Type: files; Name: "{userprograms}\Southlake Hive\Southlake Hive.lnk"; Check: not PortableCheck
+Type: files; Name: "{autodesktop}\Southlake Care Navigation Support.lnk"; Check: not PortableCheck
+Type: files; Name: "{userprograms}\Southlake Care Navigation Support\Southlake Care Navigation Support.lnk"; Check: not PortableCheck
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\Southlake Care Navigation Support.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; Check: not PortableCheck
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Southlake Care Navigation Support.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; Check: not PortableCheck
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; AppUserModelID: "{#AppUserModelId}"; Check: not PortableCheck
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; WorkingDir: "{app}"; IconFilename: "{app}\hive.ico"; AppUserModelID: "{#AppUserModelId}"; Check: not PortableCheck
 
 [Run]
-Filename: "{app}\Southlake Care Navigation Support.exe"; Description: "Open Southlake Care Navigation Support"; Flags: nowait postinstall skipifsilent; Check: not PortableCheck
+Filename: "{app}\{#AppName}.exe"; Description: "Open {#AppName}"; Flags: nowait postinstall skipifsilent; Check: not PortableCheck
 
 [Code]
 function PortableCheck: Boolean;
