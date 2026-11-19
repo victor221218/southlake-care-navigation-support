@@ -1,15 +1,18 @@
-# Southlake Care Navigation Support 2.4.0 — clearer navigation
+# Southlake Care Navigation Support 2.5.0 — service cards and feedback
 
-- Ask assistant now sits in the upper-right of the Known services heading, clear of the service rows.
-- Manage memory is directly beneath Known services in the sidebar. Connection & backup remains at the bottom.
-- Ask assistant beneath each View details button still opens the floating chat with that service selected. Minimize, Escape, Open Workspace, drafts, automatic memory and the memory manager retain their existing behavior.
+- Service cards offer **Select this service**, **Ask more about this card**, and **Provider page** at the bottom.
+- Personal notes, results and ratings appear above Category and the provider facts. Directory rows show the latest note and a compact summary.
+- Selecting a service takes you to **Contact & follow up**. Choose **Worked** or **Didn't work**, optionally add a 1–5 rating and explanation, then **Save result**. Result buttons are also available beside the selected service in chat.
+- Results remain attached to their service and private to the current app account. Edit/delete them on the card or in Manage memory. Corrections update summaries. New conversations, app restarts and backups retain the records.
+- Opening a website, selecting a provider or copying a phone number never records success. Counts include only explicit reports; ratings are optional personal observations.
+- The Known services header assistant, floating chat and Manage memory navigation remain available.
 
 ## Install or update
 
-Close the current app, then run **Southlake-Care-Navigation-Support-Setup-2.4.0.exe** and complete installation. Existing accounts, documents and memory use the same Windows data location. Updates require the new installer; no automatic updater is included.
+Close the current app, then run **Southlake-Care-Navigation-Support-Setup-2.5.0.exe**. The existing data location and installation identity are retained. An additive database migration keeps existing cards and comments. Use a memory backup when changing computers. Updates require the installer; no automatic updater is included.
 
 ## Validation and scope
 
-81 automated checks and the native Windows layout, floating-chat, document and memory checks are recorded in Verification.json. Header/button placement is checked at normal and compact window sizes, including the button staying clear of service rows.
+86 automated checks and native Windows service-card, compact-window, floating-chat, document and memory checks are recorded in Verification.json. Checks cover the previous database schema, backup/restore compatibility, explicit result counts, ratings, corrections/deletions, private accounts, duplicate-click protection and persistence after reopening.
 
-The installer remains an unsigned prototype. Live recipient ChatGPT eligibility/inference, microphone capture on that computer, publisher signing and Southlake deployment approval remain separate checks. No private records or credentials are included in the download.
+Unsigned prototype. Recipient ChatGPT sign-in/eligibility/inference, live microphone capture on that computer, publisher signing and Southlake deployment approval remain separate checks. No private records or credentials are included in the download.

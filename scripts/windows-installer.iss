@@ -1,5 +1,5 @@
 #define AppName "Southlake Care Navigation Support"
-#define AppVersion "2.4.0"
+#define AppVersion "2.5.0"
 
 [Setup]
 AppId={{DD39358A-679C-4ED1-A8F0-163CBE2DCED6}
@@ -17,7 +17,7 @@ DisableProgramGroupPage=yes
 DisableDirPage=yes
 DisableWelcomePage=no
 OutputDir=..\release\setup
-OutputBaseFilename=Southlake-Care-Navigation-Support-Setup-2.4.0
+OutputBaseFilename=Southlake-Care-Navigation-Support-Setup-2.5.0
 SetupIconFile=..\assets\hive.ico
 UninstallDisplayIcon={app}\hive.ico
 Compression=lzma2/fast

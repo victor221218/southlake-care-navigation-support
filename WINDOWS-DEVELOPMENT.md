@@ -1,4 +1,4 @@
-# Windows development — version 2.4.0
+# Windows development — version 2.5.0
 
 These steps cover development and installer builds. End users use the finished Windows installer and need none of these tools.
 
@@ -41,7 +41,7 @@ python scripts/prepare-windows.py
 & 'C:/build-tools/Inno Setup/ISCC.exe' scripts/windows-installer.iss
 ```
 
-Adjust only the compiler path to its approved installation. The result is `release/setup/Southlake-Care-Navigation-Support-Setup-2.4.0.exe`. Version and app identity are defined in package.json and scripts/windows-installer.iss; keep them consistent. It installs per Windows user and retains separate app-data files on upgrade/uninstall.
+Adjust only the compiler path to its approved installation. The result is `release/setup/Southlake-Care-Navigation-Support-Setup-2.5.0.exe`. Version and app identity are defined in package.json and scripts/windows-installer.iss; keep them consistent. It installs per Windows user and retains separate app-data files on upgrade/uninstall.
 
 The packager collects dependency license notices. Keep the bundled Vosk model source manifest, Apache license and notices with the assets. The OpenAI demonstration DevKit is not bundled; this app implements the published protocol independently.
 
@@ -52,7 +52,7 @@ After build/package and runtime configuration:
 ```powershell
 node scripts/prepare-document-smoke.mjs
 python scripts/prepare-windows.py --document-smoke
-& '.runtime/document-smoke-2.4.0/Southlake Hive Document Test.exe'
+& '.runtime/document-smoke-2.5.0/Southlake Hive Document Test.exe'
 ```
 
 Run this from a normal Windows desktop session. It uses its own isolated test profile and fictional files, exercises the shipping main/renderer/IPC, checks all three bundled Office/PDF readers, and relaunches to verify pending notes are saved before closing. It writes `document-smoke-result.json` in its test directory. It does not sign in, perform live AI requests, read existing user data or open the microphone. The test preload/bootstrap and fixtures are **not** part of the shipping installer.
@@ -60,7 +60,7 @@ Run this from a normal Windows desktop session. It uses its own isolated test pr
 For an extraction-only installer check, use a fresh test directory:
 
 ```powershell
-& 'release/setup/Southlake-Care-Navigation-Support-Setup-2.4.0.exe' /PORTABLE=1 /DIR="C:/build-tests/hive-2.4.0" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+& 'release/setup/Southlake-Care-Navigation-Support-Setup-2.5.0.exe' /PORTABLE=1 /DIR="C:/build-tests/hive-2.5.0" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
 This copies application files without normal shortcuts/uninstall registration. It does not prove the UI, account connection or AI work. Do not disable Chromium sandboxing or bypass OS protection to make a build launch.
@@ -71,16 +71,22 @@ This copies application files without normal shortcuts/uninstall registration. I
 
 Verify the intended app/account can complete real ChatGPT requests. Do not assume Plus/Pro subscription status alone admits a private app. Confirm the intended document handling, account separation, backup/restore and microphone behavior; arrange approved distribution and publisher signing. The current database/backup encryption limits and data flow are documented in START-HERE.md. Keep patient identifiers out of pilot tests.
 
-Legacy service-navigation and Mac development notes are retained in BUILDING.md; they do not define the version 2.4 Windows document workflow.
+Legacy service-navigation and Mac development notes are retained in BUILDING.md; they do not define the version 2.5 Windows document workflow.
 
 ## Service directory and app identity
 
-`src/documents/services.mjs` builds the 27 public cards from the earlier researched catalog, with source dates and targeted contact updates. Initialization uses stable source keys, avoids duplicate imports, and retains notes when the public snapshot is updated. `src/app-identity.mjs` preserves the legacy Windows data folder independently of the displayed product name. Production runtime files stage into `release/windows-app-2.4.0`. Keep the Inno Setup application ID unchanged when publishing upgrades.
+`src/documents/services.mjs` builds the 27 public cards from the earlier researched catalog, with source dates and targeted contact updates. Initialization uses stable source keys, avoids duplicate imports, and retains notes when the public snapshot is updated. `src/app-identity.mjs` preserves the legacy Windows data folder independently of the displayed product name. Production runtime files stage into `release/windows-app-2.5.0`. Keep the Inno Setup application ID unchanged when publishing upgrades.
 
-## Version 2.4 interface checks
+## Version 2.5 interface checks
 
 The native test verifies Workspace as the default full-width chat, composer visibility in a compact window, no Keep this message checkbox, full-page service rows with a floating assistant, automatic saving, a separate memory library, feedback/message editing, confirmed and cancelled deletion, original-source retention, import and reopening. Its file picker is an isolated fixture returning a fictional CSV; the shipping button/IPC/importer run unchanged. All test profiles and UI fixtures are excluded from the production installer.
 
-The version 2.4 native checks also verify the full-page directory with closed chat, header launcher, overlay bounds on compact windows, retained directory width/filters/drafts, Escape focus restoration, Ask assistant below View details, and continuity when expanding to Workspace. The same chat DOM, history, selected card and speech engine are reused; no second chat session or additional native window is created.
+The version 2.5 native checks also verify the full-page directory with closed chat, header launcher, overlay bounds on compact windows, retained directory width/filters/drafts, Escape focus restoration, Ask assistant below View details, and continuity when expanding to Workspace. The same chat DOM, history, selected card and speech engine are reused; no second chat session or additional native window is created.
 
-The version 2.4 native layout checks verify that Ask assistant remains inside the Known services heading without overlapping the directory at normal and compact sizes, and that Manage memory is the next sidebar item beneath Known services.
+The version 2.5 native layout checks verify that Ask assistant remains inside the Known services heading without overlapping the directory at normal and compact sizes, and that Manage memory is the next sidebar item beneath Known services.
+
+## Service results in 2.5
+
+`DocumentStore.serviceResult` validates service ownership, an explicit result and an optional integer rating from 1 to 5. Updates require the current record version; plain comment edits cannot overwrite result metadata. Result counts and rating averages derive from stored records. Source cards and ordinary comments stay intact. Migration 0004 is additive and runs through the existing migration journal.
+
+The 86 automated tests include an upgrade from the previous schema, backup compatibility, private-account isolation, corrections/deletions and AI grounding in personal results. Native Windows checks cover the three service actions, history before Category, contact selection, no automatic success on selection/copy, the compact result form, duplicate-click protection, result editing/deletion, draft protection, Manage memory editing and persistence after reopening. New screenshot fixtures use isolated practice records.

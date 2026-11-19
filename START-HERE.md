@@ -1,6 +1,6 @@
 # Southlake Care Navigation Support — Windows 2.1 prototype
 
-Open **Southlake-Care-Navigation-Support-Setup-2.4.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Southlake-Care-Navigation-Support-Setup-2.5.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -12,7 +12,7 @@ Workspace is the default page and is a full-width chat. Add a document remains b
 
 Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 
-Choose **Ask assistant** beneath View details, or **Ask about this card** in its details, to open the floating assistant with that service selected. Its messages save on that service card. Use Ask assistant in the upper-right of the Known services heading to reopen chat, × or Escape to minimize, or **Open Workspace** for the full chat. Your draft and selected service remain available. Open **Manage memory** to see imported document cards, saved messages and service feedback.
+Choose **Ask assistant** beneath View details, or **Ask more about this card** in its details, to open the floating assistant with that service selected. Its messages save on that service card. Use Ask assistant in the upper-right of the Known services heading to reopen chat, × or Escape to minimize, or **Open Workspace** for the full chat. Your draft and selected service remain available. Open **Manage memory** to see imported document cards, saved messages and service feedback.
 
 ## Start with three steps
 
@@ -20,7 +20,7 @@ Choose **Ask assistant** beneath View details, or **Ask about this card** in its
 2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Manage memory → Try a fictional sample** in the empty memory list. The sample contains no real services or contacts.
 3. **Ask a question.** Matching source cards appear below the answer. Open one for its exact fields, contacts, source links and notes. **Ask about this card** makes it the conversation's selected source.
 
-**Your notes & corrections** save automatically when you pause. Wait for **Saved on this card**. Choose **New note** for a separate entry. Closing the card or app also waits for a pending note to save.
+On a service card, choose **Add a note** near the top. Notes and corrections save automatically when you pause. Wait for **Saved on this card**. Choose **New note** for a separate entry. Closing the card or app also waits for a pending note to save.
 
 **Messages save automatically.** With a selected card, the message becomes a note on that card; otherwise it becomes a personal message card. Use **Manage memory** to search saved information, edit messages/notes, or delete an item after confirmation. Retry question does not save a duplicate message. Questions stay labelled as messages; the app does not turn them into verified outcomes. AI replies do not overwrite source records.
 
@@ -70,7 +70,19 @@ Official connection reference: https://developers.openai.com/cookbook/articles/s
 
 ## Updating from version 2.0
 
-Close Southlake Hive before running the version 2.4 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+Close Southlake Hive before running the version 2.5 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+
+## Select a service and record the result
+
+Open **View details**. At the top, review **Your notes & results** before the provider details. The bottom has three actions:
+
+- **Select this service** keeps it selected and takes you to **Contact & follow up**.
+- **Ask more about this card** opens the assistant with this service selected.
+- **Provider page** opens the listed provider website.
+
+After contacting or trying the service, choose **Worked** or **Didn't work**, add an optional rating and comment, then choose **Save result**. You can also use these buttons beside the selected service in chat. Selecting or copying a contact does not save a result by itself.
+
+The saved result appears at the top of the card and in **Manage memory**. Use **Edit** to change its result, rating or comment; use **Delete** to remove it after confirmation. Your service notes and summaries stay available in a new conversation and after reopening the app. Keep a backup when moving computers. Notes save automatically; the result form has its own Save result button.
 
 ## Full-page services and floating chat
 

@@ -46,6 +46,7 @@ async function invoke(method,args){
   if(method==='get-card')return store.get(args.id);
   if(method==='save-note'){idle();const result=await store.note(args);assistant.clear();return result;}
   if(method==='save-comment'){idle();const result=await store.comment(args);assistant.clear();return result;}
+  if(method==='save-service-result'){idle();const result=await store.serviceResult(args);assistant.clear();return result;}
   if(method==='forget-comment'){idle();const result=await store.forgetComment(args);assistant.clear();return result;}
   if(method==='forget-card'){idle();const result=await store.forgetCard(args.id);assistant.clear();return result;}
   if(method==='forget-document'){

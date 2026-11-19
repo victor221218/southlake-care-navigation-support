@@ -2,24 +2,24 @@
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.4.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.5.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Southlake Care Navigation Support**. Version 2.4 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Southlake Care Navigation Support**. Version 2.5 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.4.0/Southlake-Care-Navigation-Support-Handoff-2.4.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Southlake-Care-Navigation-Support-Handoff-2.5.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.4.0/Southlake-Care-Navigation-Support-Setup-2.4.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.4.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.4.0/Southlake-Care-Navigation-Support-Handoff-2.4.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Southlake-Care-Navigation-Support-Setup-2.5.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Southlake-Care-Navigation-Support-Handoff-2.5.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.4.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.5.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -47,6 +47,21 @@ Choose Ask assistant in the upper-right of the Known services heading, or beneat
 
 ![Floating assistant with the selected service](docs/floating-assistant.png)
 
+### Use a service and record what happened
+
+A service card has three footer actions: **Select this service**, **Ask more about this card**, and **Provider page**. Selecting keeps the card open and moves to **Contact & follow up**, where the listed phone/email can be copied. Asking opens the assistant with that service selected.
+
+Your saved notes, reported results and optional ratings appear above Category and the provider facts. Known services also shows your latest note and a compact result summary above the category. These observations stay separate from the public provider information.
+
+After following up, choose **Worked** or **Didn't work**, add an optional **1–5 rating** and explanation, then **Save result**. The same result buttons appear beside the selected service in chat. Opening a provider page, copying a contact, or selecting a service does not create an outcome. A second click while saving does not create another result.
+
+![Service card with personal history above provider details](docs/service-card.png)
+
+![Recording a result with an optional rating and explanation](docs/service-result-form.png)
+
+Saved results can be edited or deleted on the card or in **Manage memory**. Summaries update after corrections, and results survive a new conversation, reopening the app and a memory backup/restore. Choose Add a note near the history heading for an ordinary note. Unsaved result drafts prompt before being discarded. Counts cover only explicit results recorded by the current user; they are not provider-wide success rates. Ratings are optional personal reports, not verified patient satisfaction.
+
+
 ![Review, edit and delete saved memory](docs/manage-memory.png)
 
 The Ask assistant entry point is in the upper-right of the Known services heading, outside the service rows. Manage memory is directly beneath Known services in the sidebar.
@@ -55,7 +70,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Southlake-Care-Navigation-Support-Setup-2.4.0.exe`, choose Install, then Finish. Later, open Southlake Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Southlake-Care-Navigation-Support-Setup-2.5.0.exe`, choose Install, then Finish. Later, open Southlake Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -109,12 +124,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Care-Navigation-Support-Windows-2.4`.
+Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Care-Navigation-Support-Windows-2.5`.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Southlake-Care-Navigation-Support-Setup-2.4.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Southlake-Care-Navigation-Support-Setup-2.5.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -148,7 +163,7 @@ These files are for developers. End users do not need to open or run them.
 | `WINDOWS-DEVELOPMENT.md` | Developer prerequisites, runtime configuration, build steps and native test instructions |
 | `START-HERE.md`, `SHARING.md`, `RELEASE-NOTES.md` | User, administrator and release documentation |
 
-The active version 2.4 build uses the **document** entry points listed above. Earlier service-navigation modules and Mac packaging experiments remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
+The active version 2.5 build uses the **document** entry points listed above. Earlier service-navigation modules and Mac packaging experiments remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
 
 ## Build and run from source
 
@@ -167,7 +182,7 @@ The finished installer does not require these developer tools.
 
 ## What has been checked
 
-- **81 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior and existing regressions.
+- **86 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior, service-result edits/deletions, rating summaries, older-database upgrades and backup compatibility.
 - **Native Windows checks passed** for the default full-width chat, full-page services with a floating assistant, automatic message saving, memory editing/deletion, 27 preloaded services, category/search controls, document-upload placement, service-note persistence, bundled Excel, Word and PDF readers, import preview/save, card-note autosave, selected-card feedback, search, starting a new conversation, reopening the app, and saving a pending note when the app closes.
 - **77 extracted installer files matched** the prepared Windows application.
 - Installer and handoff SHA-256 checksums are published in the release’s `SHA256.txt` and `Verification.json`.

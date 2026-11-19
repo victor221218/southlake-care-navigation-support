@@ -23,6 +23,7 @@
       "tag": "0002_service_workspace",
       "breakpoints": true
     },
-    { "idx": 3, "version": "6", "when": 1794950000000, "tag": "0003_personal_documents", "breakpoints": true }
+    { "idx": 3, "version": "6", "when": 1794950000000, "tag": "0003_personal_documents", "breakpoints": true },
+    { "idx": 4, "version": "6", "when": 1795040000000, "tag": "0004_personal_service_results", "breakpoints": true }
   ]
 }

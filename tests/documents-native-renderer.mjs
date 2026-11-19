@@ -1,4 +1,4 @@
-const wait=async check=>{const end=Date.now()+25000;while(!check()){if(Date.now()>end)throw new Error('Windows interface check timed out.');await new Promise(resolve=>setTimeout(resolve,60));}};
+const wait=async check=>{const end=Date.now()+25000;while(!check()){if(Date.now()>end)throw new Error('Windows interface check timed out: '+String(check).slice(0,300));await new Promise(resolve=>setTimeout(resolve,60));}};
 const click=selector=>{const target=document.querySelector(selector);if(!target)throw new Error('Missing interface control: '+selector);target.click();};
 const type=(id,value)=>{const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));};
 const filter=(id,value)=>{const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('change',{bubbles:true}));};
@@ -14,7 +14,7 @@ const memoryRow=id=>`.memory-record[data-memory-id="${id}"]`;
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.4.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.5.0'));
   const phase=await window.hiveSmoke.phase();
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));
@@ -23,12 +23,13 @@ async function run(){try{
     const card=await request('get-card',{id:phase.cold.card_id});
     for(const text of [firstNote,feedback,closingNote])if(!card.comments.some(n=>n.body===text))throw new Error('A document note was lost on reopening.');
     const service=await request('get-card',{id:phase.cold.service_card_id});if(!service.comments.some(n=>n.body===serviceNote))throw new Error('Service memory was lost on reopening.');
+    assert(service.experience.not_worked===1&&service.experience.worked===0&&service.experience.rating_average===2&&service.comments.some(n=>n.body==='No vehicle for the requested Tuesday.'),'Reported service outcome/rating was lost after reopening.');
     click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(card.id)));
     click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-notes')?.textContent.includes(closingNote));
     document.getElementById('card-notes').scrollIntoView({block:'center'});
     const sourceCapture=await window.hiveSmoke.capture('card-notes');
     click('[data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
-    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture});return;
+    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture});return;
   }
   const initial=await request('snapshot');assert(initial.services.total===27&&initial.cards.total===0&&initial.documents.length===0);
   const grid=document.getElementById('workspace-grid').getBoundingClientRect(),chat=document.getElementById('chat-panel').getBoundingClientRect();assert(chat.width>=contentWidth(document.getElementById('workspace-grid'))-4,'Workspace chat must fill the content width.');
@@ -90,8 +91,42 @@ async function run(){try{
   click('[data-action="known-services"]');await wait(()=>document.querySelector(`.service-row[data-service-id="${serviceCard.id}"]`));
   click(`.service-row[data-service-id="${serviceCard.id}"] [data-action="open-card"]`);await wait(()=>document.getElementById('card-note'));
   assert(document.getElementById('modal').textContent.includes('416-733-4111')&&!document.querySelector('[data-action="open-original"]'));
-  type('card-note',serviceNote);await wait(()=>document.getElementById('note-status')?.textContent.includes('✓ Saved'));
+  click('#modal [data-action="focus-card-note"]');type('card-note',serviceNote);await wait(()=>document.getElementById('note-status')?.textContent.includes('✓ Saved'));
+  const footer=document.querySelector('#modal .modal-footer');
+  assert(footer.querySelectorAll('button').length===3&&footer.querySelector('button').dataset.action==='select-service'&&[...footer.querySelectorAll('button')].slice(1).map(b=>b.textContent).join('|')==='Ask more about this card|Provider page ↗','Service footer must offer the three requested actions.');
+  assert(Boolean(document.getElementById('card-history').compareDocumentPosition(document.getElementById('card-fields'))&Node.DOCUMENT_POSITION_FOLLOWING),'Saved history must precede Category/provider fields.');
+  click('#modal [data-action="select-service"]');await wait(()=>document.getElementById('service-use-state').textContent==='Selected service');
+  assert((await request('get-card',{id:serviceCard.id})).experience.worked===0,'Selecting a service must not record success.');
+  click('#service-contacts [data-action="copy-contact"]');await wait(()=>document.getElementById('notice').textContent==='Contact copied.');
+  assert((await request('get-card',{id:serviceCard.id})).experience.worked===0,'Copying a contact must not record success.');
+  click('#service-contacts [data-action="record-service-result"][data-outcome="worked"]');await wait(()=>document.getElementById('result-note'));
+  type('result-note','Completed the requested ride.');filter('result-rating','5');
+  await window.hiveSmoke.viewport({width:1000,height:740});await new Promise(resolve=>setTimeout(resolve,250));
+  const resultFooter=footer.getBoundingClientRect();assert(resultFooter.right<=innerWidth&&resultFooter.bottom<=innerHeight&&footer.querySelectorAll('button').length===3,'Service actions must fit a compact window.');
+  document.getElementById('service-result-editor').scrollIntoView({block:'center',behavior:'instant'});await new Promise(resolve=>setTimeout(resolve,200));const resultFormCapture=await window.hiveSmoke.capture('service-result-form');
+  click('#save-service-result');click('#save-service-result');await wait(()=>document.getElementById('service-history-status').textContent.includes('Worked saved'));
+  let experienceCard=await request('get-card',{id:serviceCard.id});const worked=experienceCard.comments.find(n=>n.outcome==='worked');assert(experienceCard.experience.worked===1&&worked.rating===5,'One save must create one result with the chosen rating.');
+  click(`.saved-note[data-note-id="${worked.id}"] [data-action="edit-card-comment"]`);await wait(()=>!document.getElementById('service-result-editor')?.hidden&&document.getElementById('result-note')?.value==='Completed the requested ride.');
+  click('.result-outcomes [data-outcome="not_worked"]');filter('result-rating','2');type('result-note','No vehicle for the requested Tuesday.');click('#save-service-result');await wait(()=>document.getElementById('service-history-status').textContent.includes("Didn't work saved"));
+  assert((await request('get-card',{id:serviceCard.id})).experience.worked===0,'Editing a result must update the summary.');
+  click('#service-contacts [data-action="record-service-result"][data-outcome="worked"]');await wait(()=>!document.getElementById('service-result-editor').hidden);click('#save-service-result');await wait(()=>document.getElementById('service-history-status').textContent.includes('Worked saved'));
+  experienceCard=await request('get-card',{id:serviceCard.id});const removable=experienceCard.comments.find(n=>n.outcome==='worked');
+  click(`.saved-note[data-note-id="${removable.id}"] [data-action="edit-card-comment"]`);await wait(()=>!document.getElementById('service-result-editor').hidden&&document.getElementById('result-note').value==='');
+  click('.result-outcomes [data-outcome="not_worked"]');click('#save-service-result');await wait(()=>document.getElementById('service-history-status').textContent.includes("Didn't work saved"));
+  assert((await request('get-card',{id:serviceCard.id})).comments.find(n=>n.id===removable.id).body==="Didn't work.",'Changing a result without a comment must not retain a contradictory default note.');
+
+  window.confirm=()=>false;click(`.saved-note[data-note-id="${removable.id}"] [data-action="delete-card-comment"]`);assert(document.querySelector(`.saved-note[data-note-id="${removable.id}"]`));
+  window.confirm=()=>true;click(`.saved-note[data-note-id="${removable.id}"] [data-action="delete-card-comment"]`);await wait(()=>!document.querySelector(`.saved-note[data-note-id="${removable.id}"]`));window.confirm=originalConfirm;
+  click('#service-contacts [data-action="record-service-result"][data-outcome="worked"]');await wait(()=>!document.getElementById('service-result-editor').hidden);type('result-note','Unsaved draft stays in this form.');window.confirm=()=>false;click('#modal [data-action="close-modal"]');assert(document.getElementById('modal').open);assert(document.getElementById('result-note').value.includes('Unsaved draft'));
+  window.confirm=()=>true;click('[data-action="cancel-service-result"]');await wait(()=>document.getElementById('service-result-editor').hidden);window.confirm=originalConfirm;
+  await window.hiveSmoke.viewport({width:1420,height:920});document.getElementById('card-history').scrollIntoView({block:'start'});await new Promise(resolve=>setTimeout(resolve,300));
+  const serviceCardCapture=await window.hiveSmoke.capture('service-card');
   click('[data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
+  await wait(()=>document.querySelector(row+' .service-experience-preview')?.textContent.includes('No vehicle for the requested Tuesday.'));
+  const directoryWithHistory=await window.hiveSmoke.capture('known-services');
+  click(row+' [data-action="ask-service"]');await wait(()=>document.getElementById('selected-context').textContent.includes('North York Seniors'));assert(document.querySelector('#selected-context [data-action="record-service-result"]'),'Selected service must have direct result controls.');
+  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(worked.id)));
+  click(memoryRow(worked.id)+' [data-action="edit-memory"]');await wait(()=>!document.getElementById('service-result-editor')?.hidden&&document.getElementById('result-note')?.value==='No vehicle for the requested Tuesday.');click('[data-action="cancel-service-result"]');await wait(()=>document.getElementById('service-result-editor').hidden);click('#modal [data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
   click('[data-action="workspace"]');click('[data-action="new-chat"]');await wait(()=>!document.querySelector('.message'));
   type('message',preference);click('[data-action="send"]');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
   const personal=(await request('list-memory',{kind:'notes',query:'Initial acceptance preference'})).items[0];if(!personal)throw new Error('A normal chat message was not saved automatically.');
@@ -118,6 +153,6 @@ async function run(){try{
   assert(document.querySelector('.memory-record-main').dataset.id===card.id);
   type('search','');filter('memory-kind-filter','documents');await wait(()=>document.querySelectorAll('.memory-record').length===4);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);
-  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,bundled_native_parsers:parserChecks,preloaded_public_services:27,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,automatic_message_memory:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_message:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
+  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_result_from_selected_context:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,automatic_message_memory:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_message:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
 }catch(error){const capture=await window.hiveSmoke.capture('failure');window.hiveSmoke.finish({ok:false,error:error.message||String(error),debug_text:document.body.innerText.slice(0,6000),failure_capture:capture});}}
 run();
