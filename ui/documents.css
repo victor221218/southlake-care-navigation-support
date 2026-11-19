@@ -150,3 +150,78 @@
 .followup-actions button { font-size: 11px; padding: 7px 10px; }
 .floating-chat .followup-fields { grid-template-columns: minmax(0, 1fr); }
 .floating-chat .chat-followup { padding: 10px 11px; }
+
+.case-sidebar > select {
+  width: 100%;
+  min-height: 32px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.case-week h3 {
+  margin: 9px 6px 4px;
+  font-size: 10px;
+  font-weight: 650;
+  color: #526a77;
+}
+.case-week:first-child h3 { margin-top: 2px; }
+.case-item small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #526a77;
+  font-size: 10px;
+}
+.case-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: #8899a3;
+  border-radius: 50%;
+}
+.case-item[data-feedback="needed"] small { color: #7a4f17; }
+.case-item[data-feedback="needed"] .case-status-dot { background: #af731f; }
+.case-item[data-feedback="recorded"] small { color: #356450; }
+.case-item[data-feedback="recorded"] .case-status-dot { background: #438267; }
+.case-more {
+  min-width: 28px;
+  margin-right: 2px;
+  border-radius: 6px;
+}
+.case-more:hover, .case-more[aria-expanded="true"] { background: #e9f1f6; color: #234d69; }
+.case-action-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(212px, calc(100vw - 16px));
+  padding: 5px;
+  border: 1px solid #d8e4ec;
+  border-radius: 10px;
+  color: #243e50;
+  background: #fff;
+  box-shadow: 0 8px 24px #233d5026;
+}
+.case-action-menu button {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+.case-action-menu button:hover, .case-action-menu button:focus-visible { background: #edf5f8; }
+.case-action-menu small { display: block; margin-top: 3px; color: #526a77; }
+.case-action-menu .case-menu-more { color: #526a77; }
+.case-title-actions, .followup-corrections { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.followup-corrections {
+  margin: 10px 0 0;
+  padding-top: 5px;
+  border-top: 1px solid #dbe7e2;
+}
+.followup-corrections button { color: #3b6279; }
+#card-history .input-tools:not(:has(button:not([hidden]))) { display: none; }
+.latest-messages { display: block; margin: 10px auto 0; font-size: 11px; }

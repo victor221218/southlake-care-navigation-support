@@ -98,6 +98,9 @@ export class DocumentStore {
     const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? AND (d.format IS NULL OR d.format<>'service-directory')
+      AND (c.kind<>'conversation' OR EXISTS (
+        SELECT 1 FROM personal_cases chat WHERE chat.archive_card_id=c.id AND chat.owner_id=c.owner_id AND chat.status='archived'
+      ))
       ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
       .map(card=>({...card,entry_type:'card',memory_type:card.kind==='conversation'?'chats':card.document_id?'documents':'notes'}));
     const notes=(await this.db().prepare(`SELECT n.id,n.card_id,n.body,n.outcome,n.rating,n.updated_at,n.version,c.title,c.document_id,c.archived,d.filename,d.format AS source_format

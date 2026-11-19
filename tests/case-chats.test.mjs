@@ -16,6 +16,7 @@ async function service(f){await ensureKnownServices(f.store);return(await f.stor
 const local=f=>new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:false})}});
 const northYorkRequest = 'I need transportation in North York for an older adult who uses a walker. Show me suitable service cards.';
 const followupsFor = fixture => new CaseFollowups({cases:fixture.cases,store:fixture.store,inputHistory:fixture.inputs});
+const rideTitle = 'Transportation in North York · Walker access';
 async function recommendedRide(fixture) {
   await ensureKnownServices(fixture.store);
   const topic = await fixture.cases.create();
@@ -31,16 +32,108 @@ test('a detailed service request has a short topic title and local category and 
   try {
     const {topic,reply}=await recommendedRide(f);
     const original=await f.cases.row(topic.id);
-    assert.equal(original.title,'Transportation in North York');
+    assert.equal(original.title,rideTitle);
     assert(reply.cards.length>=3);
     assert(reply.cards.every(card=>card.category==='Transportation'));
     await f.cases.rename({id:topic.id,title:'Return trip planning',expected_version:original.version});
     await local(f).chat({case_id:topic.id,text:'Confirm a pickup with the operator.',remember:false});
     assert.equal((await f.cases.row(topic.id)).title,'Return trip planning');
+    assert.equal(await f.cases.suggestedTitle(topic.id),rideTitle);
     const next=await f.cases.create();
     await local(f).chat({case_id:next.id,text:'Please find meal delivery in Aurora.',remember:false});
     assert.equal((await f.cases.row(next.id)).title,'Meal support in Aurora');
     assert.equal((await f.cases.read(topic.id)).message_count,4);
+  } finally { await f.close(); }
+});
+
+test('the case queue sorts meaningful activity and reflects pending feedback, saved results and closed cases', async () => {
+  const f = await fixture();
+  try {
+    const {topic,args,followups} = await recommendedRide(f);
+    const other = await f.cases.create('Meal delivery');
+    const oldTime = '2025-11-16T16:00:00.000Z', newTime = '2025-11-17T15:00:00.000Z';
+    await f.store.db().prepare('UPDATE personal_case_messages SET updated_at=? WHERE case_id=?').bind(oldTime,topic.id).run();
+    await f.store.db().prepare('UPDATE personal_cases SET created_at=? WHERE id=?').bind(newTime,other.id).run();
+    await f.cases.activate(topic.id);
+    const sorted = (await f.cases.list()).items;
+    assert.deepEqual(sorted.map(item=>item.id),[other.id,topic.id]);
+    assert.equal(sorted[1].activity_at,oldTime);
+    assert.equal(sorted[1].feedback,'unselected');
+    assert.equal((await f.cases.list({query:'north york',feedback:'unselected',limit:1})).items[0].id,topic.id);
+
+    const followup = await followups.start(args);
+    const step = {case_id:topic.id,message_id:followup.id};
+    await followups.update({...step,step:'later'});
+    assert.equal((await f.cases.list({feedback:'needed'})).items[0].feedback_sequence,followup.sequence);
+    await followups.update({...step,step:'choose',outcome:'worked'});
+    assert.equal((await f.cases.list({feedback:'needed'})).total,1);
+    const finished = (await followups.update({...step,step:'save',rating:5})).payload.followup;
+    assert.equal((await f.cases.list({feedback:'recorded'})).items[0].id,topic.id);
+    const undone = (await followups.update({...step,step:'undo',change_id:finished.history.undo.id})).payload.followup;
+    assert.equal((await f.cases.list({feedback:'needed'})).total,1);
+    await followups.update({...step,step:'redo',change_id:undone.history.redo.id});
+    assert.equal((await f.cases.list({feedback:'recorded'})).total,1);
+
+    await f.cases.archive({id:topic.id,expected_version:(await f.cases.row(topic.id)).version});
+    assert.equal((await f.cases.list({feedback:'recorded'})).total,0);
+    assert.equal((await f.store.memories({kind:'chats'})).total,1);
+    await f.cases.reopen(topic.id);
+    assert.equal((await f.store.memories({kind:'chats'})).total,0);
+    assert.equal((await f.cases.list({feedback:'recorded'})).total,1);
+    f.switch('other-account');
+    assert.equal((await f.cases.list()).total,0);
+  } finally { await f.close(); }
+});
+
+test('chat correction buttons target only their saved note or result, including a later rating change', async () => {
+  const f = await fixture();
+  try {
+    const {topic,service,args,followups} = await recommendedRide(f);
+    const {id} = await followups.start(args);
+    const step = {case_id:topic.id,message_id:id};
+    await followups.update({...step,step:'open-note'});
+    await followups.saveDrafts({case_id:topic.id,drafts:[{message_id:id,note_draft:'Practice note for this selection.'}]});
+    const saved = (await followups.update({...step,step:'save-note'})).payload.followup;
+    const independent = await f.inputs.record({type:'comment',card_id:service.id,label:'Add note'},
+      () => f.store.comment({card_id:service.id,body:'Independent note on the same service.'}));
+    const otherChange = (await f.inputs.state({card_id:service.id})).undo;
+    assert.equal(saved.history.undo.detail,'note');
+    await assert.rejects(followups.update({...step,step:'undo',change_id:otherChange.id}),/out of date/);
+    const undone = (await followups.update({...step,step:'undo',change_id:saved.history.undo.id})).payload.followup;
+    assert.equal(undone.latest_note,null);
+    assert.equal((await f.store.get(service.id)).comments[0].id,independent.id);
+    await f.reopen();
+    const redone = (await followups.update({...step,step:'redo',change_id:undone.history.redo.id})).payload.followup;
+    assert.equal(redone.latest_note.id,saved.latest_note.id);
+
+    await followups.update({...step,step:'choose',outcome:'worked'});
+    const {result} = (await followups.update({...step,step:'save',rating:5})).payload.followup;
+    await f.inputs.record({type:'comment',id:result.id,card_id:service.id,label:'Change service result or rating'},
+      () => f.store.serviceResult({id:result.id,card_id:service.id,outcome:result.outcome,rating:1,
+        body:result.body,expected_version:result.version}));
+    const revised = (await followups.start(args)).payload.followup;
+    assert.equal(revised.history.undo.detail,'rating change');
+    const corrected = (await followups.update({...step,step:'undo',change_id:revised.history.undo.id})).payload.followup;
+    assert.equal(corrected.result.rating,5);
+    assert.equal(corrected.history.redo.detail,'rating change');
+  } finally { await f.close(); }
+});
+
+test('opening pending feedback can jump to an older page without losing access to recent messages', async () => {
+  const f = await fixture();
+  try {
+    const {topic,args,followups} = await recommendedRide(f);
+    const {sequence} = await followups.start(args);
+    for (let i=0;i<5;i++) {
+      const turn = await f.cases.begin({id:topic.id,text:'Another service question '+i});
+      await f.cases.finish(turn,{text:'Follow-up detail',source:'local'});
+    }
+    const latest = await f.cases.read(topic.id,{limit:4});
+    assert(!latest.messages.some(message=>message.sequence===sequence));
+    const focused = await f.cases.read(topic.id,{focus:sequence,limit:4});
+    assert(focused.has_newer);
+    assert(focused.messages.some(message=>message.sequence===sequence));
+    assert(!latest.has_newer);
   } finally { await f.close(); }
 });
 
@@ -110,7 +203,7 @@ test('a standalone chat note saves once to its provider without recording an out
     assert((await f.store.get(service.id)).comments.some(comment => comment.id === note.id));
     f.switch('note-backup');
     await f.store.restore(backup);
-    const restored = (await f.cases.list()).items.find(item => item.title === 'Transportation in North York');
+    const restored = (await f.cases.list()).items.find(item => item.title === 'Transportation in North York · Walker access');
     const restoredFollowup = (await f.cases.hydrate(await f.cases.read(restored.id))).messages.at(-1).payload.followup;
     assert.equal(restoredFollowup.latest_note.body, completed.latest_note.body);
     assert.notEqual(restoredFollowup.latest_note.id, completed.latest_note.id);
@@ -158,7 +251,7 @@ test('saving a chat result twice records one outcome that follows Undo, Redo and
     f.switch('restored');
     await ensureKnownServices(f.store);
     await f.store.restore(backup);
-    const restored=(await f.cases.list()).items.find(item=>item.title==='Transportation in North York');
+    const restored=(await f.cases.list()).items.find(item=>item.title==='Transportation in North York · Walker access');
     const saved=await last(restored.id);
     assert.notEqual(saved.card_id,service.id);
     assert.equal(saved.result.body,save.body);

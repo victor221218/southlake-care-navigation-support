@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { InputHistory } from './input-history.mjs';
 
 export const CHAT_NOTE_LIMIT = 2000;
 const outcomes = ['worked', 'not_worked'];
@@ -7,6 +8,10 @@ const validRating = rating => Number.isInteger(rating) && rating >= 1 && rating 
 const noteText = body => typeof body === 'string' ? body.replace(/\u0000/g, '').slice(0, CHAT_NOTE_LIMIT) : '';
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= 100;
 const recentNoteIds = ids => Array.isArray(ids) ? [...new Set(ids.filter(validId))].slice(-20) : [];
+const historyScope = followup => ({
+  card_id: followup.card_id,
+  entry_ids: [followup.result_id, ...followup.note_ids].filter(Boolean)
+});
 
 function followupData(value) {
   if (!validId(value?.card_id) || !Number.isInteger(value.reply_sequence) || value.reply_sequence < 1) return null;
@@ -57,6 +62,7 @@ export async function hydrateFollowup(value, store, caseId) {
     card: {title: card.title, contacts},
     latest_note: latestNote || null,
     result: result || null,
+    history: card.archived ? null : await new InputHistory({store}).state(historyScope(followup)),
     unavailable: card.archived
   };
 }
@@ -111,7 +117,7 @@ export class CaseFollowups {
     return this.view(row);
   }
 
-  async update({case_id, message_id, step, outcome, body, rating}) {
+  async update({case_id, message_id, step, outcome, body, rating, change_id}) {
     const row = await this.db().transaction(async () => {
       const current = await this.activeCase(case_id);
       const message = await this.message(case_id, message_id, current.owner_id);
@@ -119,6 +125,13 @@ export class CaseFollowups {
       if (!followup) throw new Error('This service follow-up is unavailable in this topic.');
       const card = await this.store.get(followup.card_id, {case_id});
       if (!card.document_id || card.archived) throw new Error('This service card is no longer available.');
+      if (step === 'undo' || step === 'redo') {
+        await this.inputHistory.apply(step, {scope:historyScope(followup), expected_id:change_id});
+        const time = timestamp();
+        await this.write(message, followup, time);
+        await this.touch(current, time);
+        return message;
+      }
       const editingNote = ['open-note', 'cancel-note', 'save-note'].includes(step);
       if (followup.result_id && !editingNote) {
         if (card.comments.some(note => note.id === followup.result_id && note.outcome)) return message;
@@ -203,7 +216,10 @@ export class CaseFollowups {
           followup.body = noteText(draft.body);
           followup.rating = validRating(draft.rating) ? draft.rating : null;
         }
-        await this.write(message, followup, time);
+        if (message.payload_json !== JSON.stringify({followup})) {
+          await this.write(message, followup, time);
+          this.cases.changed({case_id:case_id});
+        }
       }
     });
   }

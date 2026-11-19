@@ -13,6 +13,12 @@ const categories = [
 ];
 const regions = [...enums.regions].sort((a, b) => b.length - a.length);
 const fold = value => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const transportNeeds = [
+  [/\b(?:wheelchairs?|mobility scooters?)\b/, 'Wheelchair access'],
+  [/\b(?:walkers?|rollators?)\b/, 'Walker access'],
+  [/\b(?:hospital|medical|clinic|specialist) (?:appointments?|visits?)\b/, 'Medical appointment'],
+  [/\b(?:older (?:adults?|person|man|woman)|seniors?|elderly)\b/, 'Older adult']
+];
 
 export function serviceTopic(text) {
   const request = fold(String(text ?? '').slice(0, 12000));
@@ -32,7 +38,10 @@ export function summarizeTopic(text) {
   const prompt = String(text ?? '').replace(/\s+/g, ' ').trim();
   if (!prompt || /^(?:hi|hey|hello|thanks|thank you)[.!? ]*$/i.test(prompt)) return 'New topic';
   const service = serviceTopic(prompt);
-  if (service) return service.title;
+  if (service) {
+    const need = service.category === 'Transportation' && transportNeeds.find(([pattern]) => pattern.test(fold(prompt)));
+    return need ? service.title + ' · ' + need[1] : service.title;
+  }
   const firstThought = prompt
     .replace(/^(?:please\s+)?(?:can you\s+|could you\s+|i (?:need|want) (?:help with |to )?)/i, '')
     .split(/[.!?]\s|\s[—–]\s/)[0];

@@ -49,23 +49,30 @@ async function invoke(method,args){
   if(method==='get-card')return store.get(args.id);
   if(method==='list-cases')return cases.list(args);
   if(method==='get-case'){idle();return cases.hydrate(await cases.read(args.id,args));}
-  if(method==='select-case'){idle();assistant.clear();await cases.activate(args.id);return cases.hydrate(await cases.read(args.id));}
+  if(method==='select-case'){idle();assistant.clear();await cases.activate(args.id);return cases.hydrate(await cases.read(args.id,args));}
   if(method==='new-case'){idle();assistant.clear();return cases.create(args.title);}
   if(method==='rename-case'){idle();return cases.rename(args);}
+  if(method==='suggest-case-title'){idle();return cases.suggestedTitle(args.id);}
   if(method==='case-context')return cases.context(args);
   if(method==='start-service-followup'){idle();return followups.start(args);}
   if(method==='update-service-followup'){
     idle();
     const reply = await followups.update(args);
-    if(args.step==='save'||args.step==='save-note')assistant.clear();
+    if(['save','save-note','undo','redo'].includes(args.step))assistant.clear();
     return reply;
   }
   if(method==='save-followup-drafts')return followups.saveDrafts(args);
   if(method==='archive-case'){idle();assistant.clear();return cases.archive(args);}
   if(method==='delete-case'){idle();assistant.clear();return cases.delete(args);}
   if(method==='reopen-case'){idle();assistant.clear();return cases.reopen(args.id);}
-  if(method==='input-history')return inputHistory.state();
-  if(method==='undo-input'||method==='redo-input'){idle();const result=await inputHistory.apply(method==='undo-input'?'undo':'redo');assistant.clear();return result;}
+  if(method==='input-history')return inputHistory.state(args.card_id ? {card_id:args.card_id} : undefined);
+  if(method==='undo-input'||method==='redo-input'){
+    idle();
+    const scope=args.card_id ? {card_id:args.card_id} : undefined;
+    const result=await inputHistory.apply(method==='undo-input'?'undo':'redo',{scope,expected_id:args.change_id});
+    assistant.clear();
+    return result;
+  }
   if(method==='save-note'){idle();const result=await inputHistory.record({type:'card',id:args.id,label:args.id?'Edit memory':'Add memory'},()=>store.note(args));assistant.clear();return result;}
   if(method==='save-comment'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:args.id?'Edit note':'Add note'},()=>store.comment(args));assistant.clear();return result;}
   if(method==='save-service-result'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:args.id?'Change service result or rating':'Record service result'},()=>store.serviceResult(args));assistant.clear();return result;}

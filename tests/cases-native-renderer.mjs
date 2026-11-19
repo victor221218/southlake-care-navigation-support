@@ -1,5 +1,7 @@
 export async function runCaseChecks({request,click,type,filter,wait,assert,serviceCard}){
   const originalCase=(await request('snapshot')).active_case.id,originalConfirm=window.confirm;
+  const row=id=>`[data-case-row="${id}"]`;
+  const menu='#case-action-menu:popover-open';
   const send=async text=>{type('message',text);click('#send-button');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));};
   // Use the shipping score form, then its saved-input Undo and Redo controls.
   click('[data-action="known-services"]');await wait(()=>document.querySelector(`.service-row[data-service-id="${serviceCard.id}"]`));
@@ -7,7 +9,7 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click('#service-contacts [data-action="record-service-result"][data-outcome="worked"]');await wait(()=>document.getElementById('result-note'));
   filter('result-rating','5');type('result-note','Practice score to correct with Undo and Redo.');click('#save-service-result');await wait(()=>document.getElementById('service-history-status').textContent.includes('Worked saved'));
   let service=await request('get-card',{id:serviceCard.id});const rating=service.comments.find(n=>n.body==='Practice score to correct with Undo and Redo.');assert(rating?.rating===5);
-  click('#card-history [data-action="undo-input"]');await wait(()=>document.getElementById('card-history')&&!document.querySelector(`.saved-note[data-note-id="${rating.id}"]`));
+  click('#card-history [data-action="undo-input"]');await wait(()=>document.querySelector('#card-history [data-action="redo-input"]:enabled:not([hidden])')&&!document.querySelector(`.saved-note[data-note-id="${rating.id}"]`));
   assert(!(await request('get-card',{id:serviceCard.id})).comments.some(n=>n.id===rating.id));
   click('#card-history [data-action="redo-input"]');await wait(()=>document.querySelector(`.saved-note[data-note-id="${rating.id}"]`));assert((await request('get-card',{id:serviceCard.id})).comments.find(n=>n.id===rating.id).rating===5);
   window.confirm=()=>true;click(`.saved-note[data-note-id="${rating.id}"] [data-action="delete-card-comment"]`);await wait(()=>!document.querySelector(`.saved-note[data-note-id="${rating.id}"]`));window.confirm=originalConfirm;
@@ -15,7 +17,13 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
   const a=(await request('snapshot')).active_case.id;
   await send('I need transportation in North York for an older adult who uses a walker. Show me suitable service cards.');
-  assert(document.getElementById('assistant-title').textContent==='Transportation in North York','The topic title should summarize the need and area.');
+  assert(document.getElementById('assistant-title').textContent==='Transportation in North York · Walker access','The topic title should summarize the need and area.');
+  await wait(()=>document.querySelector(row(a)+'[data-feedback="unselected"]'));
+  const week = new Date();
+  week.setDate(week.getDate()-(week.getDay()+6)%7);
+  const currentWeek='Week of '+week.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+  assert(document.querySelector(row(a)).closest('.case-week').querySelector('h3').textContent===currentWeek,'The sidebar must group the chat by its Monday week.');
+  assert(!document.querySelector('.sidebar .input-tools'),'Saved-input corrections must not be in the sidebar.');
   assert(document.querySelector('[data-action="new-chat"]').textContent.includes('New topic'));
   let assistant=document.querySelector('.message.assistant:last-child'),cards=assistant.querySelectorAll('.answer-card');
   const savedReply=(await request('get-case',{id:a})).messages.at(-1);
@@ -51,9 +59,19 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   const withNote=await request('get-card',{id:chosenId});
   assert(withNote.comments.some(comment=>comment.body===standaloneNote&&!comment.outcome));
   assert(withNote.experience.not_worked===previousResultCount,'Saving a note must leave the provider result count unchanged.');
+  assert(document.querySelector('.chat-followup [data-step="undo"]').textContent==='Undo note');
   const followupChoicesCapture=await window.hiveSmoke.capture('followup-choices');
   click('.chat-followup [data-step="later"]');await wait(()=>document.querySelector('.chat-followup [data-step="resume"]'));
   assert((await request('get-card',{id:chosenId})).experience.not_worked===previousResultCount,'Not yet must never record an outcome.');
+  filter('case-feedback-filter','needed');
+  await wait(()=>document.querySelectorAll('.case-item').length===1&&document.querySelector(row(a)+'[data-feedback="needed"]'));
+  click(row(a)+' [data-action="case-menu"]');
+  await wait(()=>document.querySelector(menu+' [data-action="review-case-feedback"]'));
+  assert(document.querySelector(row(a)+' [data-action="case-menu"]').getAttribute('aria-expanded')==='true');
+  click(menu+' [data-action="review-case-feedback"]');
+  await wait(()=>document.activeElement.dataset.step==='resume');
+  assert(!document.querySelector(menu),'The floating menu should close after jumping to feedback.');
+  filter('case-feedback-filter','');
   click('.chat-followup [data-step="resume"]');await wait(()=>document.querySelector('.chat-followup [data-outcome="not_worked"]'));
   click('.chat-followup [data-outcome="not_worked"]');
   await wait(()=>document.querySelector('.chat-followup textarea')&&!document.querySelector('.chat-followup textarea').disabled);
@@ -64,7 +82,15 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   draftRating.value='2';draftRating.dispatchEvent(new Event('change',{bubbles:true}));
   assert((await request('get-card',{id:chosenId})).experience.not_worked===previousResultCount,'An unsaved choice or note must not affect service history.');
   const followupFeedbackCapture=await window.hiveSmoke.capture('followup-feedback');
-  click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));type('case-title-input','Long transport follow-up');click('[data-action="rename-case"]');await wait(()=>!document.getElementById('modal').open&&document.getElementById('assistant-title').textContent==='Long transport follow-up');
+  click(row(a)+' [data-action="case-menu"]');
+  click(menu+' [data-rename-only="true"]');
+  await wait(()=>document.getElementById('case-title-input'));
+  type('case-title-input','Temporary title');
+  click('[data-action="suggest-case-title"]');
+  await wait(()=>document.getElementById('case-title-input').value==='Transportation in North York · Walker access');
+  type('case-title-input','Long transport follow-up');
+  click('[data-action="rename-case"]');
+  await wait(()=>!document.getElementById('modal').open&&document.getElementById('assistant-title').textContent==='Long transport follow-up');
   await send('Keep the walker requirement for the return trip.');type('message','Draft retained with the long-running case.');
   click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
   const b=(await request('snapshot')).active_case.id;await send('Meal support follow-up for a separate case.');
@@ -78,15 +104,19 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert(recorded?.rating===2&&recorded.outcome==='not_worked','The note and rating must save to the selected provider.');
   click('.chat-followup [data-action="chat-followup-options"]');
   assert(document.activeElement.dataset.action==='chat-followup-start'&&document.activeElement.dataset.id!==chosenId,'Other options should return focus to a different provider in the original grid.');
-  click('.sidebar [data-action="undo-input"]');await wait(()=>document.querySelector('.chat-followup [data-outcome="not_worked"]')&&document.body.dataset.caseChanging==='false');
+  assert(document.querySelector('.chat-followup [data-step="undo"]').textContent==='Undo result');
+  click('.chat-followup [data-step="undo"]');await wait(()=>document.querySelector('.chat-followup [data-outcome="not_worked"]')&&document.body.dataset.caseChanging==='false');
   assert(!(await request('get-card',{id:chosenId})).comments.some(note=>note.id===recorded.id));
-  click('.sidebar [data-action="redo-input"]');await wait(()=>document.querySelector('.followup-saved')&&document.body.dataset.caseChanging==='false');
+  await wait(()=>document.querySelector(row(a)+'[data-feedback="needed"]'));
+  assert(document.querySelector('.chat-followup [data-step="redo"]').textContent==='Redo result');
+  click('.chat-followup [data-step="redo"]');await wait(()=>document.querySelector('.followup-saved')&&document.body.dataset.caseChanging==='false');
   assert((await request('get-card',{id:chosenId})).comments.some(note=>note.id===recorded.id&&note.rating===2));
+  await wait(()=>document.querySelector(row(a)+'[data-feedback="recorded"]'));
   const caseChatsCapture=await window.hiveSmoke.capture('case-chats');
-  click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('[data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));
+  click(row(a)+' [data-action="case-menu"]');click(menu+' [data-action="archive-case"]');await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
   const archived=(await request('get-case',{id:a}));assert(archived.status==='archived'&&archived.message_count===5);const archiveCard=archived.archive_card_id;
   assert(!(await request('list-memory',{query:'walker requirement'})).items.some(i=>i.kind==='message'),'Saving the case should consolidate its automatic message cards.');
-  click(`[data-case-row="${b}"] [data-action="case-options"]`);await wait(()=>document.getElementById('case-title-input'));window.confirm=()=>false;click('[data-action="delete-case"]');assert(document.getElementById('modal').open);assert((await request('get-case',{id:b})).status==='active');
+  click(row(b)+' [data-action="case-menu"]');click(menu+' .case-menu-more');await wait(()=>document.getElementById('case-title-input'));window.confirm=()=>false;click('[data-action="delete-case"]');assert(document.getElementById('modal').open);assert((await request('get-case',{id:b})).status==='active');
   window.confirm=()=>true;click('[data-action="delete-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${b}"]`));window.confirm=originalConfirm;
   let deleted=false;try{await request('get-case',{id:b});}catch{deleted=true;}assert(deleted&&(await request('list-memory',{query:'Meal support follow-up'})).total===0,'Delete must remove both the conversation and its automatic memory.');
   assert((await request('get-card',{id:serviceCard.id})).comments.some(n=>n.outcome==='not_worked'),'Separately recorded service results must stay.');
@@ -94,7 +124,9 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   await wait(()=>document.body.dataset.view==='memory');const caseLibraryCapture=await window.hiveSmoke.capture('case-library');
   click(`.memory-record[data-memory-id="${archiveCard}"] [data-action="open-card"]`);await wait(()=>document.body.dataset.view==='workspace'&&!document.getElementById('case-archived-banner').hidden);assert(document.getElementById('composer').hidden&&document.getElementById('messages').textContent.includes('walker requirement'));
   click('#case-archived-banner [data-action="reopen-case"]');await wait(()=>!document.getElementById('composer').hidden&&document.getElementById('message').value==='Draft retained with the long-running case.');
-  click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('[data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
+  assert((await request('list-memory',{kind:'chats'})).total===0,'Reopened conversations should return to Case chats.');
+  click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('#modal [data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
   click(`[data-case-row="${originalCase}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent===(document.querySelector(`[data-case-row="${originalCase}"] strong`)?.textContent));
-  return{compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,known_contacts_above_followup:true,independent_chat_note:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
+  return{weekly_case_sidebar:true,case_feedback_filter:true,sidebar_feedback_jump:true,suggested_case_title:true,close_case_from_sidebar:true,
+    compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,known_contacts_above_followup:true,independent_chat_note:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
 }

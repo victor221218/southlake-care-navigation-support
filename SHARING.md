@@ -1,6 +1,6 @@
 # Share the Windows app
 
-Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.10.0). Users choose **Care-Navigation-Support-Setup-2.10.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
+Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.11.0). Users choose **Care-Navigation-Support-Setup-2.11.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
 
 A C: drive link works on this computer only. To send a download link, upload the installer and share that actual file page. The public GitHub release is verified separately after upload.
 
@@ -34,9 +34,13 @@ python scripts/prepare-windows.py
 
 The document tests exercise the built background reader, so build first. The Windows staging script expects the matching official Electron runtime manifest/cache; a new build machine must supply that runtime and Inno Setup. Third-party notices are in app.asar. The installer uses the same app ID and per-user directory, preserving user data on upgrade and uninstall. Never distribute developer QA stages, test profiles or credentials.
 
-## Version 2.10 upgrade
+## Version 2.11 upgrade
 
 The Windows app and shortcuts use the name Care Navigation Support and the supplied logo. The installer keeps the existing installation ID and the Windows data location `%APPDATA%\Southlake Hive` to retain saved accounts, documents and notes. Close the previous app before updating. Public starting cards are initialized separately in each account and do not transfer anyone’s comments to another account. No automatic updater is included.
+
+## Case chats in this release
+
+Active conversations appear by week, newest activity first. The sidebar shows whether a service was selected and whether a result is still needed. The three-dot menu opens pending feedback, renames the conversation, or closes it into Manage memory. Reopening a closed conversation returns it to the active list. Undo and Redo appear beneath the relevant chat follow-up or in that provider’s detail view. Existing case transcripts and feedback references carry forward with no database migration.
 
 ## Default pages and memory controls
 

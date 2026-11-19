@@ -11,11 +11,56 @@ export class DocumentCases {
   db(){return this.store.db();} owner(){return this.store.owner();}
   changed(value){this.db().afterCommit(()=>this.store.emit({type:'cases-changed',value}));return value;}
   async row(id){const value=await this.db().prepare('SELECT * FROM personal_cases WHERE id=? AND owner_id=?').bind(id,this.owner()).first();if(!value)throw new Error('This case is not in your active account.');return value;}
-  async list({query='',limit=100}={}){const rows=(await this.db().prepare("SELECT c.*,(SELECT COUNT(*) FROM personal_case_messages m WHERE m.case_id=c.id AND m.owner_id=c.owner_id) AS message_count FROM personal_cases c WHERE owner_id=? AND status='active' ORDER BY updated_at DESC,id").bind(this.owner()).all()).results;const filtered=rows.filter(c=>c.title.toLowerCase().includes(String(query).toLowerCase()));return{total:filtered.length,items:filtered.slice(0,Math.min(200,Math.max(1,limit)))};}
+  async list({query='',feedback='',limit=100}={}) {
+    const {results} = await this.db().prepare(`
+      SELECT c.id, c.title, c.version, c.created_at, COUNT(m.id) AS message_count,
+        COALESCE(MAX(m.updated_at), c.created_at) AS activity_at,
+        COUNT(provider.id) AS selection_count,
+        MAX(CASE WHEN provider.id IS NOT NULL AND result.id IS NULL THEN m.sequence END) AS feedback_sequence
+      FROM personal_cases c
+      LEFT JOIN personal_case_messages m ON m.case_id=c.id AND m.owner_id=c.owner_id
+      LEFT JOIN personal_cards provider ON provider.owner_id=c.owner_id AND provider.archived=0
+        AND provider.document_id IS NOT NULL AND m.role='assistant' AND m.state='complete'
+        AND provider.id=json_extract(m.payload_json,'$.followup.card_id')
+      LEFT JOIN personal_comments result ON result.owner_id=c.owner_id AND result.card_id=provider.id
+        AND result.outcome IS NOT NULL AND result.id=json_extract(m.payload_json,'$.followup.result_id')
+      WHERE c.owner_id=? AND c.status='active'
+      GROUP BY c.id
+      ORDER BY activity_at DESC, c.id
+    `).bind(this.owner()).all();
+    const term = String(query).trim().toLowerCase();
+    const items = results.map(row => ({
+      ...row,
+      feedback: row.feedback_sequence != null ? 'needed' : row.selection_count ? 'recorded' : 'unselected'
+    })).filter(row => row.title.toLowerCase().includes(term) && (!feedback || row.feedback === feedback));
+    return {total:items.length, items:items.slice(0, Math.min(200,Math.max(1,Number(limit)||100)))};
+  }
   async activate(id){const row=await this.row(id);if(row.status!=='active')throw new Error('Reopen this saved case before continuing.');await this.db().prepare('INSERT INTO personal_case_workspace(owner_id,active_case_id) VALUES (?,?) ON CONFLICT(owner_id) DO UPDATE SET active_case_id=excluded.active_case_id').bind(this.owner(),id).run();await this.db().prepare('UPDATE personal_cases SET updated_at=? WHERE id=? AND owner_id=?').bind(stamp(),id,this.owner()).run();return row;}
   async create(title='New topic'){title=clean(title)||'New topic';return this.db().transaction(async()=>{const id=randomUUID(),time=stamp();await this.db().prepare('INSERT INTO personal_cases(id,owner_id,origin_id,title,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id,this.owner(),id,title,time,time).run();await this.activate(id);return this.changed(await this.row(id));});}
   async current(){const active=await this.db().prepare("SELECT c.* FROM personal_case_workspace w JOIN personal_cases c ON c.id=w.active_case_id AND c.owner_id=w.owner_id WHERE w.owner_id=? AND c.status='active'").bind(this.owner()).first();if(active)return active;const latest=(await this.list({limit:1})).items[0];return latest?this.activate(latest.id):this.create();}
-  async read(id,{before=null,limit=50}={}){const row=await this.row(id),count=Math.min(100,Math.max(1,Number(limit)||50));const values=(await this.db().prepare('SELECT * FROM personal_case_messages WHERE owner_id=? AND case_id=? '+(before!=null?'AND sequence<? ':'')+'ORDER BY sequence DESC LIMIT ?').bind(this.owner(),id,...(before!=null?[Number(before)]:[]),count+1).all()).results;const has_more=values.length>count;return{...row,messages:values.slice(0,count).reverse().map(unpack),has_more,message_count:(await this.db().prepare('SELECT COUNT(*) AS count FROM personal_case_messages WHERE owner_id=? AND case_id=?').bind(this.owner(),id).first()).count};}
+  async read(id,{before=null,limit=50,focus=null}={}) {
+    const row = await this.row(id);
+    const count = Math.min(100,Math.max(1,Number(limit)||50));
+    const {message_count, last_sequence} = await this.db().prepare(
+      'SELECT COUNT(*) AS message_count, MAX(sequence) AS last_sequence FROM personal_case_messages WHERE owner_id=? AND case_id=?'
+    ).bind(this.owner(),id).first();
+    // Open older feedback with a few surrounding messages and a way back to the latest page.
+    const cutoff = Number.isInteger(focus) && focus > 0 && last_sequence - focus >= count
+      ? focus + Math.min(count,6) : before;
+    const values = (await this.db().prepare(
+      'SELECT * FROM personal_case_messages WHERE owner_id=? AND case_id=? ' +
+      (cutoff!=null?'AND sequence<? ':'') + 'ORDER BY sequence DESC LIMIT ?'
+    ).bind(this.owner(),id,...(cutoff!=null?[Number(cutoff)]:[]),count+1).all()).results;
+    return {...row,messages:values.slice(0,count).reverse().map(unpack),has_more:values.length>count,
+      has_newer:values.length > 0 && values[0].sequence < last_sequence,message_count};
+  }
+  async suggestedTitle(id) {
+    await this.row(id);
+    const {results} = await this.db().prepare(
+      "SELECT body FROM personal_case_messages WHERE owner_id=? AND case_id=? AND role='user' ORDER BY sequence LIMIT 20"
+    ).bind(this.owner(), id).all();
+    return results.map(message => summarizeTopic(message.body)).find(title => title !== 'New topic') || null;
+  }
   async rename({id,title,expected_version}){title=clean(title);if(!title)throw new Error('Give this case a short title without patient identifiers.');const row=await this.row(id);if(row.version!==expected_version)throw new Error('This case changed. Reopen its options before renaming.');await this.db().prepare('UPDATE personal_cases SET title=?,version=version+1,updated_at=? WHERE id=? AND owner_id=?').bind(title,stamp(),id,this.owner()).run();if(row.archive_card_id)await this.db().prepare('UPDATE personal_cards SET title=?,updated_at=?,version=version+1 WHERE id=? AND owner_id=?').bind('Saved case: '+title,stamp(),row.archive_card_id,this.owner()).run();return this.changed(await this.row(id));}
   async context({id,card_id=null,draft=''}){const row=await this.row(id);if(row.status!=='active')throw new Error('This case is saved in memory. Reopen it before editing.');if(card_id)await this.store.get(card_id);await this.db().prepare('UPDATE personal_cases SET selected_card_id=?,draft=? WHERE id=? AND owner_id=?').bind(card_id,clean(draft,12000),id,this.owner()).run();return{saved:true};}
   async begin({id,text,retry_turn_id=null}){return this.db().transaction(async()=>{

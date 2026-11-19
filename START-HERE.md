@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.10 prototype
+# Care Navigation Support — Windows 2.11 prototype
 
-Open **Care-Navigation-Support-Setup-2.10.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.11.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -74,22 +74,22 @@ Close the current app and open the new installer. After installation, open **Car
 
 ## Keep a case conversation
 
-1. Choose **New topic** in the sidebar or chat header. A request about transportation in North York becomes **Transportation in North York**.
-2. Open **Case options** to give it a short, non-identifying name, such as **North York return ride**.
-3. Click that title in **Case chats** whenever you want to return. Its messages, selected card and draft are kept after closing the app.
-4. Use **Earlier messages** to read older discussion. The assistant can also search earlier messages in the current case.
+1. Choose **New topic** for a separate conversation. A detailed ride request can become **Transportation in North York · Walker access**.
+2. Find it in **Case chats**, where **Week of** groups show the newest activity first. The filter lets you see which chats need feedback, have a recorded result, or have no service selected.
+3. Open **⋯ → Record feedback** to jump to a pending result. Open **⋯ → Rename conversation** to type a new title or choose **Suggest a title**.
+4. Click a conversation title to return to its messages and draft. Use **Earlier messages** to read older parts of the chat.
 
 Service recommendations appear as cards only, with every returned choice visible in the grid. Read each card’s short reason and Confirm check, then click it for the full details. There are no separate recommendation paragraphs or extra choices to expand. Lower-rated matching services appear later; unrated options remain available. Document answers, clarification questions, calculations and connection errors still have readable answer cards.
 
-### Save or delete a case
+### Close or delete a conversation
 
-Open **Case options**. **Save to memory & remove chat** keeps the complete conversation in **Manage memory → Saved case chats** and takes it out of the sidebar. Open the saved item and choose **Reopen case** to continue.
+Choose **⋯ → Close conversation** when you’re finished. The complete conversation moves to **Manage memory → Closed conversations**. Open it there and choose **Reopen conversation** to continue.
 
-**Delete chat history** removes the case and its automatically saved messages after confirmation. Separate service notes, ratings and recorded outcomes stay. Deleted cases cannot be recovered through saved-input Undo.
+**⋯ → More options → Delete chat history** permanently removes the conversation and its automatically saved messages after confirmation. Separate service notes, ratings and recorded outcomes stay.
 
 ### Correct a wrong rating or note
 
-After saving, use **Undo** to reverse the most recent saved rating/result/note change. Use **Redo** to put it back. These buttons are in the sidebar and card history. Inside a text box, Ctrl+Z/Ctrl+Y still edit the text normally. A new saved edit after Undo clears the redo option.
+Look beneath the service follow-up for **Undo note**, **Undo result**, or **Undo rating change**, depending on what was saved. The matching **Redo** appears there after using Undo. Inside a text box, Ctrl+Z and Ctrl+Y still edit the text. Saving another change clears the redo option.
 
 ## Follow up from a service card in chat
 

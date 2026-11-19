@@ -1,7 +1,8 @@
-# Care Navigation Support 2.10.0
+# Care Navigation Support 2.11.0
 
-- The chat follow-up card starts with **Known contact**. It lists the phone number and email when available, with a Copy button for each.
-- **Add a note** opens an editor on the card. Save a note before or after recording a service result. The note appears on the provider card and the latest one appears in the chat.
-- Close the previous app and open **Care-Navigation-Support-Setup-2.10.0.exe** to update. Saved topics, notes, ratings and account connections carry over.
+- The **Case chats** sidebar groups conversations by week, newest activity first, with filters for pending feedback, recorded feedback and chats with no chosen service.
+- The **⋯** menu jumps to pending feedback, offers a title suggestion, or closes the conversation into **Manage memory → Closed conversations**.
+- New service chats get titles such as **Transportation in North York · Walker access**. Saved notes, results and rating changes have their own Undo and Redo controls beneath the follow-up card.
+- Close the previous app and open **Care-Navigation-Support-Setup-2.11.0.exe** to update. Saved conversations, notes, ratings and account connections carry over.
 
-The Windows checks cover contact placement, standalone notes and the existing result workflow. The unsigned prototype still requires Southlake to check its own ChatGPT connection and managed Windows deployment.
+The Windows checks cover the weekly sidebar, feedback filters, title suggestions, chat corrections, and closing and reopening conversations. The unsigned prototype still requires Southlake to check its own ChatGPT connection and managed Windows deployment.

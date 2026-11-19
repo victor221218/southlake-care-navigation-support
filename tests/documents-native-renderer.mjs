@@ -15,7 +15,7 @@ const memoryRow=id=>`.memory-record[data-memory-id="${id}"]`;
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.10.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.11.0'));
   const phase=await window.hiveSmoke.phase();
   const title='Care Navigation Support';
   assert(phase.windowTitle===title&&document.title===title&&document.querySelector('.brand strong')?.textContent===title,'The current name must appear in the Windows title and sidebar.');
