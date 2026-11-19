@@ -7,6 +7,8 @@ import { ChatGPTConnection, Vault } from './auth.mjs';
 import { DocumentStore } from './documents/store.mjs';
 import { DocumentImporter } from './documents/importer.mjs';
 import { DocumentAssistant } from './documents/assistant.mjs';
+import {DocumentCases} from './documents/cases.mjs';
+import {InputHistory} from './documents/input-history.mjs';
 import { cspForPath } from './security.mjs';
 import { APP_NAME, windowsDataDirectory } from './app-identity.mjs';
 import { ensureKnownServices, serviceCategories, SERVICE_DIRECTORY_FORMAT } from './documents/services.mjs';
@@ -18,7 +20,7 @@ if(process.platform==='win32')app.setAppUserModelId('org.team26.southlakehive');
 protocol.registerSchemesAsPrivileged([{scheme:'hive',privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}}]);
 const hasLock=app.requestSingleInstanceLock();if(!hasLock)app.quit();
 const dataDir=app.getPath('userData');
-let window,db,store,importer,assistant,connection,micAllowedUntil=0,ready=false,closing=false,pickerBusy=false;
+let window,db,store,importer,assistant,cases,inputHistory,connection,micAllowedUntil=0,ready=false,closing=false,pickerBusy=false;
 let account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'},accountError='',modelList={items:[],selected:null};
 const owner=()=>account.connected?account.profileId:'device';
 const emit=value=>{if(window&&!window.isDestroyed())window.webContents.send('hive:event',value);};
@@ -26,7 +28,7 @@ const safeError=error=>({message:error.message||'This action could not complete.
 const fromApp=event=>event.sender===window?.webContents&&event.senderFrame?.url.startsWith(uiOrigin+'/');
 const idle=()=>{if(assistant.busy||importer.busy||connection.busy||pickerBusy)throw new Error('Finish the current answer, file import, or sign-in first.');};
 async function updateAccount(){try{account=await connection.session();accountError='';}catch(error){accountError=error.message;account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'};}return account;}
-async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents();return{account,accountError,documents:allDocuments.filter(d=>d.format!==SERVICE_DIRECTORY_FORMAT),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),serviceCategories,version:app.getVersion(),models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this Windows account',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
+async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents(),activeCase=await cases.current();return{account,accountError,documents:allDocuments.filter(d=>d.format!==SERVICE_DIRECTORY_FORMAT),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),cases:await cases.list(),active_case:activeCase,input_history:await inputHistory.state(),serviceCategories,version:app.getVersion(),models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this Windows account',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
 async function allowedOriginal(document){
   if(!document?.original_path)return null;
   const base=path.resolve(dataDir,'documents',owner())+path.sep,target=path.resolve(document.original_path);
@@ -44,11 +46,22 @@ async function invoke(method,args){
   if(method==='list-cards')return store.list(args);
   if(method==='list-memory')return store.memories(args);
   if(method==='get-card')return store.get(args.id);
-  if(method==='save-note'){idle();const result=await store.note(args);assistant.clear();return result;}
-  if(method==='save-comment'){idle();const result=await store.comment(args);assistant.clear();return result;}
-  if(method==='save-service-result'){idle();const result=await store.serviceResult(args);assistant.clear();return result;}
-  if(method==='forget-comment'){idle();const result=await store.forgetComment(args);assistant.clear();return result;}
-  if(method==='forget-card'){idle();const result=await store.forgetCard(args.id);assistant.clear();return result;}
+  if(method==='list-cases')return cases.list(args);
+  if(method==='get-case'){idle();return cases.hydrate(await cases.read(args.id,args));}
+  if(method==='select-case'){idle();assistant.clear();await cases.activate(args.id);return cases.hydrate(await cases.read(args.id));}
+  if(method==='new-case'){idle();assistant.clear();return cases.create(args.title);}
+  if(method==='rename-case'){idle();return cases.rename(args);}
+  if(method==='case-context')return cases.context(args);
+  if(method==='archive-case'){idle();assistant.clear();return cases.archive(args);}
+  if(method==='delete-case'){idle();assistant.clear();return cases.delete(args);}
+  if(method==='reopen-case'){idle();assistant.clear();return cases.reopen(args.id);}
+  if(method==='input-history')return inputHistory.state();
+  if(method==='undo-input'||method==='redo-input'){idle();const result=await inputHistory.apply(method==='undo-input'?'undo':'redo');assistant.clear();return result;}
+  if(method==='save-note'){idle();const result=await inputHistory.record({type:'card',id:args.id,label:args.id?'Edit memory':'Add memory'},()=>store.note(args));assistant.clear();return result;}
+  if(method==='save-comment'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:args.id?'Edit note':'Add note'},()=>store.comment(args));assistant.clear();return result;}
+  if(method==='save-service-result'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:args.id?'Change service result or rating':'Record service result'},()=>store.serviceResult(args));assistant.clear();return result;}
+  if(method==='forget-comment'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:'Delete note or result'},()=>store.forgetComment(args));assistant.clear();return result;}
+  if(method==='forget-card'){idle();const card=await store.get(args.id);if(card.case_info)throw new Error('Use Delete case history to remove this saved case and its messages.');const result=card.document_id?await store.forgetCard(args.id):await inputHistory.record({type:'card',id:args.id,label:'Delete memory'},()=>store.forgetCard(args.id));assistant.clear();return result;}
   if(method==='forget-document'){
     idle();const source=await allowedOriginal(await store.document(args.id));const result=await store.forgetDocument(args.id);
     if(source)await rm(source,{force:true}).catch(()=>{});assistant.clear();return result;
@@ -105,8 +118,9 @@ async function boot(){
   const encryption={available:()=>safeStorage.isAsyncEncryptionAvailable(),encrypt:value=>safeStorage.encryptStringAsync(value),decrypt:async value=>(await safeStorage.decryptStringAsync(value)).result};
   connection=new ChatGPTConnection({vault:new Vault(path.join(dataDir,'account'),encryption),openExternal:url=>shell.openExternal(url),onChange:()=>{assistant?.reset();emit({type:'account-changed'});}});
   store=new DocumentStore({database:()=>db,owner,emit});
+  cases=new DocumentCases({store});inputHistory=new InputHistory({store});
   importer=new DocumentImporter({store,directory:path.join(dataDir,'documents'),worker:path.join(root,'dist/document-worker.cjs'),pdfWorker:path.join(root,'dist/pdf.worker.mjs')});
-  assistant=new DocumentAssistant({store,connection,emit});
+  assistant=new DocumentAssistant({store,connection,cases,emit});
   protocol.handle('hive',async request=>{
     const url=new URL(request.url);if(url.host!=='app')return new Response('Unavailable',{status:404});
     const relative=decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname),folder=relative.startsWith('/voice/')?path.join(root,'assets'):path.join(root,'dist/ui');

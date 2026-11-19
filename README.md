@@ -2,24 +2,24 @@
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.5.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.6.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Southlake Care Navigation Support**. Version 2.5 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Southlake Care Navigation Support**. Version 2.6 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Southlake-Care-Navigation-Support-Handoff-2.5.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.6.0/Southlake-Care-Navigation-Support-Handoff-2.6.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Southlake-Care-Navigation-Support-Setup-2.5.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.5.0/Southlake-Care-Navigation-Support-Handoff-2.5.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.6.0/Southlake-Care-Navigation-Support-Setup-2.6.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.6.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.6.0/Southlake-Care-Navigation-Support-Handoff-2.6.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.5.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.6.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -35,7 +35,7 @@ The current deliverable is a Windows app. To connect it to ChatGPT, open the app
 
 ## Known services are ready on first launch
 
-The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Messages save automatically; there is no Keep this message checkbox. New conversation clears the chat while saved memory remains available.
+The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Messages save automatically; there is no Keep this message checkbox. New case starts a separate discussion while the earlier case remains in the sidebar.
 
 Choose **Known services** to browse the 27 researched pathways as full-width horizontal rows. Category filtering and search appear above the directory; the assistant opens in a floating panel on the right. Open View details for contact details, access requirements, source links and research dates, or choose Ask assistant beneath View details to open the floating chat with that provider selected. A named person appears only when listed in the public source. Confirm eligibility, boundaries, costs and current capacity before referring.
 
@@ -46,6 +46,29 @@ Choose **Known services** to browse the 27 researched pathways as full-width hor
 Choose Ask assistant in the upper-right of the Known services heading, or beneath View details on a service row, to open the side panel. Minimize it with × or Escape to browse the whole directory again. Open Workspace continues the same conversation in the full chat. Drafts, the selected service and saved memory are retained.
 
 ![Floating assistant with the selected service](docs/floating-assistant.png)
+
+### Compact choices and private case chats
+
+Screenshots in this section use fictional practice documents and isolated feedback, not provider performance records.
+
+Responses show two compact cards side by side. Choose **Show more choices** for the remaining cards, or open a card for its details. Long responses have **Read full response**. Reading earlier messages no longer forces the view to the bottom when text arrives.
+
+![Compact service choices](docs/compact-choices.png)
+
+**Case chats** in the sidebar keeps separate named discussions. Choose **New case** for a new situation, rename it through **Case options**, and click a previous title to reopen it. Messages, selected card and the unsent draft stay with that case after the app closes. Use non-identifying titles. Earlier messages load in pages; the assistant can search older discussion within the current case.
+
+![Named case chats](docs/case-chats.png)
+
+Case options offers two different actions:
+
+- **Save to memory & remove chat** moves the complete discussion into **Manage memory → Saved case chats**. Open the saved case and choose **Reopen case** to continue. Its automatic message cards are consolidated into one saved case card; the complete transcript remains available.
+- **Delete chat history** permanently removes that case, its transcript and its automatically saved messages. Separate service notes, ratings and explicit results stay on their service cards. This action is confirmed and cannot be reversed with saved-input Undo.
+
+![Saved case conversations in the memory library](docs/case-library.png)
+
+**Undo** and **Redo** correct saved ratings, results and notes, including supported note/result deletions. They are available in the sidebar and card history. Inside a text box, normal typing Undo/Redo continues to work. The app keeps up to 100 correction actions per account. A new edit after Undo clears the redo branch; imports, case deletion and account changes are separate actions.
+
+Services that match the search/category are ordered using the current user's saved experience. Lower average ratings appear later among matching options. Unrated services use a neutral position for ordering, without displaying a made-up rating; reported outcomes break ties. The actual average, sample count and notes remain visible. Eligibility and suitability still need confirmation. This is personal experience, not a provider-wide success measure.
 
 ### Use a service and record what happened
 
@@ -70,7 +93,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Southlake-Care-Navigation-Support-Setup-2.5.0.exe`, choose Install, then Finish. Later, open Southlake Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Southlake-Care-Navigation-Support-Setup-2.6.0.exe`, choose Install, then Finish. Later, open Southlake Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -88,7 +111,7 @@ Choose a card to see the original fields, worksheet/row or page reference, any c
 ## How memory works
 
 - Imported information is stored as cards separately from the chat.
-- **New conversation** clears the chat and selected card; it keeps saved cards and notes.
+- **New case** starts another chat with its own selected card and draft. Earlier cases stay in the sidebar.
 - Messages save automatically when sent. Use **Manage memory** to edit or delete them; retrying an AI request does not create another saved message.
 - With a selected card, messages become notes on that card. Otherwise, they become personal message cards.
 - Card notes save automatically when you pause. They can be edited or deleted using the controls on that card.
@@ -124,12 +147,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Care-Navigation-Support-Windows-2.5`.
+Extract the ZIP first, then open **START-HERE.html** inside `Southlake-Care-Navigation-Support-Windows-2.6`.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Southlake-Care-Navigation-Support-Setup-2.5.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Southlake-Care-Navigation-Support-Setup-2.6.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -163,7 +186,7 @@ These files are for developers. End users do not need to open or run them.
 | `WINDOWS-DEVELOPMENT.md` | Developer prerequisites, runtime configuration, build steps and native test instructions |
 | `START-HERE.md`, `SHARING.md`, `RELEASE-NOTES.md` | User, administrator and release documentation |
 
-The active version 2.5 build uses the **document** entry points listed above. Earlier service-navigation modules and Mac packaging experiments remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
+The active version 2.6 build uses the **document** entry points listed above. Earlier service-navigation modules and Mac packaging experiments remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
 
 ## Build and run from source
 
@@ -182,7 +205,7 @@ The finished installer does not require these developer tools.
 
 ## What has been checked
 
-- **86 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior, service-result edits/deletions, rating summaries, older-database upgrades and backup compatibility.
+- **98 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior, service-result edits/deletions, rating summaries, older-database upgrades and backup compatibility.
 - **Native Windows checks passed** for the default full-width chat, full-page services with a floating assistant, automatic message saving, memory editing/deletion, 27 preloaded services, category/search controls, document-upload placement, service-note persistence, bundled Excel, Word and PDF readers, import preview/save, card-note autosave, selected-card feedback, search, starting a new conversation, reopening the app, and saving a pending note when the app closes.
 - **77 extracted installer files matched** the prepared Windows application.
 - Installer and handoff SHA-256 checksums are published in the release’s `SHA256.txt` and `Verification.json`.

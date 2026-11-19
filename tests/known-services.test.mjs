@@ -242,7 +242,7 @@ test('upgrading an existing version 2.4 database preserves source cards and note
   const journal=JSON.parse(await readFile('drizzle/meta/_journal.json','utf8'));journal.entries=journal.entries.filter(n=>n.idx<=3);
   await writeFile(path.join(folder,'meta/_journal.json'),JSON.stringify(journal));for(const entry of journal.entries)await copyFile('drizzle/'+entry.tag+'.sql',path.join(folder,entry.tag+'.sql'));
   const f=await fixture(folder);try{
-    await ensureKnownServices(f.store);const backup=await f.store.export(),card=backup.cards[0];
+    await ensureKnownServices(f.store);const card=(await f.store.db().prepare('SELECT * FROM personal_cards WHERE owner_id=? LIMIT 1').bind('user-a').first());
     // Write a previous-schema comment before the additive result columns exist.
     await f.store.db().prepare('INSERT INTO personal_comments (id,owner_id,card_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind('legacy-note','user-a',card.id,'Retain this existing contact note.','2026-11-18T12:00:00Z','2026-11-18T12:00:00Z').run();
     await f.reopen(path.resolve('drizzle'));const upgraded=await f.store.get(card.id);assert.equal(upgraded.comments[0].body,'Retain this existing contact note.');assert.equal(upgraded.comments[0].outcome,null);

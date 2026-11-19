@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import {DocumentCases} from './cases.mjs';
+import {compareHistory} from './ranking.mjs';
 
 const now = () => new Date().toISOString();
 const clean = (value, limit = 12000) => String(value ?? '').replace(/\u0000/g, '').trim().slice(0, limit);
@@ -64,7 +66,7 @@ export class DocumentStore {
       return this.changed({ document_id: id, count: parsed.sections.length, added, updated, duplicate: false });
     });
   }
-  async list({ query = '', document_id = null, collection = 'all', category = '', include_archived = false, limit = 60, offset = 0 } = {}) {
+  async list({ query = '', document_id = null, collection = 'all', category = '', case_id = null, include_archived = false, limit = 60, offset = 0 } = {}) {
     if (!['all', 'services', 'personal'].includes(collection)) throw new Error('Choose a supported card collection.');
     const rows = (await this.db().prepare(`SELECT c.*,d.filename,d.format AS source_format, (SELECT COUNT(*) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_count,
       (SELECT group_concat(body,' ') FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_text,
@@ -75,13 +77,14 @@ export class DocumentStore {
       (SELECT AVG(rating) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id AND outcome IS NOT NULL) AS rating_average
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
+      ${case_id?'AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=c.owner_id AND cm.entry_type=\'card\' AND cm.entry_id=c.id AND cm.case_id<>?)':''}
       ${collection === 'services' ? "AND d.format='service-directory'" : collection === 'personal' ? "AND (d.format IS NULL OR d.format<>'service-directory')" : ''}
-      ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : [])).all()).results;
+      ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : []),...(case_id?[case_id]:[])).all()).results;
     const terms = tokens(query);
     const matches = rows.map(row => {
       const title = norm(row.title), haystack = norm(row.title + ' ' + row.body + ' ' + (row.comment_text || '') + ' ' + (row.worked?'worked ':'') + (row.not_worked?"didn't work not worked ":'') + (row.filename || ''));
-      return { row, matches: terms.every(term=>haystack.includes(term)), score: terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0) + (title.includes(term) ? 2 : 0), 0) };
-    }).filter(item => (!category || JSON.parse(item.row.fields_json || '{}').Category === category) && (!terms.length || item.matches)).sort((a, b) => b.score - a.score || (collection === 'services' ? a.row.title.localeCompare(b.row.title) : 0));
+      return { row, matches: terms.every(term=>haystack.includes(term)), score: terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0) + (row.source_format!=='service-directory'&&title.includes(term) ? 2 : 0), 0) };
+    }).filter(item => (!category || JSON.parse(item.row.fields_json || '{}').Category === category) && (!terms.length || item.matches)).sort((a, b) => b.score - a.score || (a.row.source_format==='service-directory'&&b.row.source_format==='service-directory'?compareHistory(a.row,b.row):0) || (collection === 'services' ? a.row.title.localeCompare(b.row.title) : 0));
     const total = matches.length;
     return { total, items: matches.slice(Math.max(0,offset), Math.max(0,offset) + Math.max(1, Math.min(100,limit))).map(({ row }) => {
       const card = unpack(row); delete card.fields_json; delete card.contacts_json; delete card.links_json; delete card.comment_text;
@@ -90,13 +93,13 @@ export class DocumentStore {
     }) };
   }
   async memories({query='',document_id=null,kind='all',include_archived=false,limit=30,offset=0}={}) {
-    if(!['all','notes','documents','feedback'].includes(kind))throw new Error('Choose a supported memory type.');
+    if(!['all','notes','documents','feedback','chats'].includes(kind))throw new Error('Choose a supported memory type.');
     const owner=this.owner();
     const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? AND (d.format IS NULL OR d.format<>'service-directory')
       ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
-      .map(card=>({...card,entry_type:'card',memory_type:card.document_id?'documents':'notes'}));
+      .map(card=>({...card,entry_type:'card',memory_type:card.kind==='conversation'?'chats':card.document_id?'documents':'notes'}));
     const notes=(await this.db().prepare(`SELECT n.id,n.card_id,n.body,n.outcome,n.rating,n.updated_at,n.version,c.title,c.document_id,c.archived,d.filename,d.format AS source_format
       FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id AND c.owner_id=n.owner_id LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE n.owner_id=? ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
@@ -107,15 +110,18 @@ export class DocumentStore {
     const start=Math.max(0,Number(offset)||0),count=Math.max(1,Math.min(100,Number(limit)||30));
     return{total:items.length,items:items.slice(start,start+count).map(item=>({...item,body:item.body.slice(0,650)}))};
   }
-  async get(id) {
+  async get(id,{case_id=null}={}) {
     const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
     if (!card) throw new Error('This card is not in your active workspace.');
-    const comments = (await this.db().prepare('SELECT id,body,outcome,rating,created_at,updated_at,version FROM personal_comments WHERE card_id=? AND owner_id=? ORDER BY created_at').bind(id, this.owner()).all()).results;
+    if(case_id&&await this.db().prepare("SELECT 1 FROM personal_case_memory WHERE owner_id=? AND entry_type='card' AND entry_id=? AND case_id<>?").bind(this.owner(),id,case_id).first())throw new Error('This automatically saved message belongs to another case.');
+    const comments = (await this.db().prepare('SELECT id,body,outcome,rating,created_at,updated_at,version FROM personal_comments n WHERE card_id=? AND owner_id=? '+(case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=n.owner_id AND cm.entry_type='comment' AND cm.entry_id=n.id AND cm.case_id<>?) ":'')+'ORDER BY created_at').bind(id, this.owner(),...(case_id?[case_id]:[])).all()).results;
     delete card.fields_json; delete card.contacts_json; delete card.links_json;
     const latest=[...comments].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)||b.id.localeCompare(a.id))[0];
-    return { ...card, category: card.fields.Category || '', comments, comment_count:comments.length, latest_note:latest?.body.slice(0,180)||'', experience:experience(comments) };
+    const case_info=card.kind==='conversation'?await this.db().prepare('SELECT id,title,status,version FROM personal_cases WHERE archive_card_id=? AND owner_id=?').bind(id,this.owner()).first():null;
+    return { ...card, case_info, category: card.fields.Category || '', comments, comment_count:comments.length, latest_note:latest?.body.slice(0,180)||'', experience:experience(comments) };
   }
-  async note({ title, body, id = null, expected_version = null, kind = 'note' }) {
+  async linkCaseMemory(case_id,type,id){if(!case_id)return;const value=await this.db().prepare("SELECT 1 FROM personal_cases WHERE id=? AND owner_id=? AND status='active'").bind(case_id,this.owner()).first();if(!value)throw new Error('This case is not available in your account.');await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id) VALUES (?,?,?,?)').bind(case_id,this.owner(),type,id).run();}
+  async note({ title, body, id = null, expected_version = null, kind = 'note', case_id = null }) {
     body = clean(body, 12000); title = clean(title || body.split('\n')[0], 140);
     if (!body || !title) throw new Error('Add some text to save this note.');
     const stamp = now(), owner = this.owner();
@@ -123,16 +129,17 @@ export class DocumentStore {
       if (id) {
         const old = await this.get(id);
         if (old.document_id) throw new Error('Keep the original source intact. Add a correction in the card notes.');
+        if(old.kind==='conversation')throw new Error('Use the saved case controls to reopen or rename this conversation.');
         if (old.version !== expected_version) throw new Error('This card changed. Reopen it before editing.');
         await this.db().prepare('UPDATE personal_cards SET title=?,body=?,contacts_json=?,links_json=?,updated_at=?,version=version+1 WHERE id=? AND owner_id=? AND version=?').bind(title, body, JSON.stringify(contactsIn(body)), JSON.stringify(linksIn(body)), stamp, id, owner, expected_version).run();
       } else {
         id = randomUUID();
         await this.db().prepare('INSERT INTO personal_cards (id,owner_id,kind,title,body,contacts_json,links_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(id, owner, kind === 'message' ? 'message' : 'note', title, body, JSON.stringify(contactsIn(body)), JSON.stringify(linksIn(body)), stamp, stamp).run();
       }
-      this.changed({ card_id: id }); return this.get(id);
+      await this.linkCaseMemory(case_id,'card',id);this.changed({ card_id: id }); return this.get(id);
     });
   }
-  async comment({ card_id, body, id = null, expected_version = null }) {
+  async comment({ card_id, body, id = null, expected_version = null, case_id = null }) {
     body = clean(body); if (!body) throw new Error('Write a note before saving.');
     return this.db().transaction(async () => {
       await this.get(card_id); const stamp = now();
@@ -143,7 +150,7 @@ export class DocumentStore {
         await this.db().prepare('UPDATE personal_comments SET body=?,updated_at=?,version=version+1 WHERE id=? AND owner_id=?').bind(body, stamp, id, this.owner()).run();
       } else { id = randomUUID(); await this.db().prepare('INSERT INTO personal_comments (id,owner_id,card_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind(id,this.owner(),card_id,body,stamp,stamp).run(); }
       await this.db().prepare('UPDATE personal_cards SET updated_at=? WHERE id=? AND owner_id=?').bind(stamp,card_id,this.owner()).run();
-      this.changed({ card_id }); return { saved: true, id, card_id };
+      await this.linkCaseMemory(case_id,'comment',id);this.changed({ card_id }); return { saved: true, id, card_id };
     });
   }
   async serviceResult({card_id,outcome,rating=null,body='',id=null,expected_version=null}) {
@@ -186,11 +193,11 @@ export class DocumentStore {
     const docs = (await this.db().prepare('SELECT * FROM personal_documents WHERE owner_id=?').bind(this.owner()).all()).results.map(({ owner_id, original_path, ...row }) => row);
     const cards = (await this.db().prepare('SELECT * FROM personal_cards WHERE owner_id=?').bind(this.owner()).all()).results.map(({ owner_id, ...row }) => row);
     const comments = (await this.db().prepare('SELECT * FROM personal_comments WHERE owner_id=?').bind(this.owner()).all()).results.map(({ owner_id, ...row }) => row);
-    return { format: 'southlake-personal-memory', version: 1, exported_at: now(), documents: docs, cards, comments };
+    return { format: 'southlake-personal-memory', version: 1, exported_at: now(), documents: docs, cards, comments,...await new DocumentCases({store:this}).export() };
   }
   async restore(data) {
     if (data?.format !== 'southlake-personal-memory' || data.version !== 1 || !Array.isArray(data.cards) || data.cards.length > 20000 || !Array.isArray(data.documents) || !Array.isArray(data.comments) || data.comments.length > 50000) throw new Error('Choose a valid Southlake personal-memory backup.');
-    const owner = this.owner(), docs = new Map(), cards = new Map(); let added = 0, notesAdded = 0;
+    const owner = this.owner(), docs = new Map(), cards = new Map(), comments = new Map(); let added = 0, notesAdded = 0;
     return this.db().transaction(async () => {
       for (const doc of data.documents) {
         if (typeof doc.id !== 'string' || !/^[a-f0-9]{64}$/.test(doc.digest)) throw new Error('The backup contains an invalid document.');
@@ -208,7 +215,7 @@ export class DocumentStore {
         const fields = JSON.parse(card.fields_json || '{}');
         if (!fields || Array.isArray(fields) || typeof fields !== 'object' || Object.keys(fields).length > 100) throw new Error('The backup has invalid column values.');
         const body = clean(card.body,30000);
-        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,contacts_json,links_json,archived,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,owner,doc?.id||null,card.source_key ? clean(card.source_key,500):null,doc?'document':card.kind==='message'?'message':'note',clean(card.title,180),body,clean(card.locator,220),JSON.stringify(fields),JSON.stringify(contactsIn(body,fields)),JSON.stringify(linksIn(body,fields)),card.archived?1:0,clean(card.created_at,40),clean(card.updated_at,40),Number(card.version)||1).run(); added++;
+        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,contacts_json,links_json,archived,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,owner,doc?.id||null,card.source_key ? clean(card.source_key,500):null,doc?'document':card.kind==='conversation'?'conversation':card.kind==='message'?'message':'note',clean(card.title,180),body,clean(card.locator,220),JSON.stringify(fields),JSON.stringify(contactsIn(body,fields)),JSON.stringify(linksIn(body,fields)),card.archived?1:0,clean(card.created_at,40),clean(card.updated_at,40),Number(card.version)||1).run(); added++;
       }
       for (const note of data.comments) if (cards.has(note.card_id)) {
         const cardId=cards.get(note.card_id), body=clean(note.body), created=clean(note.created_at,40);
@@ -216,8 +223,10 @@ export class DocumentStore {
         if(outcome!=null){validResult(outcome,rating);if((await this.get(cardId)).source_format!=='service-directory')throw new Error('A service result must belong to a known service.');}
         else if(rating!=null)throw new Error('A rating must belong to a reported service result.');
         const exists=await this.db().prepare('SELECT id FROM personal_comments WHERE owner_id=? AND card_id=? AND body=? AND created_at=? AND outcome IS ? AND rating IS ?').bind(owner,cardId,body,created,outcome,rating).first();
-        if(!exists){await this.db().prepare('INSERT INTO personal_comments (id,owner_id,card_id,body,outcome,rating,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?)').bind(randomUUID(),owner,cardId,body,outcome,rating,created,clean(note.updated_at,40),Number(note.version)||1).run();notesAdded++;}
+        const id=exists?.id||randomUUID();comments.set(note.id,id);
+        if(!exists){await this.db().prepare('INSERT INTO personal_comments (id,owner_id,card_id,body,outcome,rating,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?)').bind(id,owner,cardId,body,outcome,rating,created,clean(note.updated_at,40),Number(note.version)||1).run();notesAdded++;}
       }
+      await new DocumentCases({store:this}).restore(data,{cards,comments});
       return this.changed({ restored: true, added, notes_added: notesAdded });
     });
   }

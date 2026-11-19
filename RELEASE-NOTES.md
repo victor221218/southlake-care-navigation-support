@@ -1,18 +1,18 @@
-# Southlake Care Navigation Support 2.5.0 — service cards and feedback
+# Southlake Care Navigation Support 2.6.0 — compact choices and case chats
 
-- Service cards offer **Select this service**, **Ask more about this card**, and **Provider page** at the bottom.
-- Personal notes, results and ratings appear above Category and the provider facts. Directory rows show the latest note and a compact summary.
-- Selecting a service takes you to **Contact & follow up**. Choose **Worked** or **Didn't work**, optionally add a 1–5 rating and explanation, then **Save result**. Result buttons are also available beside the selected service in chat.
-- Results remain attached to their service and private to the current app account. Edit/delete them on the card or in Manage memory. Corrections update summaries. New conversations, app restarts and backups retain the records.
-- Opening a website, selecting a provider or copying a phone number never records success. Counts include only explicit reports; ratings are optional personal observations.
-- The Known services header assistant, floating chat and Manage memory navigation remain available.
+- Responses start with two compact cards side by side. More choices and long response text can be expanded.
+- Matching services with lower saved ratings move down the list. Unrated options stay available. Ratings do not override the search/category or the need to check suitability.
+- Named case chats appear in the sidebar. Each keeps its own discussion, selected card and draft after reopening. Older messages load in pages and the assistant can search earlier discussion in that case.
+- Save a complete case to Manage memory and remove it from the sidebar, then reopen it later. Automatic message cards are consolidated into its saved case card.
+- Delete chat history removes the case and its automatically saved messages after confirmation. Separately recorded service notes, ratings and results remain.
+- Undo and Redo correct saved ratings, results and notes. They stay private to the account, reject conflicting changes and retain up to 100 correction actions. Permanent case deletion and source-file operations are separate controls.
 
 ## Install or update
 
-Close the current app, then run **Southlake-Care-Navigation-Support-Setup-2.5.0.exe**. The existing data location and installation identity are retained. An additive database migration keeps existing cards and comments. Use a memory backup when changing computers. Updates require the installer; no automatic updater is included.
+Close the current app and run **Southlake-Care-Navigation-Support-Setup-2.6.0.exe**. The existing Windows data location and app identity are retained. An additive migration preserves cards, notes and results. Earlier versions did not persist their visible chat transcript, so those unsaved old transcripts cannot be recovered. Case conversations created in this version persist automatically. Use a memory backup when moving computers; backups now include active and saved cases.
 
 ## Validation and scope
 
-86 automated checks and native Windows service-card, compact-window, floating-chat, document and memory checks are recorded in Verification.json. Checks cover the previous database schema, backup/restore compatibility, explicit result counts, ratings, corrections/deletions, private accounts, duplicate-click protection and persistence after reopening.
+98 automated checks cover existing features plus case isolation, restart, archive/reopen/delete, backup compatibility, earlier-message search, retry, ranking and Undo/Redo. Native Windows checks and installer extraction are recorded in Verification.json. Documentation screenshots use isolated practice feedback, not provider performance records.
 
-Unsigned prototype. Recipient ChatGPT sign-in/eligibility/inference, live microphone capture on that computer, publisher signing and Southlake deployment approval remain separate checks. No private records or credentials are included in the download.
+Unsigned prototype. Real recipient ChatGPT sign-in/eligibility/inference, live microphone capture on that computer, publisher signing and Southlake deployment approval remain separate checks. No private user records or credentials are included in the download. There is no automatic updater.

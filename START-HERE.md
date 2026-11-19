@@ -1,6 +1,6 @@
 # Southlake Care Navigation Support — Windows 2.1 prototype
 
-Open **Southlake-Care-Navigation-Support-Setup-2.5.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Southlake-Care-Navigation-Support-Setup-2.6.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -26,7 +26,7 @@ On a service card, choose **Add a note** near the top. Notes and corrections sav
 
 **Editing and deleting memory:** choose Edit beside a saved message or feedback entry, change its text and save. Choose Delete to remove it. Document cards offer Add correction so the original source remains intact. Deleting feedback leaves its source service/document card in place. Completed changes affect subsequent AI answers; already displayed answers remain a record of that earlier conversation.
 
-**New conversation** clears this conversation and selected card. Saved cards and notes remain. The full chat transcript is not stored. Later questions retrieve relevant saved information again. This uses your saved records; it does not train the AI model or read your ChatGPT Memory.
+**New case** starts a separate discussion and selected-card context. Earlier case chats, drafts and saved records remain available. Conversations persist in this app; this does not train the AI model or read your ChatGPT Memory.
 
 ## Which model is answering?
 
@@ -70,7 +70,26 @@ Official connection reference: https://developers.openai.com/cookbook/articles/s
 
 ## Updating from version 2.0
 
-Close Southlake Hive before running the version 2.5 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+Close Southlake Hive before running the version 2.6 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+
+## Keep a case conversation
+
+1. Choose **New case** in the sidebar. Ask your first question; its words provide an initial title.
+2. Open **Case options** to give it a short, non-identifying name, such as **North York return ride**.
+3. Click that title in **Case chats** whenever you want to return. Its messages, selected card and draft are kept after closing the app.
+4. Use **Earlier messages** to read older discussion. The assistant can also search earlier messages in the current case.
+
+For a shorter response, two compact cards appear first. Use **Show more choices**, **Read full response**, or open a card for details. Lower-rated matching services appear later; unrated options remain available.
+
+### Save or delete a case
+
+Open **Case options**. **Save to memory & remove chat** keeps the complete conversation in **Manage memory → Saved case chats** and takes it out of the sidebar. Open the saved item and choose **Reopen case** to continue.
+
+**Delete chat history** removes the case and its automatically saved messages after confirmation. Separate service notes, ratings and recorded outcomes stay. Deleted cases cannot be recovered through saved-input Undo.
+
+### Correct a wrong rating or note
+
+After saving, use **Undo** to reverse the most recent saved rating/result/note change. Use **Redo** to put it back. These buttons are in the sidebar and card history. Inside a text box, Ctrl+Z/Ctrl+Y still edit the text normally. A new saved edit after Undo clears the redo option.
 
 ## Select a service and record the result
 
