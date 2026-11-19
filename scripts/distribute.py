@@ -5,13 +5,16 @@ import json
 import pathlib
 import shutil
 import zipfile
-from mac_package import asar_hashes, build_mac, digest, entry, verify_mac
+from mac_package import PROJECT, PRODUCT, REVISION, asar_hashes, build_mac, digest, entry, verify_mac
 
 root = pathlib.Path(__file__).resolve().parent.parent
 output = root.parent.parent / 'outputs'
 output.mkdir(exist_ok=True)
 runtimes = json.loads((root / '.runtime/runtimes.json').read_text())
-version = json.loads((root / 'package.json').read_text())['version']
+version = PROJECT['version']
+electron_version = PROJECT['devDependencies']['electron']
+product_prefix = PRODUCT.replace(' ', '-')
+mac_output = output / f"{product_prefix}-Windows-{'.'.join(version.split('.')[:2])}" / 'Mac'
 parser = argparse.ArgumentParser()
 selection = parser.add_mutually_exclusive_group()
 selection.add_argument('--platform', choices=('Windows', 'Mac-Apple-Silicon', 'Mac-Intel'))
@@ -36,17 +39,23 @@ for runtime in runtimes:
         continue
     alias = output / f'Southlake-Hive-{label}.zip'
     if platform == 'darwin':
+        checksum_path = root / f'.runtime/electron-v{electron_version}-official-sha256.txt'
+        upstream = dict((name.lstrip('*'), sha) for sha, name in (
+            line.split(maxsplit=1) for line in checksum_path.read_text(encoding='utf-8-sig').splitlines() if line.strip()
+        ))
+        runtime_name = f'electron-v{electron_version}-darwin-{arch}.zip'
+        if pathlib.Path(runtime['path']).name != runtime_name or digest(runtime['path']) != upstream.get(runtime_name):
+            raise ValueError('The Mac runtime differs from Electron’s official checksum: ' + runtime_name)
         if hashes is None:
             hashes = asar_hashes(root, asar)
-        destination = output / f'Southlake-Hive-{label}-{version}-Test.zip'
+        mac_output.mkdir(parents=True, exist_ok=True)
+        destination = mac_output / f'{product_prefix}-{label}-{version}-Test.zip'
         temporary = destination.with_suffix('.building.zip')
         build_mac(root, runtime, temporary, version, asar, hashes)
         report = verify_mac(temporary, *hashes, arch, version)
         temporary.replace(destination)
         report['file'] = destination.name
-        shutil.copyfile(destination, alias)
-        checksums[destination.name] = report['sha256']
-        checksums[alias.name] = report['sha256']
+        report['official_electron_checksum_verified'] = True
         mac_reports.append(report)
     else:
         destination = alias
@@ -64,16 +73,18 @@ for runtime in runtimes:
         with zipfile.ZipFile(destination) as archive:
             assert archive.testzip() is None
         checksums[destination.name] = digest(destination)
-    print(json.dumps({'file': str(destination), 'bytes': destination.stat().st_size, 'sha256': checksums[destination.name]}), flush=True)
+    print(json.dumps({'file': str(destination), 'bytes': destination.stat().st_size, 'sha256': report['sha256'] if platform == 'darwin' else checksums[destination.name]}), flush=True)
 
-checksum_file.write_text(''.join(f'{value}  {name}\n' for name, value in sorted(checksums.items())))
+if not args.mac_only and args.platform in (None, 'Windows'):
+    checksum_file.write_text(''.join(f'{value}  {name}\n' for name, value in sorted(checksums.items())))
 if mac_reports:
-    report_file = output / 'Southlake-Hive-Mac-Verification.json'
+    report_file = mac_output / 'Mac-Verification.json'
     previous = json.loads(report_file.read_text()) if report_file.exists() else {'packages': []}
-    reports = {report['architecture']: report for report in previous['packages']}
+    reports = {report['architecture']: report for report in previous['packages'] if report['app_version'] == version}
     reports.update({report['architecture']: report for report in mac_reports})
-    report_file.write_text(json.dumps({'package_revision': 'mac-2', 'app_version': version,
+    report_file.write_text(json.dumps({'package_revision': REVISION, 'app_version': version,
                                       'built_on': 'Windows; no macOS runtime is available in this workspace',
                                       'packages': list(reports.values())}, indent=2) + '\n')
-shutil.copyfile(root / 'START-HERE.md', output / 'Southlake-Hive-Desktop-Start-Here.md')
-shutil.copyfile(root / 'SHARING.md', output / 'Southlake-Hive-Sharing-Guide.md')
+if not args.mac_only and args.platform in (None, 'Windows'):
+    shutil.copyfile(root / 'START-HERE.md', output / 'Southlake-Hive-Desktop-Start-Here.md')
+    shutil.copyfile(root / 'SHARING.md', output / 'Southlake-Hive-Sharing-Guide.md')

@@ -1,6 +1,6 @@
 # Share the Windows app
 
-Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.14.0). Users choose **Care-Navigation-Support-Setup-2.14.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
+Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.15.0). Users choose **Care-Navigation-Support-Setup-2.15.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers. Mac testers choose the Apple Silicon or Intel test download, extract it in Finder, and run **Install Care Navigation Support.command**.
 
 A C: drive link works on this computer only. To send a download link, upload the installer and share that actual file page. The public GitHub release is verified separately after upload.
 
@@ -34,7 +34,7 @@ python scripts/prepare-windows.py
 
 The document tests exercise the built background reader, so build first. The Windows staging script expects the matching official Electron runtime manifest/cache; a new build machine must supply that runtime and Inno Setup. Third-party notices are in app.asar. The installer uses the same app ID and per-user directory, preserving user data on upgrade and uninstall. Never distribute developer QA stages, test profiles or credentials.
 
-## Version 2.14 upgrade
+## Version 2.15 upgrade
 
 The Windows app and shortcuts use the name Care Navigation Support and the supplied logo. The installer keeps the existing installation ID and the Windows data location `%APPDATA%\Southlake Hive` to retain saved accounts, documents and notes. Close the previous app before updating. Public starting cards are initialized separately in each account and do not transfer anyone’s comments to another account. No automatic updater is included.
 

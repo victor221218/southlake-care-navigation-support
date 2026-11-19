@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, net, session, shell, safeStorage, dialog, Menu, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, net, session, shell, safeStorage, dialog, Menu, clipboard, systemPreferences } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mkdir, readFile, writeFile, stat, rm } from 'node:fs/promises';
@@ -29,7 +29,7 @@ const safeError=error=>({message:error.message||'This action could not complete.
 const fromApp=event=>event.sender===window?.webContents&&event.senderFrame?.url.startsWith(uiOrigin+'/');
 const idle=()=>{if(assistant.busy||importer.busy||connection.busy||pickerBusy)throw new Error('Finish the current answer, file import, or sign-in first.');};
 async function updateAccount(){try{account=await connection.session();accountError='';}catch(error){accountError=error.message;account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'};}return account;}
-async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents(),activeCase=await cases.current();return{account,accountError,documents:allDocuments.filter(d=>d.format!==SERVICE_DIRECTORY_FORMAT),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),cases:await cases.list({all:true}),active_case:activeCase,input_history:await inputHistory.state(),serviceCategories,version:app.getVersion(),models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this Windows account',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
+async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents(),activeCase=await cases.current();return{account,accountError,documents:allDocuments.filter(d=>d.format!==SERVICE_DIRECTORY_FORMAT),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),cases:await cases.list({all:true}),active_case:activeCase,input_history:await inputHistory.state(),serviceCategories,version:app.getVersion(),platform:process.platform,models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this computer',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
 async function allowedOriginal(document){
   if(!document?.original_path)return null;
   const base=path.resolve(dataDir,'documents',owner())+path.sep,target=path.resolve(document.original_path);
@@ -92,7 +92,7 @@ async function invoke(method,args){
   if(method==='open-original'){
     const document=await store.document(args.id),source=await allowedOriginal(document);
     if(!source)throw new Error('This document was restored from a text backup. The original file was not included.');
-    const error=await shell.openPath(source);if(error)throw new Error('Windows could not open the original file. '+error);return{opened:true};
+    const error=await shell.openPath(source);if(error)throw new Error('This computer could not open the original file. '+error);return{opened:true};
   }
   if(method==='chat')return assistant.chat({...args,remember:false,capture_note:true});
   if(method==='stop'){assistant.abort?.abort();return{stopped:true};}
@@ -119,7 +119,13 @@ async function invoke(method,args){
     const card=await store.get(args.id);const contact=card.contacts.find(c=>c.value===args.value);
     if(!contact)throw new Error('This contact is not on the selected card.');clipboard.writeText(contact.value);return{copied:true};
   }
-  if(method==='microphone'){micAllowedUntil=Date.now()+300000;return{ready:true};}
+  if(method==='microphone'){
+    if(process.platform==='darwin' && !await systemPreferences.askForMediaAccess('microphone')) {
+      throw new Error('Allow microphone access in System Settings to use Speak. You can also type your message.');
+    }
+    micAllowedUntil=Date.now()+300000;
+    return{ready:true};
+  }
   if(method==='close-after-save'){assistant.abort?.abort();await db.flush();closing=true;window?.close();return{closing:true};}
   throw new Error('This action is unavailable.');
 }
@@ -152,7 +158,7 @@ async function boot(){
     if(!fromApp(event)||!request||typeof request.method!=='string'||JSON.stringify(request).length>100000)return{ok:false,error:{message:'This action is unavailable.'}};
     try{return{ok:true,value:await invoke(request.method,request.args||{})};}catch(error){return{ok:false,error:safeError(error)};}
   });
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},{label:'View',submenu:[{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]}]));
+  Menu.setApplicationMenu(Menu.buildFromTemplate([...(process.platform==='darwin'?[{role:'appMenu'}]:[]),{label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},{label:'View',submenu:[{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]}]));
   window = new BrowserWindow({
     width: 1420,
     height: 920,

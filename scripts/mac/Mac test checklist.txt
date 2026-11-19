@@ -1,24 +1,15 @@
-SOUTHLAKE HIVE MAC ACCEPTANCE CHECK
-
-Mac chip (Apple M-series / Intel):
+Care Navigation Support @VERSION@ Mac test
+Chip: @CHIP_LABEL@
 macOS version:
-Hive version shown in sidebar (expected @VERSION@):
+Date:
 
-For each item write PASS, FAIL, or NOT TESTED. Include the exact visible error.
+[ ] The installer finishes and the app opens from your home Applications folder.
+[ ] Known services shows local cards. Program details and contacts open.
+[ ] A saved rating appears next to the contact, and changes are retained.
+[ ] Deleting a practice note from the preview leaves the other note.
+[ ] An imported spreadsheet, saved feedback and a chat reopen after quitting.
+[ ] Speak transcribes after microphone permission is granted.
+[ ] An eligible ChatGPT account can connect, answer and reconnect after a restart.
 
-1. ZIP extracts; Install Southlake Hive.command completes:
-2. Southlake Hive opens from home folder > Applications:
-3. Find services shows the starting directory and service details:
-4. "I need a ride in North York" returns clickable service cards without sign-in:
-5. A selected card + "this did not work" saves against that service and suggests alternatives:
-6. "I tried CHATS iRIDEplus and they said no" applies to CHATS, not Circle of Care:
-7. A service comment remains with that service after New conversation + quit/reopen:
-8. Check local setup recognizes the bundled English sample:
-9. Speak requests microphone access and produces an editable transcript:
-10. Answers appear as text/cards without being read aloud:
-11. Optional: own ChatGPT account connects and answers a broader AI question:
-12. Optional: connection still works after quit/reopen (including any Keychain prompt):
-
-After the test, retract/remove invented outcomes from your own library.
-Do not include names, patient details, account tokens or memory database files
-in a report. For failures, include the exact error and the step that triggered it.
+For an issue, share the error message and Mac model. Use invented requests
+and entries when testing.

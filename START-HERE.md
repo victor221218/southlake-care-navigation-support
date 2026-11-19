@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.14 prototype
+# Care Navigation Support — Windows 2.15 prototype
 
-Open **Care-Navigation-Support-Setup-2.14.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.15.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -10,7 +10,7 @@ Workspace opens as a full-width chat, with Add a document beside Speak. **Chat h
 
 ## Known services are ready to browse
 
-Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
+Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. Your saved average rating appears beside the program contact. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 
 Choose **Ask assistant** beneath View details, or **Ask more about this card** in its details, to open the floating assistant with that service selected. Use × or Escape to minimize it, or **Open Workspace** for the full chat. Type **Remember that …** to save a note on the selected service.
 
@@ -99,7 +99,7 @@ Use **Case options → Finish conversation** when you’re done with a chat that
 
 ### Find an organization’s history
 
-In **Manage memory**, search for the organization, service, or note. The organization card shows a short list of saved items. Choose **Expand history** to see older items and their dates, or to open, edit or delete one. Use **Add memory** to write a new note with an optional organization name.
+In **Manage memory**, search for the organization, service, or note. The organization card shows a short list of saved items. Use **Delete** beside a visible note or result to remove it. Choose **Expand history** to see older items and their dates, or to open, edit or delete one. Use **Add memory** to write a new note with an optional organization name.
 
 ### Correct a wrong rating or note
 

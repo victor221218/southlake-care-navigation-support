@@ -1,25 +1,26 @@
 # Care Navigation Support
 
-A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
+A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.14.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.15.0 prototype. The Windows app and installer have been tested. The Mac downloads are for testing on Apple Silicon and Intel.
 
-The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. Version 2.14 uses the same Windows install and data locations.
+The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. Version 2.15 uses the same Windows install and data locations.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.14.0/Care-Navigation-Support-Handoff-2.14.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.15.0/Care-Navigation-Support-Handoff-2.15.0.zip)
 
-Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
+The complete package includes the Windows installer, both Mac test packages, editable source files, guides and verification reports.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.14.0/Care-Navigation-Support-Setup-2.14.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.14.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.14.0/Care-Navigation-Support-Handoff-2.14.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.15.0/Care-Navigation-Support-Setup-2.15.0.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.15.0/Care-Navigation-Support-Mac-Apple-Silicon-2.15.0-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.15.0/Care-Navigation-Support-Mac-Intel-2.15.0-Test.zip) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.15.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.15.0/Care-Navigation-Support-Handoff-2.15.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.14.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.15.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -37,9 +38,9 @@ The current deliverable is a Windows app. To connect it to ChatGPT, open the app
 
 The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Each discussion keeps its own messages and draft. Choose **New chat** to start a separate conversation.
 
-Choose **Known services** to browse the 27 researched pathways as full-width horizontal rows. Category filtering and search appear above the directory; the assistant opens in a floating panel on the right. Open View details for contact details, access requirements, source links and research dates, or choose Ask assistant beneath View details to open the floating chat with that provider selected. A named person appears only when listed in the public source. Confirm eligibility, boundaries, costs and current capacity before referring.
+Choose **Known services** to browse the 27 researched pathways as full-width horizontal rows. Category filtering and search appear above the directory; the assistant opens in a floating panel on the right. Open View details for contact details, access requirements, source links and research dates, or choose Ask assistant beneath View details to open the floating chat with that provider selected. The average of your saved ratings appears beside the program contact. Scores of 1–2 are red, 3 is yellow and 4–5 are green. A named person appears only when listed in the public source. Confirm eligibility, boundaries, costs and current capacity before referring.
 
-**Manage memory**, directly beneath Known services, groups saved history by organization. Search an organization, service or note. Each group shows a short bullet preview. Choose **Expand history** to see dated notes, results and saved conversations, with controls to open, edit or delete an item. Imported cards without an organization are grouped by file. Use **Add memory** to write a note and optionally name its organization.
+**Manage memory**, directly beneath Known services, groups saved history by organization. Search an organization, service or note. Each group shows a short bullet preview with **Delete** beside the visible notes and results. Choose **Expand history** to see dated notes, results and saved conversations, with controls to open, edit or delete an item. Imported cards without an organization are grouped by file. Use **Add memory** to write a note and optionally name its organization.
 
 ![Known services with Ask assistant in the upper-right heading](docs/known-services.png)
 
@@ -100,7 +101,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Care-Navigation-Support-Setup-2.14.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Care-Navigation-Support-Setup-2.15.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
@@ -114,6 +115,10 @@ Import a service spreadsheet, then ask:
 > Which entries cover North York, and what contact details are listed? Show the source cards.
 
 Choose a card to see the original fields, worksheet/row or page reference, any contact details and links supplied by the document, and your dated notes. The app does not invent a contact person when the source only lists a phone number.
+
+## Mac test setup
+
+In **Apple menu → About This Mac**, check whether the Mac has an Apple chip or Intel processor. Download the matching ZIP, open it in Finder and double-click **Install Care Navigation Support.command**. Follow the checklist in the extracted folder. The Mac packages include the same app files and starting services as this Windows release. Native launch, microphone access and ChatGPT sign-in still need a Mac test. The installer adds a local test signature. Routine distribution requires Apple Developer ID signing and notarization.
 
 ## How memory works
 
@@ -154,12 +159,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside the Care-Navigation-Support-Windows-2.14 folder.
+Extract the ZIP first, then open **START-HERE.html** inside the Care-Navigation-Support-Windows-2.15 folder.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Care-Navigation-Support-Setup-2.14.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-2.15.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -194,7 +199,7 @@ These files are for developers. End users do not need to open or run them.
 | `WINDOWS-DEVELOPMENT.md` | Developer prerequisites, runtime configuration, build steps and native test instructions |
 | `START-HERE.md`, `SHARING.md`, `RELEASE-NOTES.md` | User, administrator and release documentation |
 
-The active version 2.7 build uses the **document** entry points listed above. Earlier service-navigation modules and Mac packaging experiments remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
+The active version 2.7 build uses the **document** entry points listed above. Earlier service-navigation modules remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
 
 ## Build and run from source
 

@@ -1,6 +1,6 @@
 # Build the desktop test app
 
-> **Current release: 2.0.0 Windows personal document assistant.** Start with README.md and WINDOWS-DEVELOPMENT.md. The notes below retain the earlier service-navigation workflow and packaging experiments for reference; their service UI and Mac commands are not the current product entry points.
+> **Current release: 2.15.0 personal document assistant.** Start with README.md and WINDOWS-DEVELOPMENT.md for the current Windows workflow and Mac test packages. The notes below describe earlier experiments.
 
 Testers use the installer or an app bundle; they do not need these tools.
 

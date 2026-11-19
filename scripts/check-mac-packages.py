@@ -5,10 +5,12 @@ import pathlib
 import plistlib
 import struct
 import zipfile
+from mac_package import APP, PREFIX, PRODUCT, PROJECT, TEMPLATES
 
 root = pathlib.Path(__file__).resolve().parent.parent
-output = root.parent.parent / 'outputs'
-version = json.loads((root / 'package.json').read_text())['version']
+version = PROJECT['version']
+product_prefix = PRODUCT.replace(' ', '-')
+output = root.parent.parent / 'outputs' / f"{product_prefix}-Windows-{'.'.join(version.split('.')[:2])}" / 'Mac'
 asar = root / 'release/app.asar'
 with asar.open('rb') as stream:
     full_hash = hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -24,7 +26,7 @@ def file_hash(archive, name):
     with archive.open(name) as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
-report_file = output / 'Southlake-Hive-Mac-Verification.json'
+report_file = output / 'Mac-Verification.json'
 report = json.loads(report_file.read_text())
 report_by_arch = {item['architecture']: item for item in report['packages']}
 for runtime in json.loads((root / '.runtime/runtimes.json').read_text()):
@@ -32,8 +34,8 @@ for runtime in json.loads((root / '.runtime/runtimes.json').read_text()):
         continue
     arch = runtime['arch']
     label = 'Apple-Silicon' if arch == 'arm64' else 'Intel'
-    path = output / f'Southlake-Hive-Mac-{label}-{version}-Test.zip'
-    app = 'Southlake Hive Mac/Southlake Hive.app/'
+    path = output / f'{product_prefix}-Mac-{label}-{version}-Test.zip'
+    app = APP
     compared = 0
     with zipfile.ZipFile(runtime['path']) as upstream, zipfile.ZipFile(path) as packaged:
         expected = set()
@@ -66,19 +68,18 @@ for runtime in json.loads((root / '.runtime/runtimes.json').read_text()):
                 native_minimum = f'{number >> 16}.{number >> 8 & 255}.{number & 255}'
             offset += size
         assert native_minimum == '13.0.0', 'Unexpected native macOS minimum'
-        manifest = json.loads(packaged.read('Southlake Hive Mac/Support/package-manifest.json'))
+        manifest = json.loads(packaged.read(PREFIX + 'Support/package-manifest.json'))
         assert manifest['app_asar_sha256'] == full_hash
         assert not manifest['native_mac_launch_verified'] and not manifest['developer_id_signed'] and not manifest['apple_notarized']
-        for name in ('READ ME FIRST.txt', 'Mac test checklist.txt', 'Install Southlake Hive.command'):
-            text = packaged.read('Southlake Hive Mac/' + name).decode('utf-8')
+        for name in TEMPLATES:
+            text = packaged.read(PREFIX + name).decode('utf-8')
             assert '@VERSION@' not in text and '@ASAR_SHA256@' not in text
             assert version in text
     item = report_by_arch[arch]
     item.update(unchanged_upstream_runtime_entries_compared=compared,
                 only_expected_bundle_files=True, independently_parsed_asar_header_matches=True,
                 native_binary_minimum_macos=native_minimum,
-                installer_bash_execution_verified=False,
-                installer_bash_execution_note='Git Bash cannot start in this restricted Windows build environment; recipient Mac test required.')
+                installer_execution_verified_on_mac=False)
     print(json.dumps({'architecture': arch, 'unchanged_runtime_entries_compared': compared,
                       'app_hash': full_hash, 'independent_header_check': True, 'native_minimum': native_minimum}))
 report_file.write_text(json.dumps(report, indent=2) + '\n')

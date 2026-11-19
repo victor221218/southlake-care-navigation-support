@@ -23,7 +23,7 @@ async function revealMemoryEntry(id) {
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.14.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.15.0'));
   const phase=await window.hiveSmoke.phase();
   const title='Care Navigation Support';
   assert(phase.windowTitle===title&&document.title===title&&document.querySelector('.brand strong')?.textContent===title,'The current name must appear in the Windows title and sidebar.');
@@ -101,9 +101,29 @@ async function run(){try{
   click(memoryRow(note.id)+' [data-action="edit-memory"]');await wait(()=>document.getElementById('memory-comment-body'));
   type('memory-comment-body',editedServiceNote);click('[data-action="save-memory-comment"]');await wait(()=>!document.getElementById('modal').open&&document.querySelector(memoryRow(note.id))?.textContent.includes(editedServiceNote));
   if(!(await request('get-card',{id:serviceCard.id})).comments.some(n=>n.body===editedServiceNote))throw new Error('Edited feedback was not persisted.');
+  const sibling=await request('save-comment',{card_id:serviceCard.id,body:'Independent practice note to keep.'});
+  const previewRow=id=>`[data-preview-id="${id}"]`;
+  const deleteButton=' [data-action="delete-memory"]';
+  document.querySelector(memoryRow(note.id)).closest('.memory-group').querySelector('[data-action="toggle-memory-group"]').click();
+  await wait(()=>document.querySelector(previewRow(note.id)+deleteButton)&&document.querySelector(previewRow(sibling.id)));
+  const removePreview=document.querySelector(previewRow(note.id)+deleteButton);
+  const previewText=document.querySelector(previewRow(note.id)+' strong');
+  assert(removePreview.getBoundingClientRect().left>previewText.getBoundingClientRect().right&&
+    !removePreview.closest('.memory-group').querySelector('.memory-history'),'Each collapsed note must offer its own Delete button on the right.');
   const memoryCapture=await window.hiveSmoke.capture('memory-library');
-  const originalConfirm=window.confirm;window.confirm=()=>false;click(memoryRow(note.id)+' [data-action="delete-memory"]');assert(Boolean(document.querySelector(memoryRow(note.id))));
-  window.confirm=()=>true;click(memoryRow(note.id)+' [data-action="delete-memory"]');await wait(()=>!document.querySelector(memoryRow(note.id)));window.confirm=originalConfirm;
+  const originalConfirm=window.confirm;
+  window.confirm=()=>false;
+  click(previewRow(note.id)+deleteButton);
+  assert(document.querySelector(previewRow(note.id)),'Cancel must preserve the note.');
+  window.confirm=()=>true;
+  click(previewRow(note.id)+deleteButton);
+  await wait(()=>!document.querySelector(previewRow(note.id))&&document.querySelector(previewRow(sibling.id)));
+  assert((await request('get-card',{id:serviceCard.id})).comments.map(item=>item.id).join('')===sibling.id,
+    'Deleting from the preview must leave the service and the other note.');
+  await revealMemoryEntry(sibling.id);
+  click(memoryRow(sibling.id)+deleteButton);
+  await wait(()=>!document.querySelector(memoryRow(sibling.id)));
+  window.confirm=originalConfirm;
   assert((await request('get-card',{id:serviceCard.id})).comments.length===0&&(await request('snapshot')).services.total===27);
   // Restore an isolated note via the real service-card editor for the reopening check.
   click('[data-action="known-services"]');await wait(()=>document.querySelector(`.service-row[data-service-id="${serviceCard.id}"]`));
@@ -128,7 +148,12 @@ async function run(){try{
   const resultNote=document.querySelector(followup+' [data-followup-field="body"]');
   const ratingField=document.querySelector(followup+' [data-followup-field="rating"]');
   resultNote.value='Completed the requested ride.';resultNote.dispatchEvent(new Event('input',{bubbles:true}));
-  ratingField.value='5';ratingField.dispatchEvent(new Event('change',{bubbles:true}));
+  const low='rgb(255, 240, 239)', mid='rgb(255, 246, 220)', high='rgb(234, 246, 238)';
+  for(const [score,color] of [[1,low],[2,low],[3,mid],[4,high],[5,high]]){
+    ratingField.value=String(score);ratingField.dispatchEvent(new Event('change',{bubbles:true}));
+    assert(getComputedStyle(ratingField).backgroundColor===color,`Selected rating ${score} must use its rating color.`);
+  }
+  ratingField.value='1';ratingField.dispatchEvent(new Event('change',{bubbles:true}));
   assert(!document.querySelector('.case-next-steps'),'A draft result must not open the end prompt.');
   const resultFormCapture=await window.hiveSmoke.capture('service-result-form');
   click(followup+' [data-step="save"]');click(followup+' [data-step="save"]');
@@ -141,7 +166,16 @@ async function run(){try{
   }),'The separate end prompt must bring all three choices into the compact floating chat.');
   const experienceCard=await request('get-card',{id:serviceCard.id});
   const worked=experienceCard.comments.find(n=>n.outcome==='worked');
-  assert(experienceCard.experience.worked===1&&worked.rating===5,'One save must create one result with the chosen rating.');
+  assert(experienceCard.experience.worked===1&&worked.rating===1,'One save must create one result with the chosen rating.');
+  const workedBadge=document.querySelector(followup+' .followup-saved .result-badge');
+  assert(workedBadge?.textContent==='Worked · 1/5'&&getComputedStyle(workedBadge).backgroundColor===low,
+    'A low score stays red even when the service worked.');
+  const directoryRating=row+' .service-row-score .rating-badge';
+  await wait(()=>document.querySelector(directoryRating)?.textContent==='1.0/5');
+  const scoreBadge=document.querySelector(directoryRating);
+  assert(getComputedStyle(scoreBadge).backgroundColor===low&&
+    scoreBadge.getBoundingClientRect().left>document.querySelector(row+' .service-row-contact > div:first-child span').getBoundingClientRect().left,
+    'Show the saved average to the right of the program contact.');
   click('.case-next-steps [data-action="keep-case-open"]');
   await wait(()=>!document.querySelector('.case-next-steps')&&document.body.dataset.caseChanging==='false');
   assert(!(await request('get-case',{id:(await request('snapshot')).active_case.id})).completion&&
@@ -218,6 +252,6 @@ async function run(){try{
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);
-  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
+  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
 }catch(error){const capture=await window.hiveSmoke.capture('failure');window.hiveSmoke.finish({ok:false,error:error.message||String(error),stack:error.stack,debug_text:document.body.innerText.slice(0,6000),notice_text:document.getElementById('notice')?.textContent,modal_text:document.getElementById('modal')?.innerText.slice(0,3500),failure_capture:capture});}}
 run();

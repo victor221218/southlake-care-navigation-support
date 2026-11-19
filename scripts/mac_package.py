@@ -11,9 +11,14 @@ import struct
 import subprocess
 import zipfile
 
-PREFIX = 'Southlake Hive Mac/'
-APP = PREFIX + 'Southlake Hive.app/'
-REVISION = 'mac-2'
+PROJECT = json.loads((pathlib.Path(__file__).resolve().parent.parent / 'package.json').read_text(encoding='utf-8'))
+PRODUCT = PROJECT['productName']
+PREFIX = PRODUCT + ' Mac/'
+APP = PREFIX + PRODUCT + '.app/'
+REVISION = 'mac-3'
+INSTALLER = f'Install {PRODUCT}.command'
+TEMPLATES = {'READ ME FIRST.txt': 'READ ME FIRST.txt', 'Mac test checklist.txt': 'Mac test checklist.txt',
+             INSTALLER: 'Install Southlake Hive.command'}
 
 
 def digest(path):
@@ -56,7 +61,7 @@ def build_mac(root, runtime, destination, version, asar, hashes):
     chip = 'Apple Silicon (Apple M-series)' if arch == 'arm64' else 'Intel'
     full_hash, header_hash = hashes
     manifest = {
-        'app': 'Southlake Hive', 'app_version': version, 'package_revision': REVISION,
+        'app': PRODUCT, 'app_version': version, 'package_revision': REVISION,
         'architecture': arch, 'minimum_macos': '13.0',
         'app_asar_sha256': full_hash, 'app_asar_header_sha256': header_hash,
         'runtime': {'archive': pathlib.Path(runtime['path']).name, 'sha256': digest(runtime['path']),
@@ -84,11 +89,11 @@ def build_mac(root, runtime, destination, version, asar, hashes):
             if old_name == 'Electron.app/Contents/Info.plist':
                 values = plistlib.loads(data)
                 values.update(
-                    CFBundleDisplayName='Southlake Hive', CFBundleName='Southlake Hive',
+                    CFBundleDisplayName=PRODUCT, CFBundleName=PRODUCT,
                     CFBundleIdentifier='org.team26.southlakehive', CFBundleVersion=version,
                     CFBundleShortVersionString=version, CFBundleIconFile='hive.icns',
                     LSApplicationCategoryType='public.app-category.productivity',
-                    NSMicrophoneUsageDescription='Dictate service needs to Southlake Hive. English recognition runs on this computer.',
+                    NSMicrophoneUsageDescription='Dictate service needs to ' + PRODUCT + '. English recognition runs on this computer.',
                     ElectronAsarIntegrity={'Resources/app.asar': {'algorithm': 'SHA256', 'hash': header_hash}},
                 )
                 for key in ('NSCameraUsageDescription', 'NSBluetoothAlwaysUsageDescription',
@@ -99,9 +104,9 @@ def build_mac(root, runtime, destination, version, asar, hashes):
         with asar.open('rb') as stream, target.open(entry(APP + 'Contents/Resources/app.asar'), 'w', force_zip64=True) as dest:
             shutil.copyfileobj(stream, dest, length=1024 * 1024)
         target.writestr(entry(APP + 'Contents/Resources/hive.icns'), (root / 'assets/hive.icns').read_bytes())
-        for name in ('READ ME FIRST.txt', 'Mac test checklist.txt', 'Install Southlake Hive.command'):
+        for name, template in TEMPLATES.items():
             target.writestr(entry(PREFIX + name, 0o755 if name.endswith('.command') else 0o644),
-                            render_template(root, name, substitutions))
+                            render_template(root, template, substitutions))
         target.writestr(entry(PREFIX + 'Support/main-entitlements.plist'),
                         (root / 'scripts/mac/main-entitlements.plist').read_bytes())
         target.writestr(entry(PREFIX + 'Support/package-manifest.json'),
@@ -140,6 +145,7 @@ def verify_mac(destination, expected_asar, expected_header, expected_arch, versi
         assert not any(name.startswith(APP + 'Contents/_CodeSignature/') for name in names), 'Stale outer signature remains'
         info = plistlib.loads(archive.read(APP + 'Contents/Info.plist'))
         assert info['CFBundleIdentifier'] == 'org.team26.southlakehive'
+        assert info['CFBundleName'] == info['CFBundleDisplayName'] == PRODUCT
         assert info['CFBundleShortVersionString'] == info['CFBundleVersion'] == version
         assert info['CFBundleExecutable'] == 'Electron'
         assert info['LSMinimumSystemVersion'] == '13.0'
@@ -164,7 +170,7 @@ def verify_mac(destination, expected_asar, expected_header, expected_arch, versi
         assert links, 'Framework symlinks lost'
         for name in links:
             resolved_link(name, links, set(names))
-        installer = archive.getinfo(PREFIX + 'Install Southlake Hive.command')
+        installer = archive.getinfo(PREFIX + INSTALLER)
         assert installer.external_attr >> 16 & 0o111, 'Installer executable bit missing'
         command = archive.read(installer).decode()
         assert '\r' not in command and command.startswith('#!/bin/bash\n'), 'Mac script line endings'

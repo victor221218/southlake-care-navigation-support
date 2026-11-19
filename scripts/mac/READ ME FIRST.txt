@@ -1,55 +1,24 @@
-SOUTHLAKE HIVE @VERSION@ - MAC TEST PACKAGE
-For: @CHIP_LABEL@ Macs, macOS 13 Ventura or newer
+Care Navigation Support @VERSION@ for Mac
+For @CHIP_LABEL@ Macs with macOS 13 Ventura or later
 
-INSTALL
-1. Double-click the ZIP in Finder to extract it. Keep the whole folder together.
-2. Close Hive if it is already open. Double-click Install Southlake Hive.command.
-   A Terminal window shows progress; there are no commands to type.
-3. When it says Installed, double-click Southlake Hive in the Finder window.
-   The app is in your home folder > Applications. You can keep it in the Dock.
+Install
+1. Open the ZIP in Finder. Keep the extracted folder together.
+2. Quit any running copy. Double-click Install Care Navigation Support.command.
+3. When Finder opens, double-click Care Navigation Support. The app is in
+   the Applications folder inside your home folder.
 
-No Node.js, Python, ChatGPT plugin or API key is needed to install the app.
-The installer uses built-in Mac tools and does not download anything.
+The installer uses built-in Mac tools and adds a local test signature.
+A launch check on an actual Mac is still needed. If macOS or your
+organization blocks the download, ask IT to review the package. A
+Developer ID signature and Apple notarization are needed for routine
+distribution through Gatekeeper.
 
-This is a planned recipient test build. It has not been run on a Mac here.
-The installer creates a local ad-hoc test signature. It does not certify the
-publisher and does not make this an Apple-notarized release. If macOS or your
-organization blocks the installer or app, stop and ask the sender or IT for
-approval. Do not turn off Mac security protections. A Developer ID signed and
-Apple-notarized build is still needed for straightforward client distribution.
-
-FIRST TEST (use only invented service needs; no names or patient identifiers)
-- Start without ChatGPT sign-in. Ask: "I need a ride in North York."
-  Check that clickable service options, contact details and access steps appear.
-- Open a card and try "this did not work". Check the saved result and alternatives.
-- Add a comment to that service. Start a new conversation, quit Hive and reopen.
-  Check that the comment and result remain with the same service in Memory library.
-- In Connection & settings, run Check local setup. It should recognize
-  "find home support in aurora" using the bundled sample, without a microphone.
-- Try Speak. Grant microphone permission yourself when the Mac asks. Review the
-  transcript and send it. Hive should not read the answer aloud.
-- If broader AI conversation is needed, choose Continue with ChatGPT and use
-  your own account. Account eligibility and usage limits are determined by OpenAI.
-  Quit/reopen and check the connection. Keychain behavior also needs this Mac test.
-- In your own library, remove/retract invented test results when finished.
-  The separate practice workspace is available for further trial entries.
-
-Complete Mac test checklist.txt and return it to the sender if anything fails.
-For an installation failure, send the Terminal error and Mac chip/macOS version.
-
-MEMORY AND SHARING
-Each installation keeps its own memory at:
-~/Library/Application Support/Southlake Hive
-Installing/updating the app does not copy another person's comments, outcomes,
-added services or sign-in. The package has no real user records or credentials.
-The installer keeps an existing app as a backup and leaves its data folder alone.
-Send the ZIP, not your Library/Application Support folder, to another tester.
-
-APPLE SILICON OR INTEL?
-Apple menu > About This Mac shows Chip (Apple M-series) or Processor (Intel).
-Use the Apple Silicon ZIP for an Apple M-series chip; use the Intel ZIP otherwise.
-
-Package revision: mac-2
-App version: @VERSION@
-Bundled app SHA-256: @ASAR_SHA256@
-Technical package details are in Support/package-manifest.json.
+Try the app using an invented case
+- Ask for transportation in North York. Select a card, record a result
+  and save a score. Check the rating beside its Known services contact.
+- Save or keep the chat. In Manage memory, delete one practice note from
+  its preview. Quit and reopen to check that the other record remains.
+- Try Speak and allow the microphone when macOS asks. Review the words
+  before sending. Replies appear in text.
+- Use Connect ChatGPT to test an eligible account. Reopen the app to
+  check that the connection and Keychain prompt behave as expected.

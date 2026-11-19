@@ -1,6 +1,7 @@
-# Care Navigation Support 2.14.0
+# Care Navigation Support 2.15.0
 
-- **Chat history** places **New chat** above search. Chats appear under **Feedback needed**, **No service selected**, or **Feedback recorded**, with week labels inside each group.
-- After the final pending result and any open note are saved, the chat brings a separate **What would you like to do next?** message into view.
-- Choose **Keep in chat history**, **Add to memory library**, or **Delete chat and notes**. Deletion asks for confirmation.
-- Close the previous app and open **Care-Navigation-Support-Setup-2.14.0.exe** to update.
+- Individual ratings use red for 1–2, yellow for 3, and green for 4–5. Your saved average appears beside the program contact in **Known services**.
+- **Manage memory** offers **Delete** beside visible notes and results in the preview and in expanded history. Each deletion asks for confirmation.
+- The release includes a verified Windows installer and Mac test downloads for Apple Silicon and Intel. Both Mac packages carry the same app files and directory as the Windows release. Native Mac testing and Apple notarization are pending.
+
+Close the previous app before updating.

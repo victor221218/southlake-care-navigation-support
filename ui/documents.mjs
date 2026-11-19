@@ -21,8 +21,30 @@ function textHTML(text){return e(text).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</s
 function button(action,label,classes='',extra=''){return`<button class="${classes}" data-action="${action}" ${extra}>${label}</button>`;}
 const isService=card=>card.source_format==='service-directory';
 const resultLabel=outcome=>outcome==='worked'?'Worked':"Didn't work";
-function resultBadge(note){return note.outcome?`<span class="result-badge ${e(note.outcome)}">${e(resultLabel(note.outcome))}${note.rating!=null?' · '+note.rating+'/5':''}</span>`:'';}
-function experienceHTML(summary){if(!summary||!summary.worked&&!summary.not_worked)return'';return`<span class="experience-summary"><span>${summary.worked} worked</span><span>${summary.not_worked} didn't work</span>${summary.rating_count?`<span>Your average rating ${Number(summary.rating_average).toFixed(1)}/5 · ${summary.rating_count} rating${summary.rating_count===1?'':'s'}</span>`:''}</span>`;}
+function ratingTone(score) {
+  return score <= 2 ? 'rating-low' : score >= 4 ? 'rating-high' : 'rating-mid';
+}
+function ratingOptions(selected) {
+  return '<option value="">No rating</option>' + [1,2,3,4,5].map(score =>
+    `<option value="${score}" class="${ratingTone(score)}" ${score===selected?'selected':''}>${score}/5${score===1?' · Poor':score===5?' · Excellent':''}</option>`
+  ).join('');
+}
+function averageRatingBadge(summary, {label='', showCount=false}={}) {
+  if (!summary?.rating_count) return '';
+  const score = Number(summary.rating_average).toFixed(1);
+  const count = `${summary.rating_count} rating${summary.rating_count===1?'':'s'}`;
+  return `<span class="rating-badge ${ratingTone(Number(score))}" title="Average of ${count}">${label}${score}/5${showCount?' · '+count:''}</span>`;
+}
+function resultBadge(note) {
+  if (!note.outcome) return '';
+  const rated = note.rating != null;
+  return `<span class="result-badge ${e(note.outcome)}${rated?' '+ratingTone(note.rating):''}">${e(resultLabel(note.outcome))}${rated?' · '+note.rating+'/5':''}</span>`;
+}
+function experienceHTML(summary, {showRating=true}={}) {
+  if (!summary || (!summary.worked && !summary.not_worked)) return '';
+  return `<span class="experience-summary"><span>${summary.worked} worked</span><span>${summary.not_worked} didn't work</span>
+    ${showRating ? averageRatingBadge(summary,{label:'Your average rating ',showCount:true}) : ''}</span>`;
+}
 const fileLabel=card=>isService(card)?'Known service · '+(card.category||card.fields?.Category||'Public provider source'):card.filename?`${card.filename} · ${card.locator}`:card.kind==='message'?'Your saved message':'Your personal note';
 function answerCardHTML(card, reply) {
   const contact = card.contacts?.[0];
@@ -37,7 +59,7 @@ function answerCardHTML(card, reply) {
       `<span class="card-excerpt">${e(card.body?.split('\n')[0]?.slice(0,120) || 'Open to see details')}</span>`}
     ${card.card_confirm || service ? `<span class="card-confirm"><b>Confirm</b>${e(card.card_confirm || 'Eligibility, service area, accessibility, fees and current capacity with intake.')}</span>` : ''}
     <span class="answer-card-bottom">${contact && !service && !pickable ? `<span>${e(contact.value)}</span>` : ''}
-      ${summary?.rating_count ? `<small>${Number(summary.rating_average).toFixed(1)}/5 · ${summary.rating_count} rating${summary.rating_count === 1 ? '' : 's'}</small>` :
+      ${summary?.rating_count ? averageRatingBadge(summary,{showCount:true}) :
         card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count === 1 ? '' : 's'}</small>` : ''}</span>`;
   if (!pickable) {
     return `<button class="memory-card answer-card" data-action="open-card" ${details}>${content}<span class="answer-card-open">View details →</span></button>`;
@@ -127,9 +149,7 @@ function renderChatFollowup(message) {
       ${resultBadge(followup)}</div>
       <div class="followup-fields">
         <label>Note (optional)<textarea data-followup-field="body" rows="2" maxlength="2000" placeholder="For example: They could take the walker, but needed two days' notice.">${e(followup.body || '')}</textarea></label>
-        <label>Rating (optional)<select data-followup-field="rating"><option value="">No rating</option>
-          ${[1,2,3,4,5].map(n => `<option value="${n}" ${followup.rating === n ? 'selected' : ''}>${n}/5${n === 1 ? ' · Poor' : n === 5 ? ' · Excellent' : ''}</option>`).join('')}
-        </select></label>
+        <label>Rating (optional)<select class="rating-select" data-followup-field="rating">${ratingOptions(followup.rating)}</select></label>
       </div>
       <div class="followup-actions">${stepButton('save','Save result','primary')}${stepButton('change','Change result','quiet')}${stepButton('later','Finish later','quiet')}</div>`;
   } else {
@@ -150,7 +170,27 @@ function renderChatFollowup(message) {
     </section></article>`;
 }
 function renderModel(){const selected=state?.models?.selected,item=state?.models?.items?.find(m=>m.id===selected);$('model-status').textContent=selected?'AI model: '+(item?.name||selected):state?.account.sharing?'ChatGPT · model selected when you ask':'Connect ChatGPT for AI answers';}
-function serviceRowHTML(card){const contact=card.contacts?.[0];return `<article class="service-row" data-service-id="${e(card.id)}"><div class="service-row-info">${card.comment_count?`<div class="service-experience-preview">${experienceHTML(card.experience)}<small>Your latest note: ${e(card.latest_note)}</small></div>`:''}<span class="card-kicker">${e(card.category||'Known service')}</span>${button('open-card',e(card.title),'service-title',`data-id="${e(card.id)}"`)}<p>${e(card.body?.split('\n')[0]||'')}</p><span class="service-area">${e(card.area||'Confirm the service area with intake')}</span></div><div class="service-row-contact"><strong>${e(contact?.name||'Program contact')}</strong><span>${e(contact?.value||'See provider details')}</span>${card.comment_count?`<small>${card.comment_count} saved note${card.comment_count===1?'':'s'} / result${card.comment_count===1?'':'s'}</small>`:''}</div><div class="service-row-actions">${button('open-card','View details','secondary',`data-id="${e(card.id)}"`)}${button('ask-service','Ask assistant','quiet',`data-id="${e(card.id)}"`)}</div></article>`;}
+function serviceRowHTML(card) {
+  const contact=card.contacts?.[0];
+  const score=averageRatingBadge(card.experience);
+  const attrs=`data-id="${e(card.id)}"`;
+  return `<article class="service-row" data-service-id="${e(card.id)}">
+    <div class="service-row-info">
+      ${card.comment_count ? `<div class="service-experience-preview">${experienceHTML(card.experience,{showRating:false})}
+        <small>Your latest note: ${e(card.latest_note)}</small></div>` : ''}
+      <span class="card-kicker">${e(card.category||'Known service')}</span>
+      ${button('open-card',e(card.title),'service-title',attrs)}
+      <p>${e(card.body?.split('\n')[0]||'')}</p><span class="service-area">${e(card.area||'Confirm the service area with intake')}</span>
+    </div>
+    <div class="service-row-contact">
+      <div><strong>${e(contact?.name||'Program contact')}</strong><span>${e(contact?.value||'See provider details')}</span>
+      ${card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count===1?'':'s'} / result${card.comment_count===1?'':'s'}</small>` : ''}</div>
+      ${score ? `<div class="service-row-score"><strong>Avg. rating</strong>${score}</div>` : ''}
+    </div>
+    <div class="service-row-actions">${button('open-card','View details','secondary',attrs)}
+      ${button('ask-service','Ask assistant','quiet',attrs)}</div>
+    </article>`;
+}
 function memoryEntry(item,group,expanded) {
   const conversation = item.kind === 'conversation';
   const prefix = group.title + ' · ';
@@ -161,12 +201,14 @@ function memoryEntry(item,group,expanded) {
   const body = (!expanded && conversation) || item.body.trim() === item.title.trim() ||
     (item.outcome && item.body === resultLabel(item.outcome)+'.') ? '' : item.body;
   const status = resultBadge(item);
+  const attrs = `data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}" ${item.outcome?'data-service-result="true"':''}`;
+  const remove = button('delete-memory','Delete','quiet danger',`${attrs} aria-label="${e('Delete this '+label.toLowerCase())}"`);
   if (!expanded) {
-    return `<li data-preview-id="${e(item.id)}"><strong>${e(title)}</strong>
+    const deleteFromPreview = item.entry_type==='comment' || item.memory_type==='notes';
+    return `<li data-preview-id="${e(item.id)}"><div class="memory-preview-row"><div><strong>${e(title)}</strong>
       ${status}${!status && item.entry_type==='comment' ? '<span class="memory-entry-label">Note</span>' : ''}
-      ${body ? `<p>${e(body)}</p>` : ''}</li>`;
+      ${body ? `<p>${e(body)}</p>` : ''}</div>${deleteFromPreview ? remove : ''}</div></li>`;
   }
-  const attrs = `data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}"`;
   const editLabel = conversation ? 'Case options' : item.document_id && item.entry_type==='card' ? 'Add correction' : 'Edit';
   return `<li class="memory-record" data-memory-id="${e(item.id)}">
     <div class="memory-entry-content">
@@ -176,7 +218,7 @@ function memoryEntry(item,group,expanded) {
       <small>${label}${item.archived?' · Previous row':''} · ${e(date(item.updated_at))}</small>
     </div>
     <div class="memory-record-actions">${button('edit-memory',editLabel,'secondary',attrs)}
-      ${button('delete-memory','Delete','quiet danger',attrs)}</div></li>`;
+      ${remove}</div></li>`;
 }
 function memoryGroupHTML(group) {
   const open = Boolean(group.history);
@@ -491,7 +533,7 @@ function renderLibraryMode(){
   document.querySelectorAll('[data-library-mode]').forEach(b=>{const active=b.dataset.libraryMode===libraryMode;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
 }
 async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
-async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';$('case-search').value='';}$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent='Windows · version '+state.version;
+async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';$('case-search').value='';}$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent=(state.platform==='darwin'?'macOS':'Windows')+' · version '+state.version;
   $('document-filter').innerHTML='<option value="">All sources</option>'+state.documents.map(d=>`<option value="${e(d.id)}">${e(d.filename)} (${d.card_count})</option>`).join('');if(documentFilter&&!state.documents.some(d=>d.id===documentFilter))documentFilter='';$('document-filter').value=documentFilter;
   $('category-filter').innerHTML='<option value="">All service categories</option>'+(state.serviceCategories||[]).map(c=>`<option value="${e(c)}">${e(c)}</option>`).join('');$('category-filter').value=category;renderLibraryMode();renderModel();renderCases();renderUndo();await loadCards();const identity=state.account.profileId||'device';if(!activeCase||activeOwner!==identity){activeCase=null;activeOwner=identity;await loadCase(state.active_case.id,{activate:false});}else if(activeCase.id===state.active_case.id){activeCase={...activeCase,...state.active_case};renderCaseTitle();}}
 async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='workspace')return;
@@ -533,7 +575,7 @@ function shell(){
       <label class="sr-only" for="case-search">Search chat history</label>
       <input id="case-search" type="search" placeholder="Search chats">
       <div id="case-list" class="case-list"></div>
-    </section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.14</span></div></aside>
+    </section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label"></span></div></aside>
   <div id="case-action-menu" class="case-action-menu" popover="auto" aria-label="Conversation actions"></div>
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
@@ -675,8 +717,7 @@ async function startServiceResult(id,editId) {
     <fieldset class="result-outcomes"><legend>What happened?</legend>
     ${button('choose-service-result','✓ Worked','secondary',`data-outcome="worked" aria-pressed="${note.outcome==='worked'}"`)}
     ${button('choose-service-result',"Didn't work",'secondary',`data-outcome="not_worked" aria-pressed="${note.outcome==='not_worked'}"`)}</fieldset>
-    <label for="result-rating">Your rating (optional)<select id="result-rating"><option value="">No rating</option>
-    ${[1,2,3,4,5].map(n=>`<option value="${n}" ${note.rating===n?'selected':''}>${n}/5${n===1?' · Poor':n===5?' · Excellent':''}</option>`).join('')}</select></label>
+    <label for="result-rating">Your rating (optional)<select id="result-rating" class="rating-select">${ratingOptions(note.rating)}</select></label>
     <label for="result-note">What happened? (optional)<textarea id="result-note" rows="3" maxlength="12000">${e(note.body===resultLabel(note.outcome)+'.'?'':note.body)}</textarea></label>
     <div class="result-editor-actions">${button('save-service-result','Save changes','primary','id="save-service-result"')}
     ${button('cancel-service-result','Cancel result','quiet')}</div><p id="result-status" class="saved-status" role="status"></p>`;
@@ -736,17 +777,30 @@ async function editMemory(target){
   else await noteForm(card.id);
 }
 async function deleteMemory(target){
-  const value=await api('get-card',{id:target.dataset.cardId});if(value.case_info){if(!confirm('Permanently delete this saved case and its chat history? Separate service notes and results stay.'))return;await api('delete-case',{id:value.case_info.id,expected_version:value.case_info.version});if(activeCase?.id===value.case_info.id)activeCase=null;await refresh();notice('Saved case history deleted.');return;}
   const comment=target.dataset.entryType==='comment';
-  if(!confirm(comment?'Delete this saved note? Its service or source card will stay.':'Delete this saved card and its attached notes? This cannot be undone.'))return;
+  if (!comment) {
+    const card=await api('get-card',{id:target.dataset.cardId});
+    if(card.case_info){
+      if(!confirm('Permanently delete this saved case and its chat history? Separate service notes and results stay.'))return;
+      await api('delete-case',{id:card.case_info.id,expected_version:card.case_info.version});
+      if(activeCase?.id===card.case_info.id)activeCase=null;
+      await refresh();notice('Saved case history deleted.');return;
+    }
+  }
+  const item=target.dataset.serviceResult==='true'?'service result':'note';
+  if(!confirm(comment?`Delete this saved ${item}?`:'Delete this saved card and its attached notes? This cannot be undone.'))return;
+  const group=target.closest('.memory-group')?.dataset.groupId;
   await flushNote();
   await api(comment?'forget-comment':'forget-card',comment?{id:target.dataset.id,card_id:target.dataset.cardId}:{id:target.dataset.id});
   if(!comment&&selected?.id===target.dataset.cardId){selected=null;context();}
-  await refresh();notice('Memory deleted. Future answers will use the remaining saved information.');
+  await refresh();
+  const remaining=group && $('cards').querySelector(`.memory-group[data-group-id="${CSS.escape(group)}"] [data-action="toggle-memory-group"]`);
+  (remaining || $('search')).focus({preventScroll:true});
+  notice('Memory deleted. Future answers will use the remaining saved information.');
 }
-async function settings(){await refresh();const starter=state.account.connected?await api('starter-count'):{count:0};await openModal(modalHead('Connection & backup','One Windows app. Your own saved information.')+`<div class="detail-body settings-body"><section><h3>ChatGPT connection</h3><p><strong>${e(state.account.connected?state.account.label:'Connect your own ChatGPT account')}</strong></p><p>${state.account.sharing?'Plan permission is enabled. Send a question to verify this account can complete an answer.':'AI answers use an eligible ChatGPT account and its allowed plan usage. Sign-in opens the official OpenAI page in your browser. Account and app eligibility are decided by OpenAI.'}</p>${state.accountError?`<p class="callout">${e(state.accountError)}</p>`:''}<div class="button-row">${button('sign-in',state.account.connected?'Reconnect ChatGPT':'Continue with ChatGPT','primary')}${state.account.connected?button('sign-out','Sign out','secondary'):''}${button('add-account','Use a different account','quiet')}</div>${state.account.profiles.length?`<label class="saved-accounts">Saved connections<select id="saved-accounts"><option value="">Choose a saved connection…</option>${state.account.profiles.map(p=>`<option value="${e(p.id)}">${e(p.label)}${p.connected?'':' · reconnect'}</option>`).join('')}</select></label>`:''}<p class="subtle">This app cannot read your ChatGPT chat history or ChatGPT Memory. It keeps its own document cards. There is no shared team database.</p>${state.account.sharing?button('load-models','Choose an available AI model','quiet'):''}<div id="model-picker"></div></section>
+async function settings(){await refresh();const starter=state.account.connected?await api('starter-count'):{count:0};await openModal(modalHead('Connection & backup','Manage your connection and saved information.')+`<div class="detail-body settings-body"><section><h3>ChatGPT connection</h3><p><strong>${e(state.account.connected?state.account.label:'Connect your own ChatGPT account')}</strong></p><p>${state.account.sharing?'Plan permission is enabled. Send a question to verify this account can complete an answer.':'AI answers use an eligible ChatGPT account and its allowed plan usage. Sign-in opens the official OpenAI page in your browser. Account and app eligibility are decided by OpenAI.'}</p>${state.accountError?`<p class="callout">${e(state.accountError)}</p>`:''}<div class="button-row">${button('sign-in',state.account.connected?'Reconnect ChatGPT':'Continue with ChatGPT','primary')}${state.account.connected?button('sign-out','Sign out','secondary'):''}${button('add-account','Use a different account','quiet')}</div>${state.account.profiles.length?`<label class="saved-accounts">Saved connections<select id="saved-accounts"><option value="">Choose a saved connection…</option>${state.account.profiles.map(p=>`<option value="${e(p.id)}">${e(p.label)}${p.connected?'':' · reconnect'}</option>`).join('')}</select></label>`:''}<p class="subtle">This app cannot read your ChatGPT chat history or ChatGPT Memory. It keeps its own document cards. There is no shared team database.</p>${state.account.sharing?button('load-models','Choose an available AI model','quiet'):''}<div id="model-picker"></div></section>
     ${starter.count?`<section class="callout"><h3>${starter.count} saved starter items on this computer</h3><p>These cards or service notes were saved before sign-in. Copy them into this account to use them with ChatGPT.</p>${button('copy-starter','Copy starter cards into this account','secondary')}</section>`:''}
-    <section><h3>Private memory backup</h3><p>Back up all cards, extracted information and notes. Restore the backup on another Windows computer. Original files and ChatGPT credentials are not included. Keep the backup private.</p><div class="button-row">${button('export','Save a backup','secondary')}${button('restore','Restore a backup','secondary')}</div><p class="subtle">Saved records use the Windows app-data folder. The database and exported backups are not encrypted by the app. Account credentials use Windows protected storage. Signing out hides that account’s cards but keeps them for reconnecting.</p></section><section><h3>What works without ChatGPT</h3><p>Import Excel, CSV, TSV, Word, text PDFs and text files. Search cards, open contacts, add notes and back up your memory. AI answers need internet and an eligible ChatGPT connection.</p><p class="subtle">Version ${e(state.version)} · Windows 10/11 (64-bit). This pilot installer is unsigned; organization approval is needed before Southlake rollout.</p></section></div>`,'settings-dialog');
+    <section><h3>Private memory backup</h3><p>Back up all cards, extracted information and notes. Restore the backup on another computer with the app installed. Original files and ChatGPT credentials are not included. Keep the backup private.</p><div class="button-row">${button('export','Save a backup','secondary')}${button('restore','Restore a backup','secondary')}</div><p class="subtle">Saved records use the app-data folder on this computer. The database and exported backups are not encrypted by the app. Account credentials use your system’s protected storage. Signing out hides that account’s cards but keeps them for reconnecting.</p></section><section><h3>What works without ChatGPT</h3><p>Import Excel, CSV, TSV, Word, text PDFs and text files. Search cards, open contacts, add notes and back up your memory. AI answers need internet and an eligible ChatGPT connection.</p><p class="subtle">Version ${e(state.version)} · ${state.platform==='darwin'?'macOS':'Windows 10/11 (64-bit)'}.</p></section></div>`,'settings-dialog');
   $('saved-accounts')?.addEventListener('change',async event=>{if(!event.target.value)return;try{await flushNote();await flushCaseDraft();const result=await api('select-account',{id:event.target.value});state=result;messages=[];selected=null;context();renderMessages();await settings();}catch(error){fail(error);}});
 }
 async function signIn(addAccount=false){if(connectionBusy)return;await flushNote();await flushCaseDraft();connectionBusy=true;await openModal(modalHead('Continue in your browser','Sign in on the official OpenAI page, then return to the app.')+`<div class="detail-body"><p>The app is waiting for the sign-in response. Your password stays with OpenAI.</p>${button('cancel-sign-in','Cancel sign-in','secondary')}</div>`);
