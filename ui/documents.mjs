@@ -10,6 +10,9 @@ const feedbackLabels = {
   recorded: 'Feedback recorded'
 };
 let caseFeedback = '', caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHistory = null;
+let expandedMemoryGroup = '', memoryHistoryOffset = 0;
+const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
+const deleteChatHelp = 'Discard a practice or inaccurate conversation.';
 const date=value=>{try{return new Date(value).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch{return value;}};
 const icon=name=>({file:'▤',chat:'◌',plus:'+',search:'⌕',arrow:'↗',close:'×',mic:'◉',check:'✓'}[name]||'');
 function notice(text,error=false){$('notice').textContent=text;$('notice').className=error?'visible error':'visible';clearTimeout(notice.timer);notice.timer=setTimeout(()=>$('notice').className='',6500);}
@@ -124,7 +127,49 @@ function renderChatFollowup(message) {
 }
 function renderModel(){const selected=state?.models?.selected,item=state?.models?.items?.find(m=>m.id===selected);$('model-status').textContent=selected?'AI model: '+(item?.name||selected):state?.account.sharing?'ChatGPT · model selected when you ask':'Connect ChatGPT for AI answers';}
 function serviceRowHTML(card){const contact=card.contacts?.[0];return `<article class="service-row" data-service-id="${e(card.id)}"><div class="service-row-info">${card.comment_count?`<div class="service-experience-preview">${experienceHTML(card.experience)}<small>Your latest note: ${e(card.latest_note)}</small></div>`:''}<span class="card-kicker">${e(card.category||'Known service')}</span>${button('open-card',e(card.title),'service-title',`data-id="${e(card.id)}"`)}<p>${e(card.body?.split('\n')[0]||'')}</p><span class="service-area">${e(card.area||'Confirm the service area with intake')}</span></div><div class="service-row-contact"><strong>${e(contact?.name||'Program contact')}</strong><span>${e(contact?.value||'See provider details')}</span>${card.comment_count?`<small>${card.comment_count} saved note${card.comment_count===1?'':'s'} / result${card.comment_count===1?'':'s'}</small>`:''}</div><div class="service-row-actions">${button('open-card','View details','secondary',`data-id="${e(card.id)}"`)}${button('ask-service','Ask assistant','quiet',`data-id="${e(card.id)}"`)}</div></article>`;}
-function memoryRowHTML(item){const label=item.kind==='conversation'?'Closed conversation':item.outcome?'Service result':item.entry_type==='comment'?'Feedback & notes':item.document_id?'Document card':item.kind==='message'?'Saved message':'Personal memory';return `<article class="memory-record" data-memory-id="${e(item.id)}"><button class="memory-record-main" data-action="open-card" data-id="${e(item.card_id)}"><span class="card-kicker">${label}${item.archived?' · PREVIOUS ROW':''}</span><strong>${e(item.title)}</strong>${resultBadge(item)}<p>${e(item.body)}</p><small>${e(item.filename||'Personal memory')} · ${e(date(item.updated_at))}</small></button><div class="memory-record-actions">${button('edit-memory',item.kind==='conversation'?'Case options':item.document_id&&item.entry_type==='card'?'Add correction':'Edit','secondary',`data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}"`)}${button('delete-memory','Delete','quiet danger',`data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}"`)}</div></article>`;}
+function memoryEntry(item,group,expanded) {
+  const conversation = item.kind === 'conversation';
+  const prefix = group.title + ' · ';
+  const label = conversation ? 'Saved conversation' : item.outcome ? 'Service result' :
+    item.entry_type === 'comment' ? 'Note' : item.document_id ? 'Document card' : 'Saved note';
+  const title = conversation ? item.title.replace(/^Saved case: /,'') :
+    item.title.startsWith(prefix) ? item.title.slice(prefix.length) : item.title === group.title ? label : item.title;
+  const body = (!expanded && conversation) || item.body.trim() === item.title.trim() ||
+    (item.outcome && item.body === resultLabel(item.outcome)+'.') ? '' : item.body;
+  const status = resultBadge(item);
+  if (!expanded) {
+    return `<li data-preview-id="${e(item.id)}"><strong>${e(title)}</strong>
+      ${status}${!status && item.entry_type==='comment' ? '<span class="memory-entry-label">Note</span>' : ''}
+      ${body ? `<p>${e(body)}</p>` : ''}</li>`;
+  }
+  const attrs = `data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}"`;
+  const editLabel = conversation ? 'Case options' : item.document_id && item.entry_type==='card' ? 'Add correction' : 'Edit';
+  return `<li class="memory-record" data-memory-id="${e(item.id)}">
+    <div class="memory-entry-content">
+      <div class="memory-entry-heading">${button('open-card',e(title),'memory-record-main',
+        `data-id="${e(item.card_id)}" aria-label="${e('Open '+title)}"`)}${status}</div>
+      ${body ? `<p>${e(body)}</p>` : ''}
+      <small>${label}${item.archived?' · Previous row':''} · ${e(date(item.updated_at))}</small>
+    </div>
+    <div class="memory-record-actions">${button('edit-memory',editLabel,'secondary',attrs)}
+      ${button('delete-memory','Delete','quiet danger',attrs)}</div></li>`;
+}
+function memoryGroupHTML(group) {
+  const open = Boolean(group.history);
+  const items = open ? group.history : group.preview;
+  const attrs = `data-group-id="${e(group.id)}"`;
+  const groupName = e(group.title);
+  const paging = open && (group.history_offset || group.has_more) ? `<div class="memory-history-paging">
+    ${button('page-memory-history','← Previous','quiet',`${attrs} data-offset="${Math.max(0,group.history_offset-20)}" ${group.history_offset?'':'disabled'}`)}
+    <small>${group.history_offset+1}–${group.history_offset+items.length} of ${group.total}</small>
+    ${button('page-memory-history','Next →','quiet',`${attrs} data-offset="${group.history_offset+20}" ${group.has_more?'':'disabled'}`)}</div>` : '';
+  return `<section class="memory-group" ${attrs} aria-label="${groupName}">
+    <header><h3>${groupName}</h3><small>${group.total} saved item${group.total===1?'':'s'}</small></header>
+    <ul class="${open?'memory-history':'memory-preview'}">${items.map(item=>memoryEntry(item,group,open)).join('')}</ul>
+    ${paging}<div class="memory-group-footer">${button('toggle-memory-group',open?'Show less':'Expand history',
+      'quiet',`${attrs} aria-expanded="${open}" aria-label="${open?'Collapse':'Expand'} history for ${groupName}"`)}</div>
+  </section>`;
+}
 function weekLabel(value) {
   const start = new Date(value);
   if (Number.isNaN(start.getTime())) return 'Date unavailable';
@@ -184,8 +229,8 @@ function showCaseMenu(trigger) {
     ? button('review-case-feedback','Record feedback','',`${attrs} data-sequence="${chat.feedback_sequence}"`)
     : button('open-case','Open conversation','',attrs))
     + button('case-options','Rename conversation','',attrs+' data-rename-only="true"')
-    + button('archive-case','Close conversation<small>Save to Manage memory</small>','',attrs)
-    + button('case-options','More options','case-menu-more',attrs);
+    + button('archive-case',`Add to memory library<small>${keepChatHelp}</small>`,'',attrs+(chat.message_count?'':' disabled'))
+    + button('delete-case',`Delete chat history<small>${deleteChatHelp}</small>`,'case-menu-delete',attrs);
   const anchor = trigger.getBoundingClientRect();
   caseMenuTrigger = trigger;
   trigger.setAttribute('aria-expanded','true');
@@ -221,7 +266,7 @@ async function refreshCardHistoryControls(id=noteEditor?.cardId) {
   cardHistory = history;
   renderUndo();
 }
-function renderCaseTitle(){if(!activeCase)return;$('assistant-title').textContent=activeCase.title;$('case-options-button').hidden=false;$('composer').hidden=activeCase.status==='archived';$('selected-context').hidden=activeCase.status==='archived';$('case-archived-banner').hidden=activeCase.status!=='archived';$('case-archived-banner').innerHTML=activeCase.status==='archived'?`<span>Closed conversation · Saved in Manage memory</span>${button('reopen-case','Reopen conversation','secondary',`data-id="${e(activeCase.id)}"`)}`:'';}
+function renderCaseTitle(){if(!activeCase)return;$('assistant-title').textContent=activeCase.title;$('case-options-button').hidden=false;$('composer').hidden=activeCase.status==='archived';$('selected-context').hidden=activeCase.status==='archived';$('case-archived-banner').hidden=activeCase.status!=='archived';$('case-archived-banner').innerHTML=activeCase.status==='archived'?`<span>Saved in the memory library</span>${button('reopen-case','Reopen conversation','secondary',`data-id="${e(activeCase.id)}"`)}`:'';}
 function scheduleCaseDraft() {
   clearTimeout(caseDraftTimer);
   caseDraftTimer = setTimeout(() => flushCaseDraft().catch(fail), 500);
@@ -331,15 +376,14 @@ async function caseOptions(id=activeCase?.id,{renameOnly=false}={}) {
   if (!id) return;
   const record = await api('get-case',{id,limit:1});
   const attrs = `data-id="${e(id)}" data-version="${record.version}"`;
-  const caseActions = renameOnly ? '' : `<section class="detail-section">
-    <h3>${record.status === 'active' ? 'Close this conversation' : 'Continue this conversation'}</h3>
-    <p>${record.status === 'active' ? 'Move the complete conversation to Manage memory. You can reopen it whenever you need it.' :
-      'Reopen this conversation to bring it back to Case chats.'}</p>
-    ${record.status === 'active' ? button('archive-case','Close conversation','secondary',attrs) :
-      button('reopen-case','Reopen conversation','secondary',attrs)}</section>
-    <section class="detail-section"><h3>Delete this conversation</h3>
-    <p>Delete the conversation and its automatically saved messages. Separately recorded service results and notes stay on their cards. This action is permanent.</p>
-    ${button('delete-case','Delete chat history','quiet danger',attrs)}</section>`;
+  const caseActions = renameOnly ? '' : `<section class="detail-section case-choices">
+    ${record.status === 'active'
+      ? `<div>${button('archive-case','Add to memory library','secondary',attrs+(record.message_count?'':' disabled'))}
+        <p>${record.message_count?keepChatHelp:'Send a message to save this conversation.'}</p></div>`
+      : `<div>${button('reopen-case','Reopen conversation','secondary',attrs)}
+        <p>Bring this conversation back to Case chats to continue.</p></div>`}
+    <div>${button('delete-case','Delete chat history','quiet danger',attrs)}
+      <p>${deleteChatHelp} You can manage separately recorded service notes and results in their organization’s history.</p></div></section>`;
   await openModal(modalHead(renameOnly?'Rename conversation':'Case options',record.title)+`<div class="detail-body case-options">
     <label>Conversation title<input id="case-title-input" maxlength="80" value="${e(record.title)}" placeholder="For example, North York transport follow-up"></label>
     <p class="subtle">Use a short title without patient names or identifiers.</p>
@@ -381,33 +425,57 @@ function renderLibraryMode(){
   const services=libraryMode==='services',memory=libraryMode==='memory',workspace=libraryMode==='workspace';
   document.body.dataset.view=libraryMode;$('workspace-grid').className='workspace-grid '+libraryMode+'-view';
   $('library-panel').hidden=workspace;$('workspace-heading').hidden=workspace;renderAssistantSurface();
-  $('page-title').textContent=services?'Known services':'Manage memory';$('page-subtitle').textContent=services?'Find a contact or open Ask assistant for help without leaving the directory.':'Review saved messages, service feedback and document cards. Edit or delete what you no longer need.';
+  $('page-title').textContent=services?'Known services':'Manage memory';$('page-subtitle').textContent=services?'Find a contact or open Ask assistant for help without leaving the directory.':'Find saved conversations, service results and notes by organization.';
   $('library-title').textContent=services?'Service directory':'Memory library';$('view-label').textContent=services?'KNOWN SERVICES':memory?'MANAGE MEMORY':'WORKSPACE';
   $('file-count').textContent=services?(state?.services?.total||0)+' service cards':memory?'Saved information':'Chat';
   $('document-filter').hidden=!memory;$('memory-kind-filter').hidden=!memory;$('category-filter').hidden=!services;$('library-source-note').hidden=!services;$('manage-files').hidden=!memory;$('add-memory').hidden=!memory;
-  $('search').placeholder=services?'Search a service, place or phone number':'Search saved memory';
+  $('search').placeholder=services?'Search a service, place or phone number':'Search an organization, service or note';
   document.querySelectorAll('[data-library-mode]').forEach(b=>{const active=b.dataset.libraryMode===libraryMode;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
 }
-async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;offset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
+async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
 async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';caseFeedback='';$('case-search').value='';$('case-feedback-filter').value='';}if(caseFilter||caseFeedback)await refreshCaseList();$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent='Windows · version '+state.version;
   $('document-filter').innerHTML='<option value="">All sources</option>'+state.documents.map(d=>`<option value="${e(d.id)}">${e(d.filename)} (${d.card_count})</option>`).join('');if(documentFilter&&!state.documents.some(d=>d.id===documentFilter))documentFilter='';$('document-filter').value=documentFilter;
   $('category-filter').innerHTML='<option value="">All service categories</option>'+(state.serviceCategories||[]).map(c=>`<option value="${e(c)}">${e(c)}</option>`).join('');$('category-filter').value=category;renderLibraryMode();renderModel();renderCases();renderUndo();await loadCards();const identity=state.account.profileId||'device';if(!activeCase||activeOwner!==identity){activeCase=null;activeOwner=identity;await loadCase(state.active_case.id,{activate:false});}else if(activeCase.id===state.active_case.id){activeCase={...activeCase,...state.active_case};renderCaseTitle();}}
 async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='workspace')return;
   const services=libraryMode==='services';
-  const result=await api(services?'list-cards':'list-memory',services?{query,collection:'services',category,limit:30,offset}:{query,document_id:documentFilter||null,kind:memoryKind,include_archived:includeArchived,limit:30,offset});if(sequence!==cardLoadSequence)return;
-  $('card-count').textContent=result.total+(services?' service'+(result.total===1?'':'s'):' saved item'+(result.total===1?'':'s'))+(includeArchived?' · including previous rows':'');
-  $('cards').className='cards-scroll '+(services?'service-rows':'memory-records');
-  $('cards').innerHTML=result.items.length?result.items.map(services?serviceRowHTML:memoryRowHTML).join(''):`<div class="empty-library"><div class="empty-symbol">▤</div><h3>${query||category||documentFilter||memoryKind!=='all'?'No matching items':'No saved memory yet'}</h3><p>${query||category||documentFilter||memoryKind!=='all'?'Try a shorter keyword or change the filter.':'Your messages, notes and imported information appear here automatically. You can edit or delete them at any time.'}</p>${services||query||documentFilter||memoryKind!=='all'?'':button('sample','Try a fictional sample','quiet')}</div>`;
-  $('paging').innerHTML=result.total>30?button('previous','← Previous','quiet',offset===0?'disabled':'')+`<span>${offset+1}–${Math.min(offset+30,result.total)} of ${result.total}</span>`+button('next','Next →','quiet',offset+30>=result.total?'disabled':''):'';
+  const result=await api(services?'list-cards':'list-memory',services?{query,collection:'services',category,limit:30,offset}:
+    {query,document_id:documentFilter||null,kind:memoryKind,include_archived:includeArchived,limit:30,offset,
+      grouped:true,expanded:expandedMemoryGroup,history_offset:memoryHistoryOffset});
+  if(sequence!==cardLoadSequence)return;
+  if(offset && !result.items.length){offset=Math.max(0,Math.floor((result.total-1)/30)*30);return loadCards();}
+  const count=services?result.total:result.record_count;
+  $('card-count').textContent=count+(services?' service':' saved item')+(count===1?'':'s')+(includeArchived?' · including previous rows':'');
+  const filters=Boolean(query||category||documentFilter||memoryKind!=='all');
+  $('cards').className='cards-scroll '+(services?'service-rows':'memory-groups');
+  $('cards').innerHTML=result.items.length?result.items.map(services?serviceRowHTML:memoryGroupHTML).join(''):
+    `<div class="empty-library"><h3>${filters?'No matching items':services?'No services available':'No saved memory yet'}</h3>
+    <p>${filters?'Try a shorter search or change the filter.':services?'':'Add a conversation to the library or save a service note to see it here.'}</p>
+    ${!services&&!filters?button('sample','Try a sample spreadsheet','quiet'):''}</div>`;
+  $('paging').innerHTML=result.total>30?button('previous','← Previous','quiet',offset===0?'disabled':'')+
+    `<span>${offset+1}–${Math.min(offset+30,result.total)} of ${result.total}${services?'':' groups'}</span>`+
+    button('next','Next →','quiet',offset+30>=result.total?'disabled':''):'';
+}
+async function changeMemoryHistory(target) {
+  const group = target.dataset.groupId;
+  if (target.dataset.action==='toggle-memory-group') {
+    expandedMemoryGroup = group === expandedMemoryGroup ? '' : group;
+    memoryHistoryOffset = 0;
+  } else {
+    expandedMemoryGroup = group;
+    memoryHistoryOffset = Number(target.dataset.offset);
+  }
+  await loadCards();
+  const current = $('cards').querySelector(`[data-action="toggle-memory-group"][data-group-id="${CSS.escape(group)}"]`);
+  current?.focus({preventScroll:true});
 }
 function shell(){
   $('app').innerHTML=`<aside class="sidebar"><div class="brand"><img class="brand-mark" src="care-navigation-logo.png" alt=""><div><strong>Care Navigation Support</strong><span>Personal assistant</span></div></div><nav>${button('workspace','◫ &nbsp; Workspace','nav-item active','data-library-mode="workspace"')}${button('known-services','▤ &nbsp; Known services','nav-item','data-library-mode="services"')}${button('manage-memory','▧ &nbsp; Manage memory','nav-item','data-library-mode="memory"')}</nav><section class="case-sidebar"><div class="case-sidebar-heading"><h2>Case chats</h2>${button('new-chat','＋ New topic','quiet')}</div><label class="sr-only" for="case-search">Search case chats</label><input id="case-search" placeholder="Search case chats"><label class="sr-only" for="case-feedback-filter">Filter chats by feedback status</label>
-      <select id="case-feedback-filter"><option value="">All conversations</option><option value="needed">Feedback needed</option><option value="unselected">No service selected</option><option value="recorded">Feedback recorded</option></select><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.11</span></div></aside>
+      <select id="case-feedback-filter"><option value="">All conversations</option><option value="needed">Feedback needed</option><option value="unselected">No service selected</option><option value="recorded">Feedback recorded</option></select><div id="case-list" class="case-list"></div></section><div class="sidebar-bottom">${button('settings','Connection & backup','nav-item')}<span class="version" id="version-label">Windows · version 2.12</span></div></aside>
   <div id="case-action-menu" class="case-action-menu" popover="auto" aria-label="Conversation actions"></div>
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
-  <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Messages & personal notes</option><option value="feedback">Feedback & card notes</option><option value="chats">Closed conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Public service research · confirm current eligibility and capacity.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
-  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New topic','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Messages save automatically to your memory.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status">Review, edit or delete saved information in Manage memory.</div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
+  <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Personal notes</option><option value="feedback">Service results & notes</option><option value="chats">Saved conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Public service research · confirm current eligibility and capacity.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
+  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New topic','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
   $('case-search').addEventListener('input',()=>{
     caseFilter=$('case-search').value;
     clearTimeout(refreshCaseList.searchTimer);
@@ -429,10 +497,10 @@ function shell(){
   $('message').addEventListener('input',scheduleCaseDraft);
   $('messages').addEventListener('input',event=>rememberFeedbackDraft(event.target));
   $('messages').addEventListener('change',event=>rememberFeedbackDraft(event.target));
-  $('search').addEventListener('input',()=>{query=$('search').value;offset=0;clearTimeout(shell.searchTimer);shell.searchTimer=setTimeout(()=>loadCards().catch(fail),150);});
-  $('document-filter').addEventListener('change',()=>{documentFilter=$('document-filter').value;includeArchived=false;offset=0;loadCards().catch(fail);});
+  $('search').addEventListener('input',()=>{query=$('search').value;offset=0;memoryHistoryOffset=0;clearTimeout(shell.searchTimer);shell.searchTimer=setTimeout(()=>loadCards().catch(fail),150);});
+  $('document-filter').addEventListener('change',()=>{documentFilter=$('document-filter').value;includeArchived=false;offset=0;memoryHistoryOffset=0;loadCards().catch(fail);});
   $('category-filter').addEventListener('change',()=>{category=$('category-filter').value;offset=0;loadCards().catch(fail);});
-  $('memory-kind-filter').addEventListener('change',()=>{memoryKind=$('memory-kind-filter').value;offset=0;loadCards().catch(fail);});
+  $('memory-kind-filter').addEventListener('change',()=>{memoryKind=$('memory-kind-filter').value;offset=0;memoryHistoryOffset=0;loadCards().catch(fail);});
   $('composer').addEventListener('submit',event=>{event.preventDefault();sendMessage().catch(fail);});
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage().catch(fail);}});
   renderLibraryMode();renderMessages();
@@ -445,7 +513,7 @@ function renderMessages(forceScroll=false){
     const cardsOnly=Boolean(m.cards?.length)&&m.role==='assistant'&&!m.error&&(m.presentation==='service-options'||!m.presentation&&!m.calculations?.length&&m.cards?.some(isService));
     const answer=pending?'<div class="answer-summary answer-pending" role="status">Finding the useful details…</div>':cardsOnly?'':`<div class="${m.role==='assistant'?'answer-summary'+(m.error?' answer-error':''):'message-text'}">${textHTML(m.text||'No answer is available. Please retry.')}</div>`;
     return `<article class="message ${m.role}" data-message-sequence="${m.sequence||''}"><div class="message-label">${m.role==='user'?'YOU':'ASSISTANT'}${m.source?`<span>${e(m.source==='chatgpt'?'ChatGPT':m.source==='local'?'Saved information':m.source==='error'?'Connection interrupted':m.source)}</span>`:''}${m.saved?'<span class="saved-marker">Saved to memory</span>':''}</div>${answer}${!pending&&m.cards?.length?`<div class="answer-cards">${m.cards.map(c=>answerCardHTML(c,m)).join('')}</div>`:''}${!pending&&m.calculations?.length?`<div class="calculation-proof">${m.calculations.map(c=>`<div>Calculated from ${e(c.matched_rows)} matching row(s) · ${e(c.operation)}${c.column?' of '+e(c.column):''}${c.value!==undefined?' = '+e(c.value??'No numeric values'):''}</div>`).join('')}</div>`:''}${m.role==='assistant'&&m.error?button('retry','Retry question','quiet',`data-index="${index}"`):''}</article>`;
-  }).join(''):`<div class="chat-welcome"><img class="welcome-icon" src="care-navigation-logo.png" alt=""><h2>A clearer way to work<br>with your information.</h2><p>Ask a question, add a document, or keep a case conversation for later.</p><div class="prompt-chips">${button('prompt','Find a local service','prompt',`data-prompt="Find transportation services in North York. Show the service cards and contact details."`)}${button('prompt','Summarize a document','prompt',`data-prompt="Summarize my latest imported document. Highlight anything I should follow up on."`)}${button('prompt','Recall my notes','prompt',`data-prompt="What have I saved in my personal notes? Show the matching cards."`)}</div><small>Use a non-identifying case title. Saved conversations are available in Case chats.</small></div>`)
+  }).join(''):`<div class="chat-welcome"><img class="welcome-icon" src="care-navigation-logo.png" alt=""><h2>A clearer way to work<br>with your information.</h2><p>Ask a question, add a document, or keep a case conversation for later.</p><div class="prompt-chips">${button('prompt','Find a local service','prompt',`data-prompt="Find transportation services in North York. Show the service cards and contact details."`)}${button('prompt','Summarize a document','prompt',`data-prompt="Summarize my latest imported document. Highlight anything I should follow up on."`)}${button('prompt','Recall my notes','prompt',`data-prompt="What have I saved in my personal notes? Show the matching cards."`)}</div><small>Use a case title without patient names or identifiers.</small></div>`)
     +(caseHasNewer ? button('latest-messages','↓ Latest messages','quiet latest-messages') : '');
   updateFollowupControls();
   if(forceScroll){const last=viewport.querySelector('.message:last-of-type');viewport.scrollTo({top:last?last.getBoundingClientRect().top-viewport.getBoundingClientRect().top+viewport.scrollTop:viewport.scrollHeight,behavior:'instant'});}else viewport.scrollTop=follow?viewport.scrollHeight:previous;
@@ -458,13 +526,13 @@ async function sendMessage(retryText=null,retryTurnId=null){
     if(voice.listening)await voice.stop();
     const text=(retryText||$('message').value).trim();if(!text)return;
     if(activeCase?.status==='archived')throw new Error('Reopen this saved case to continue.');
-    await flushCaseDraft();const remember=!retryText;
+    await flushCaseDraft();
     messages.push({role:'user',text});response={role:'assistant',text:''};messages.push(response);$('message').value='';renderMessages(true);
-    const answer=await api('chat',{text,remember,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer);response.error=answer.source==='error';await refresh();
+    const answer=await api('chat',{text,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer);response.error=answer.source==='error';await refresh();
   }catch(error){if(response){response.text=error.message;response.error=true;response.source='error';}else fail(error);}
   finally{if(response&&response.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}setBusy(false);renderMessages(true);$('message').focus();}
 }
-function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong><small>Your messages save as notes on this card.</small></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div>${isService(selected)?`<div class="context-actions"><span>After following up:</span>${resultButtons(selected.id)}</div>`:''}</div>`:'';}
+function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div>${isService(selected)?`<div class="context-actions"><span>After following up:</span>${resultButtons(selected.id)}</div>`:''}</div>`:'';}
 function resultButtons(id){return button('record-service-result','✓ Worked','secondary result-choice',`data-id="${e(id)}" data-outcome="worked"`)+button('record-service-result',"Didn't work",'secondary result-choice',`data-id="${e(id)}" data-outcome="not_worked"`);}
 function resultDraft(){return feedbackEditor?{outcome:feedbackEditor.outcome,rating:$('result-rating')?.value||'',body:$('result-note')?.value||''}:null;}
 function discardResult(){return !feedbackEditor||JSON.stringify(resultDraft())===feedbackEditor.initial||confirm('Discard this unsaved service result? Choose Cancel to keep editing.');}
@@ -535,7 +603,16 @@ async function saveImport(update=false){if(!preview||importing)return;importing=
   try{const result=await api('confirm-import',{id:preview.id,update});libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;offset=0;preview=null;await closeModal();await refresh();$('document-filter').value=documentFilter;notice(result.updated?`${result.updated} matching cards updated. Notes kept.`:`${result.count} cards saved. You can ask about them now.`);$('message').focus();}
   finally{importing=false;modal.querySelectorAll('button').forEach(b=>b.disabled=false);}}
 async function manageDocuments(){await refresh();await openModal(modalHead('Your documents','Originals and extracted cards stay on this computer.')+`<div class="detail-body document-list">${state.documents.length?state.documents.map(d=>`<article><div><strong>${e(d.filename)}</strong><p>${d.card_count} current cards · version ${d.version} · ${e(date(d.updated_at))}</p></div><div>${button('filter-document','Show cards','secondary',`data-id="${e(d.id)}"`)}${d.version>1?button('previous-rows','Include previous rows','quiet',`data-id="${e(d.id)}"`):''}${button('open-original','Open file ↗','quiet',`data-id="${e(d.id)}"`)}${button('delete-document','Delete','danger quiet',`data-id="${e(d.id)}"`)}</div></article>`).join(''):'<p>No documents imported yet.</p>'}</div>`);}
-async function noteForm(id=null){const card=id?await api('get-card',{id}):null;await openModal(modalHead(id?'Edit saved memory':'Add memory','Keep useful details without importing a file.')+`<form id="note-form" class="detail-body"><label>Title<input id="note-title" maxlength="140" value="${e(card?.title||'')}" placeholder="A short, useful title"></label><label>Information to remember<textarea id="note-body" rows="9" maxlength="12000" required>${e(card?.body||'')}</textarea></label><div class="modal-footer">${button('save-personal-note','Save memory','primary',`data-id="${e(id||'')}" data-version="${card?.version||''}"`)}</div></form>`);$('note-body').focus();}
+async function noteForm(id=null) {
+  const card=id?await api('get-card',{id}):null;
+  await openModal(modalHead(id?'Edit saved memory':'Add memory','')+`<form id="note-form" class="detail-body">
+    <label>Title<input id="note-title" maxlength="140" value="${e(card?.title||'')}" placeholder="A short, useful title"></label>
+    <label>Organization (optional)<input id="note-organization" maxlength="180" value="${e(card?.fields?.Organization||'')}"
+      placeholder="For example, Routes Connecting Communities"></label>
+    <label>Information to remember<textarea id="note-body" rows="7" maxlength="12000" required>${e(card?.body||'')}</textarea></label>
+    <div class="modal-footer">${button('save-personal-note','Save memory','primary',`data-id="${e(id||'')}" data-version="${card?.version||''}"`)}</div></form>`);
+  $('note-body').focus();
+}
 async function editMemory(target){
   const card=await api('get-card',{id:target.dataset.cardId});if(card.case_info){await caseOptions(card.case_info.id);return;}
   if(target.dataset.entryType==='comment'){
@@ -597,8 +674,8 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     }
     else if(action==='archive-case'||action==='delete-case'){
       const id=target.dataset.id;
-      if(action==='delete-case'&&!confirm('Permanently delete this conversation and its automatically saved messages? Separate service results and notes stay.'))return;
-      if(busy)throw new Error('Wait for the answer or choose Stop before closing this conversation.');
+      if(action==='delete-case'&&!confirm('Permanently delete this conversation and any messages it saved automatically? You can manage separately recorded notes and results in the memory library.'))return;
+      if(busy)throw new Error('Wait for the answer or choose Stop before choosing what to do with this conversation.');
       lockCase(true);
       try{
         await flushCaseDraft();
@@ -606,7 +683,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
         if(modal.open)await closeModal();
         if(activeCase?.id===id){activeCase=null;selected=null;messages=[];context();}
         await refresh();
-        notice(action==='archive-case'?'Conversation closed and saved in Manage memory.':'Conversation and automatically saved messages deleted.');
+        notice(action==='archive-case'?'Conversation added to the memory library.':'Chat history deleted.');
       }finally{lockCase(false);}
     }
     else if(action==='reopen-case'){if(modal.open&&!await closeModal())return;await api('reopen-case',{id:target.dataset.id});await loadCase(target.dataset.id);await changeLibraryMode('workspace');await refresh();}
@@ -616,6 +693,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='workspace'){await changeLibraryMode('workspace');}
     else if(action==='known-services'){await changeLibraryMode('services');}
     else if(action==='manage-memory'){await changeLibraryMode('memory');}
+    else if(action==='toggle-memory-group'||action==='page-memory-history')await changeMemoryHistory(target);
     else if(action==='open-service-chat'){openServiceChat(target);}
     else if(action==='minimize-assistant'){await closeServiceChat();}
     else if(action==='expand-assistant'){await changeLibraryMode('workspace');$('message').focus({preventScroll:true});}
@@ -654,7 +732,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='new-chat')await newCase();
     else if(action==='new-note')await noteForm();
     else if(action==='edit-note')await noteForm(target.dataset.id);
-    else if(action==='save-personal-note'){await api('save-note',{id:target.dataset.id||null,expected_version:Number(target.dataset.version)||null,title:$('note-title').value,body:$('note-body').value});await closeModal();await refresh();notice('Memory saved. Future answers will use the updated information.');}
+    else if(action==='save-personal-note'){await api('save-note',{id:target.dataset.id||null,expected_version:Number(target.dataset.version)||null,title:$('note-title').value,organization:$('note-organization').value,body:$('note-body').value});await closeModal();await refresh();notice('Memory saved.');}
     else if(action==='delete-card'){if(!confirm('Delete this card and its attached notes? This cannot be undone.'))return;await flushNote();await api('forget-card',{id:target.dataset.id});await closeModal();if(selected?.id===target.dataset.id){selected=null;context();}await refresh();notice('Card deleted.');}
     else if(action==='delete-document'){if(!confirm('Delete this imported document, its cards and their notes? This cannot be undone.'))return;await api('forget-document',{id:target.dataset.id});if(documentFilter===target.dataset.id){documentFilter='';offset=0;}await manageDocuments();await refresh();}
     else if(action==='sign-in')await signIn();

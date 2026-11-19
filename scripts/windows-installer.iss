@@ -1,5 +1,5 @@
 #define AppName "Care Navigation Support"
-#define AppVersion "2.11.0"
+#define AppVersion "2.12.0"
 #define AppUserModelId "org.team26.southlakehive"
 
 [Setup]

@@ -1,28 +1,28 @@
-# Care Navigation Support — Windows 2.11 prototype
+# Care Navigation Support — Windows 2.12 prototype
 
-Open **Care-Navigation-Support-Setup-2.11.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.12.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
 ## Start in Workspace
 
-Workspace is the default page and is a full-width chat. Add a document remains beside Speak. Messages save automatically; use Manage memory directly beneath Known services in the sidebar to review, change or delete what has been saved.
+Workspace opens as a full-width chat, with Add a document beside Speak. Case chats keeps your conversations and drafts. Use **Manage memory** for information you choose to keep for future reference.
 
 ## Known services are ready to browse
 
 Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 
-Choose **Ask assistant** beneath View details, or **Ask more about this card** in its details, to open the floating assistant with that service selected. Its messages save on that service card. Use Ask assistant in the upper-right of the Known services heading to reopen chat, × or Escape to minimize, or **Open Workspace** for the full chat. Your draft and selected service remain available. Open **Manage memory** to see imported document cards, saved messages and service feedback.
+Choose **Ask assistant** beneath View details, or **Ask more about this card** in its details, to open the floating assistant with that service selected. Use × or Escape to minimize it, or **Open Workspace** for the full chat. Type **Remember that …** to save a note on the selected service.
 
 ## Start with three steps
 
 1. **Connect ChatGPT.** Sign in on the official OpenAI page in your browser, review identity and plan-usage permission, then return to the app. Use your own account. Account, workspace and app eligibility are decided by OpenAI; signing in alone does not prove AI usage is available. The app never switches to API billing.
-2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Manage memory → Try a fictional sample** in the empty memory list. The sample contains no real services or contacts.
+2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Manage memory → Try a sample spreadsheet** in the empty memory list. The sample contains no real services or contacts.
 3. **Ask a question.** Matching source cards appear below the answer. Open one for its exact fields, contacts, source links and notes. **Ask about this card** makes it the conversation's selected source.
 
 On a service card, choose **Add a note** near the top. Notes and corrections save automatically when you pause. Wait for **Saved on this card**. Choose **New note** for a separate entry. Closing the card or app also waits for a pending note to save.
 
-**Messages save automatically.** With a selected card, the message becomes a note on that card; otherwise it becomes a personal message card. Use **Manage memory** to search saved information, edit messages/notes, or delete an item after confirmation. Retry question does not save a duplicate message. Questions stay labelled as messages; the app does not turn them into verified outcomes. AI replies do not overwrite source records.
+Ordinary messages stay together in the conversation. To keep a note, type **Remember that intake asked for a Thursday callback.** If a card is selected, the note goes on that card. Otherwise it appears under **Personal notes**.
 
 **Editing and deleting memory:** choose Edit beside a saved message or feedback entry, change its text and save. Choose Delete to remove it. Document cards offer Add correction so the original source remains intact. Deleting feedback leaves its source service/document card in place. Completed changes affect subsequent AI answers; already displayed answers remain a record of that earlier conversation.
 
@@ -81,11 +81,15 @@ Close the current app and open the new installer. After installation, open **Car
 
 Service recommendations appear as cards only, with every returned choice visible in the grid. Read each card’s short reason and Confirm check, then click it for the full details. There are no separate recommendation paragraphs or extra choices to expand. Lower-rated matching services appear later; unrated options remain available. Document answers, clarification questions, calculations and connection errors still have readable answer cards.
 
-### Close or delete a conversation
+### Keep or discard a conversation
 
-Choose **⋯ → Close conversation** when you’re finished. The complete conversation moves to **Manage memory → Closed conversations**. Open it there and choose **Reopen conversation** to continue.
+Choose **⋯ → Add to memory library** to keep the complete conversation as one item. Find it under a linked organization or filter **Manage memory** to **Saved conversations**. Open the saved item to review its history. Choose **Reopen conversation** to continue it.
 
-**⋯ → More options → Delete chat history** permanently removes the conversation and its automatically saved messages after confirmation. Separate service notes, ratings and recorded outcomes stay.
+Choose **⋯ → Delete chat history** to discard a practice or inaccurate chat. This permanently removes the chat and any entries an earlier version saved automatically. Manage notes and results saved separately in the organization’s history.
+
+### Find an organization’s history
+
+In **Manage memory**, search for the organization, service, or note. The organization card shows a short list of saved items. Choose **Expand history** to see older items and their dates, or to open, edit or delete one. Use **Add memory** to write a new note with an optional organization name.
 
 ### Correct a wrong rating or note
 

@@ -94,7 +94,7 @@ async function invoke(method,args){
     if(!source)throw new Error('This document was restored from a text backup. The original file was not included.');
     const error=await shell.openPath(source);if(error)throw new Error('Windows could not open the original file. '+error);return{opened:true};
   }
-  if(method==='chat')return assistant.chat(args);
+  if(method==='chat')return assistant.chat({...args,remember:false,capture_note:true});
   if(method==='stop'){assistant.abort?.abort();return{stopped:true};}
   if(method==='clear-chat')return assistant.clear();
   if(method==='calculate')return store.calculate(args);

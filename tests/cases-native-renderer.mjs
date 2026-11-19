@@ -1,4 +1,4 @@
-export async function runCaseChecks({request,click,type,filter,wait,assert,serviceCard}){
+export async function runCaseChecks({request,click,type,filter,wait,assert,serviceCard,revealMemoryEntry}){
   const originalCase=(await request('snapshot')).active_case.id,originalConfirm=window.confirm;
   const row=id=>`[data-case-row="${id}"]`;
   const menu='#case-action-menu:popover-open';
@@ -113,20 +113,31 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   assert((await request('get-card',{id:chosenId})).comments.some(note=>note.id===recorded.id&&note.rating===2));
   await wait(()=>document.querySelector(row(a)+'[data-feedback="recorded"]'));
   const caseChatsCapture=await window.hiveSmoke.capture('case-chats');
-  click(row(a)+' [data-action="case-menu"]');click(menu+' [data-action="archive-case"]');await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
+  click(row(a)+' [data-action="case-menu"]');
+  const saveChoice=document.querySelector(menu+' [data-action="archive-case"]');
+  const deleteChoice=document.querySelector(menu+' [data-action="delete-case"]');
+  assert(saveChoice?.textContent.startsWith('Add to memory library')&&saveChoice.querySelector('small')?.textContent.includes('one item'));
+  assert(deleteChoice?.textContent.startsWith('Delete chat history')&&deleteChoice.querySelector('small')?.textContent.includes('inaccurate'));
+  click(menu+' [data-action="archive-case"]');await wait(()=>!document.querySelector(row(a))&&document.body.dataset.caseChanging==='false');
   const archived=(await request('get-case',{id:a}));assert(archived.status==='archived'&&archived.message_count===5);const archiveCard=archived.archive_card_id;
   assert(!(await request('list-memory',{query:'walker requirement'})).items.some(i=>i.kind==='message'),'Saving the case should consolidate its automatic message cards.');
-  click(row(b)+' [data-action="case-menu"]');click(menu+' .case-menu-more');await wait(()=>document.getElementById('case-title-input'));window.confirm=()=>false;click('[data-action="delete-case"]');assert(document.getElementById('modal').open);assert((await request('get-case',{id:b})).status==='active');
-  window.confirm=()=>true;click('[data-action="delete-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${b}"]`));window.confirm=originalConfirm;
+  click(row(b)+' [data-action="case-menu"]');window.confirm=()=>false;click(menu+' [data-action="delete-case"]');assert((await request('get-case',{id:b})).status==='active');
+  click(row(b)+' [data-action="case-menu"]');window.confirm=()=>true;click(menu+' [data-action="delete-case"]');await wait(()=>!document.querySelector(row(b))&&document.body.dataset.caseChanging==='false');window.confirm=originalConfirm;
   let deleted=false;try{await request('get-case',{id:b});}catch{deleted=true;}assert(deleted&&(await request('list-memory',{query:'Meal support follow-up'})).total===0,'Delete must remove both the conversation and its automatic memory.');
   assert((await request('get-card',{id:serviceCard.id})).comments.some(n=>n.outcome==='not_worked'),'Separately recorded service results must stay.');
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(`.memory-record[data-memory-id="${archiveCard}"]`));filter('memory-kind-filter','chats');await wait(()=>document.querySelectorAll('.memory-record').length===1);
-  await wait(()=>document.body.dataset.view==='memory');const caseLibraryCapture=await window.hiveSmoke.capture('case-library');
+  click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
+  filter('memory-kind-filter','chats');
+  await wait(()=>document.querySelector(`[data-preview-id="${archiveCard}"]`));
+  assert(document.querySelector(`[data-preview-id="${archiveCard}"]`).closest('.memory-group').querySelector('h3').textContent==='TTC');
+  await wait(()=>!document.getElementById('notice').classList.contains('visible'));
+  const caseLibraryCapture=await window.hiveSmoke.capture('case-library');
+  await revealMemoryEntry(archiveCard);
   click(`.memory-record[data-memory-id="${archiveCard}"] [data-action="open-card"]`);await wait(()=>document.body.dataset.view==='workspace'&&!document.getElementById('case-archived-banner').hidden);assert(document.getElementById('composer').hidden&&document.getElementById('messages').textContent.includes('walker requirement'));
   click('#case-archived-banner [data-action="reopen-case"]');await wait(()=>!document.getElementById('composer').hidden&&document.getElementById('message').value==='Draft retained with the long-running case.');
   assert((await request('list-memory',{kind:'chats'})).total===0,'Reopened conversations should return to Case chats.');
   click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('#modal [data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
   click(`[data-case-row="${originalCase}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent===(document.querySelector(`[data-case-row="${originalCase}"] strong`)?.textContent));
   return{weekly_case_sidebar:true,case_feedback_filter:true,sidebar_feedback_jump:true,suggested_case_title:true,close_case_from_sidebar:true,
+    save_or_delete_case_choices:true,saved_conversation_grouped_by_organization:true,
     compact_response_choices:true,automatic_topic_titles:true,chat_service_followup:true,known_contacts_above_followup:true,independent_chat_note:true,chat_feedback_draft_retained:true,chat_feedback_undo_redo:true,followup_choices_capture:followupChoicesCapture,followup_feedback_capture:followupFeedbackCapture,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
 }

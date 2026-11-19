@@ -2,24 +2,24 @@
 
 A Windows prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Status:** version 2.11.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
+**Status:** version 2.12.0 prototype. The Windows document readers and saved-card workflow have been tested. The installer is unsigned; real recipient ChatGPT access and Southlake deployment approval remain checks before routine field use.
 
-The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.11 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
+The app, Windows shortcut and installer are named **Care Navigation Support**. Version 2.12 retains the previous Windows data location and installation identity so existing cards, notes and account connections remain available after updating. Close the previous version before running the new installer.
 
 ## Download and start
 
-### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.11.0/Care-Navigation-Support-Handoff-2.11.0.zip)
+### [Download the complete handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Care-Navigation-Support-Handoff-2.12.0.zip)
 
 Everything needed to review the prototype in one download: the Windows installer, editable source files, user and developer guides, and the verification report.
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.11.0/Care-Navigation-Support-Setup-2.11.0.exe) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.11.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.11.0/Care-Navigation-Support-Handoff-2.11.0.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Care-Navigation-Support-Setup-2.12.0.exe) |
+| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
+| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.12.0/Care-Navigation-Support-Handoff-2.12.0.zip) |
 | **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
 | **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.11.0) |
+| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.12.0) |
 
 The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
 
@@ -35,11 +35,11 @@ The current deliverable is a Windows app. To connect it to ChatGPT, open the app
 
 ## Known services are ready on first launch
 
-The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Messages save automatically; there is no Keep this message checkbox. New topic starts a separate discussion while the earlier case remains in the sidebar.
+The app opens in **Workspace**, with a full-width chat and document upload beside Speak. Each discussion keeps its own messages and draft. Choose **New topic** to start a separate conversation.
 
 Choose **Known services** to browse the 27 researched pathways as full-width horizontal rows. Category filtering and search appear above the directory; the assistant opens in a floating panel on the right. Open View details for contact details, access requirements, source links and research dates, or choose Ask assistant beneath View details to open the floating chat with that provider selected. A named person appears only when listed in the public source. Confirm eligibility, boundaries, costs and current capacity before referring.
 
-**Manage memory**, directly beneath Known services in the sidebar, contains saved messages, personal notes, imported document cards and feedback attached to service/document cards. Search or filter the list, edit a message or note, or delete an item. Public starting service cards remain in Known services when personal feedback is deleted. Imported source text stays intact; use Add correction to attach a correction or import a revised source. Completed memory edits/deletions clear the assistant's earlier context so subsequent answers retrieve the current records.
+**Manage memory**, directly beneath Known services, groups saved history by organization. Search an organization, service or note. Each group shows a short bullet preview. Choose **Expand history** to see dated notes, results and saved conversations, with controls to open, edit or delete an item. Imported cards without an organization are grouped by file. Use **Add memory** to write a note and optionally name its organization.
 
 ![Known services with Ask assistant in the upper-right heading](docs/known-services.png)
 
@@ -66,10 +66,10 @@ Choose **New topic** for a separate discussion. A detailed request gets a short 
 ![Weekly case chats with feedback status](docs/case-chats.png)
 
 - **⋯ → Record feedback** jumps to the latest service that still needs a result, even if newer messages follow it.
-- **⋯ → Close conversation** moves the complete discussion to **Manage memory → Closed conversations**. Open it there and choose **Reopen conversation** to continue.
-- **Delete chat history** permanently removes that case, its transcript and its automatically saved messages. Separate service notes, ratings and explicit results stay on their service cards. This action is confirmed and cannot be reversed with saved-input Undo.
+- **⋯ → Add to memory library** keeps a useful conversation as one item. Find it under the linked organization or use **Manage memory → Saved conversations**. Open it and choose **Reopen conversation** to continue.
+- **⋯ → Delete chat history** permanently discards an inaccurate or practice conversation and any automatic entries from an earlier version. Manage separately saved results and notes in the organization’s history.
 
-![Saved case conversations in the memory library](docs/case-library.png)
+![A saved conversation grouped under its organization](docs/case-library.png)
 
 Use **Undo note** or **Undo result** directly beneath the follow-up card. The matching **Redo** control appears there after Undo. A rating change is labeled **Undo rating change**. Corrections affect the saved feedback linked to that card. The provider detail view also has its own correction controls. Text fields keep their normal typing shortcuts.
 
@@ -98,11 +98,11 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 
 | Step | What happens |
 | --- | --- |
-| **1. Install** | Open `Care-Navigation-Support-Setup-2.11.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
+| **1. Install** | Open `Care-Navigation-Support-Setup-2.12.0.exe`, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
 | **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
-| **5. Keep useful information** | Messages save automatically. Open Manage memory to edit/delete them. Questions about a selected card save on that card; other messages become personal memory cards. |
+| **5. Keep useful information** | Use **Add to memory library** to keep a whole conversation. Use **Remember that …** to save one note, or record a result from a service card. Search the organization in **Manage memory** and expand its history. |
 | **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. |
 
 ### Example
@@ -117,7 +117,7 @@ Choose a card to see the original fields, worksheet/row or page reference, any c
 
 - Imported information is stored as cards separately from the chat.
 - **New topic** starts another chat with its own selected card and draft. Earlier cases stay in the sidebar.
-- Messages save automatically when sent. Use **Manage memory** to edit or delete them; retrying an AI request does not create another saved message.
+- Ordinary chat turns stay together in Case chats. Type **Remember that …** to save a single note. When a card is selected, the note goes on that card.
 - With a selected card, messages become notes on that card. Otherwise, they become personal message cards.
 - Card notes save automatically when you pause. They can be edited or deleted using the controls on that card.
 - Revised spreadsheets can update matching cards using unique IDs or names, keeping attached notes when rows move. Ambiguous matches require a separate version. Previous rows remain accessible through Manage files.
@@ -152,12 +152,12 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.11`.
+Extract the ZIP first, then open **START-HERE.html** inside `Care-Navigation-Support-Windows-2.12`.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Care-Navigation-Support-Setup-2.11.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-2.12.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
 | `documentation/Windows-Quick-Start.html` | Quick-start instructions |
 | `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
@@ -212,7 +212,7 @@ The finished installer does not require these developer tools.
 ## What has been checked
 
 - **105 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior, service-result edits/deletions, rating summaries, older-database upgrades and backup compatibility.
-- **Native Windows checks passed** for the default full-width chat, full-page services with a floating assistant, automatic message saving, memory editing/deletion, 27 preloaded services, category/search controls, document-upload placement, service-note persistence, bundled Excel, Word and PDF readers, import preview/save, card-note autosave, selected-card feedback, search, starting a new conversation, reopening the app, and saving a pending note when the app closes.
+- **Native Windows checks passed** for organization grouping, search, expandable memory, explicit note saving, saving or deleting a conversation, reopening saved history, service feedback, document import, and the existing workspace controls.
 - **77 extracted installer files matched** the prepared Windows application.
 - Installer and handoff SHA-256 checksums are published in the release’s `SHA256.txt` and `Verification.json`.
 

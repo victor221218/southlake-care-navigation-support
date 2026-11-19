@@ -12,10 +12,18 @@ const editedServiceNote='Corrected acceptance note: confirm the provider callbac
 const preference='Initial acceptance preference: show phone contacts.';
 const editedPreference='Revised acceptance preference: show email contacts.';
 const memoryRow=id=>`.memory-record[data-memory-id="${id}"]`;
+async function revealMemoryEntry(id) {
+  const preview=`[data-preview-id="${id}"]`;
+  await wait(()=>document.querySelector(memoryRow(id))||document.querySelector(preview));
+  if (!document.querySelector(memoryRow(id))) {
+    document.querySelector(preview).closest('.memory-group').querySelector('[data-action="toggle-memory-group"]').click();
+    await wait(()=>document.querySelector(memoryRow(id)));
+  }
+}
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.11.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.12.0'));
   const phase=await window.hiveSmoke.phase();
   const title='Care Navigation Support';
   assert(phase.windowTitle===title&&document.title===title&&document.querySelector('.brand strong')?.textContent===title,'The current name must appear in the Windows title and sidebar.');
@@ -28,7 +36,7 @@ async function run(){try{
     const archived=await request('get-case',{id:phase.cold.archived_case_id});assert(archived.status==='archived'&&archived.message_count===5&&archived.messages.some(m=>m.body.includes('walker requirement')),'Saved case history was lost after reopening.');
     const service=await request('get-card',{id:phase.cold.service_card_id});if(!service.comments.some(n=>n.body===serviceNote))throw new Error('Service memory was lost on reopening.');
     assert(service.experience.not_worked===1&&service.experience.worked===0&&service.experience.rating_average===2&&service.comments.some(n=>n.body==='No vehicle for the requested Tuesday.'),'Reported service outcome/rating was lost after reopening.');
-    click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(card.id)));
+    click('[data-action="manage-memory"]');await revealMemoryEntry(card.id);
     click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-notes')?.textContent.includes(closingNote));
     document.getElementById('card-notes').scrollIntoView({block:'center'});
     const sourceCapture=await window.hiveSmoke.capture('card-notes');
@@ -85,9 +93,10 @@ async function run(){try{
   type('message','');await window.hiveSmoke.viewport({width:1420,height:920});
   click('[data-action="known-services"]');await wait(()=>document.querySelectorAll('.service-row').length===27);filter('category-filter','Transportation');type('search','North York');await wait(()=>document.querySelectorAll('.service-row').length===4);
   click(row+' [data-action="ask-service"]');await wait(()=>document.body.dataset.serviceChatOpen==='true');
-  type('message',serviceNote);click('[data-action="send"]');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
-  const service=(await request('get-card',{id:serviceCard.id}));const note=service.comments.find(n=>n.body===serviceNote);if(!note)throw new Error('Automatic service feedback was not saved.');
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(note.id)));
+  type('message','Remember that '+serviceNote);click('[data-action="send"]');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
+  const service=(await request('get-card',{id:serviceCard.id}));const note=service.comments.find(n=>n.body===serviceNote);if(!note)throw new Error('The requested service note was not saved.');
+  click('[data-action="manage-memory"]');await revealMemoryEntry(note.id);
+  assert(document.querySelector(memoryRow(note.id)).closest('.memory-group').querySelector('h3').textContent==='North York Seniors Centre');
   assert(document.getElementById('chat-panel').hidden&&!document.getElementById('library-panel').hidden);
   click(memoryRow(note.id)+' [data-action="edit-memory"]');await wait(()=>document.getElementById('memory-comment-body'));
   type('memory-comment-body',editedServiceNote);click('[data-action="save-memory-comment"]');await wait(()=>!document.getElementById('modal').open&&document.querySelector(memoryRow(note.id))?.textContent.includes(editedServiceNote));
@@ -134,12 +143,25 @@ async function run(){try{
   await wait(()=>document.querySelector(row+' .service-experience-preview')?.textContent.includes('No vehicle for the requested Tuesday.'));
   const directoryWithHistory=await window.hiveSmoke.capture('known-services');
   click(row+' [data-action="ask-service"]');await wait(()=>document.getElementById('selected-context').textContent.includes('North York Seniors'));assert(document.querySelector('#selected-context [data-action="record-service-result"]'),'Selected service must have direct result controls.');
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(worked.id)));
+  click('[data-action="manage-memory"]');
+  await wait(()=>document.body.dataset.view==='memory');
+  type('search','North York Seniors Centre');
+  await wait(()=>document.querySelectorAll('.memory-group').length===1&&document.querySelector('.memory-group h3')?.textContent==='North York Seniors Centre'&&document.querySelector('[data-preview-id="'+worked.id+'"]'));
+  await revealMemoryEntry(worked.id);
   click(memoryRow(worked.id)+' [data-action="edit-memory"]');await wait(()=>!document.getElementById('service-result-editor')?.hidden&&document.getElementById('result-note')?.value==='No vehicle for the requested Tuesday.');click('[data-action="cancel-service-result"]');await wait(()=>document.getElementById('service-result-editor').hidden);click('#modal [data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
   click('[data-action="workspace"]');click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
-  type('message',preference);click('[data-action="send"]');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
-  const personal=(await request('list-memory',{kind:'notes',query:'Initial acceptance preference'})).items[0];if(!personal)throw new Error('A normal chat message was not saved automatically.');
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(personal.id)));
+  const ordinaryChat=(await request('snapshot')).active_case.id;
+  for (const text of ['Is there a contact number?', 'Do they publish their hours?', 'Are there booking forms?', 'What are their intake steps?']) {
+    type('message',text);click('[data-action="send"]');
+    await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
+  }
+  const normal=(await request('get-case',{id:ordinaryChat}));
+  assert(normal.message_count===8&&normal.messages.every(message=>!message.payload.saved),'Ordinary turns belong in the conversation.');
+  assert((await request('list-memory',{grouped:true,kind:'notes'})).record_count===0,'Ordinary turns must not become separate memory cards.');
+  type('message','Remember that '+preference);click('[data-action="send"]');
+  await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.getElementById('messages').textContent.includes('Note saved in Manage memory.'));
+  const personal=(await request('list-memory',{kind:'notes',query:'Initial acceptance preference'})).items[0];if(!personal)throw new Error('An explicitly requested note was not saved.');
+  click('[data-action="manage-memory"]');await revealMemoryEntry(personal.id);
   click(memoryRow(personal.id)+' [data-action="edit-memory"]');await wait(()=>document.getElementById('note-body'));
   type('note-title','Contact preference');type('note-body',editedPreference);click('[data-action="save-personal-note"]');await wait(()=>!document.getElementById('modal').open&&document.querySelector(memoryRow(personal.id))?.textContent.includes(editedPreference));
   assert((await request('list-memory',{query:'Initial acceptance preference'})).total===0);
@@ -150,20 +172,25 @@ async function run(){try{
   const snapshot=await request('snapshot');assert(snapshot.documents.length===1&&snapshot.cards.total===4);
   const card=snapshot.cards.items.find(c=>c.title==='Example Community Rides');if(!card)throw new Error('The imported document card is missing.');
   const parserChecks=await window.hiveSmoke.parsers();assert(parserChecks.xlsx.cards===2&&parserChecks.xlsx.fields[1].Slots===3&&parserChecks.docx.body.includes('Alex Example')&&parserChecks.pdf.body.includes('416-555-0101'));
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(card.id)));
+  click('[data-action="manage-memory"]');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));
   type('card-note',firstNote);await wait(()=>document.getElementById('note-status')?.textContent.includes('✓ Saved'));
   click('[data-action="use-card"]');await wait(()=>!document.getElementById('modal').open&&document.body.dataset.view==='workspace');
-  type('message',feedback);click('[data-action="send"]');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
+  type('message','Remember that '+feedback);click('[data-action="send"]');await wait(()=>document.getElementById('send-button').textContent==='Send ↑'&&document.querySelector('.message.assistant'));
   assert((await request('get-card',{id:card.id})).comments.some(n=>n.body===feedback));
   click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(card.id)));
-  type('search','Practice observation');await wait(()=>document.querySelectorAll('.memory-record').length===1);
+  const searchableNote=(await request('get-card',{id:card.id})).comments.find(note=>note.body===firstNote);
+  click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
+  type('search','Practice observation');
+  await wait(()=>document.getElementById('card-count').textContent==='1 saved item'&&document.getElementById('cards').textContent.includes(firstNote));
+  await revealMemoryEntry(searchableNote.id);
+  assert(document.querySelectorAll('.memory-record').length===1);
   assert(document.querySelector('.memory-record-main').dataset.id===card.id);
   type('search','');filter('memory-kind-filter','documents');await wait(()=>document.querySelectorAll('.memory-record').length===4);
-  const caseChecks=await runCaseChecks({request,click,type,filter,wait,assert,serviceCard});
-  click('[data-action="manage-memory"]');await wait(()=>document.querySelector(memoryRow(card.id)));filter('memory-kind-filter','documents');await wait(()=>document.querySelector(memoryRow(card.id)));
+  const caseChecks=await runCaseChecks({request,click,type,filter,wait,assert,serviceCard,revealMemoryEntry});
+  click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
+  filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);
-  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_result_from_selected_context:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,automatic_message_memory:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_message:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
+  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_result_from_selected_context:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
 }catch(error){const capture=await window.hiveSmoke.capture('failure');window.hiveSmoke.finish({ok:false,error:error.message||String(error),stack:error.stack,debug_text:document.body.innerText.slice(0,6000),notice_text:document.getElementById('notice')?.textContent,modal_text:document.getElementById('modal')?.innerText.slice(0,3500),failure_capture:capture});}}
 run();

@@ -137,6 +137,94 @@ test('opening pending feedback can jump to an older page without losing access t
   } finally { await f.close(); }
 });
 
+test('the memory library groups service notes, results and one saved conversation by organization', async () => {
+  const f = await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const {items:routes} = await f.store.list({collection:'services',query:'Routes Connecting Communities'});
+    const food = routes.find(item => item.title.includes('Food Delivery'));
+    const rides = routes.find(item => item.title.includes('Transportation'));
+    const conversation = await f.cases.create('Aurora delivery and return ride');
+    // Exercise the legacy auto-saved records that can exist in an upgraded profile.
+    await local(f).chat({case_id:conversation.id,card_id:food.id,text:'What do they charge for practice deliveries?'});
+    await local(f).chat({case_id:conversation.id,text:'Are there other days?'});
+    assert.equal((await f.store.memories({grouped:true})).record_count,0);
+
+    const note = await f.store.comment({card_id:food.id,body:'Intake can explain the delivery fee.'});
+    const result = await f.store.serviceResult({card_id:rides.id,outcome:'worked',rating:5,body:'They called back on Tuesday.'});
+    await f.store.note({title:'Billing contact',body:'Ask for the intake desk.',organization:'Routes Connecting Communities'});
+    const archive = await f.cases.archive({id:conversation.id,expected_version:(await f.cases.row(conversation.id)).version});
+    assert.equal((await f.cases.read(conversation.id)).message_count,4);
+    const org = 'organization:routes connecting communities';
+    const found = await f.store.memories({grouped:true,query:'Routes Connecting Communities',expanded:org});
+    assert.equal(found.total,1);
+    assert.equal(found.record_count,4);
+    assert.equal(found.items[0].title,'Routes Connecting Communities');
+    const ids=found.items[0].history.map(item=>item.id);
+    assert(ids.includes(note.id) && ids.includes(result.id) && ids.includes(archive.card_id));
+    assert.equal((await f.store.memories({grouped:true,query:'Routes delivery fee'})).record_count,1);
+    const saved = await f.store.memories({grouped:true,kind:'chats',query:'Routes Connecting Communities'});
+    assert.equal(saved.items[0].preview[0].id,archive.card_id);
+
+    const backup=await f.store.export();
+    f.switch('restored library');
+    assert.equal((await f.store.memories({grouped:true})).total,0);
+    await ensureKnownServices(f.store);
+    await f.store.restore(backup);
+    const restored = await f.store.memories({grouped:true,kind:'chats',query:'Routes Connecting Communities'});
+    assert.equal(restored.record_count,1);
+    assert.equal(restored.items[0].title,'Routes Connecting Communities');
+  } finally { await f.close(); }
+});
+
+test('ordinary questions stay in the case and an explicit note is saved once', async () => {
+  const f = await fixture();
+  try {
+    const provider=await service(f);
+    const conversation=await f.cases.create();
+    const assistant=local(f);
+    const chat = {case_id:conversation.id,card_id:provider.id,remember:false,capture_note:true};
+    for (const text of ['Who should I call?', 'How do fees work?', 'Remember what we talked about?', 'Is the service open?']) {
+      assert.equal((await assistant.chat({...chat,text})).saved,false);
+    }
+    assert.equal((await f.cases.read(conversation.id)).message_count,8);
+    assert.equal((await f.store.memories({grouped:true})).record_count,0);
+    const explicit = await assistant.chat({...chat,text:'Remember that intake requested a callback on Thursday.'});
+    assert.equal(explicit.saved,true);
+    assert(explicit.text.startsWith('Note saved on'));
+    const saved=await f.store.memories({grouped:true,query:'callback on Thursday'});
+    assert.equal(saved.record_count,1);
+    assert.equal(saved.items[0].title,'North York Seniors Centre');
+    await f.cases.delete({id:conversation.id,expected_version:(await f.cases.row(conversation.id)).version});
+    assert.equal((await f.store.memories({grouped:true})).record_count,1);
+    assert.equal((await f.store.memories({grouped:true,kind:'chats'})).total,0);
+  } finally { await f.close(); }
+});
+
+test('organization grouping pages full history and recognizes organization columns in imported rows', async () => {
+  const f = await fixture();
+  try {
+    const imported=await f.store.import(await parseDocument(
+      Buffer.from('ID,Service,Provider,Phone\nA,Practice shuttle,Example Outreach,416-555-0101'),
+      'Practice directory.csv'
+    ));
+    const card = (await f.store.list({document_id:imported.document_id})).items[0];
+    await f.store.db().transaction(async()=>{
+      for (let i=0;i<21;i++) await f.store.comment({card_id:card.id,body:'Practice note '+i});
+    });
+    const expanded='organization:example outreach';
+    const first=(await f.store.memories({grouped:true,expanded,query:'Example Outreach'})).items[0];
+    assert.equal(first.title,'Example Outreach');
+    assert.equal(first.total,22);
+    assert.equal(first.history.length,20);
+    assert(first.has_more);
+    const last=(await f.store.memories({grouped:true,expanded,history_offset:20})).items[0];
+    assert.equal(last.history.length,2);
+    assert(!last.has_more);
+    assert.equal(new Set([...first.history,...last.history].map(item=>item.id)).size,22);
+  } finally { await f.close(); }
+});
+
 test('selecting, deferring and preparing a chat result retain the right provider and private draft after a restart',async()=>{
   const f=await fixture();
   try {

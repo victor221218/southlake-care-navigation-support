@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {DocumentCases} from './cases.mjs';
 import {compareHistory} from './ranking.mjs';
+import {groupMemory,organizationOf} from './memory-library.mjs';
 
 const now = () => new Date().toISOString();
 const clean = (value, limit = 12000) => String(value ?? '').replace(/\u0000/g, '').trim().slice(0, limit);
@@ -92,26 +93,60 @@ export class DocumentStore {
       return { ...record, experience:{worked,not_worked,rating_count,rating_average}, latest_note:card.latest_note?.slice(0,180)||'', body: card.body.slice(0, 650), category: card.fields.Category || '', area: card.fields['Service area'] || '', fields: undefined };
     }) };
   }
-  async memories({query='',document_id=null,kind='all',include_archived=false,limit=30,offset=0}={}) {
+  async memories({query='',document_id=null,kind='all',include_archived=false,limit=30,offset=0,
+    grouped=false,expanded='',history_offset=0}={}) {
     if(!['all','notes','documents','feedback','chats'].includes(kind))throw new Error('Choose a supported memory type.');
     const owner=this.owner();
-    const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
+    const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.fields_json,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? AND (d.format IS NULL OR d.format<>'service-directory')
       AND (c.kind<>'conversation' OR EXISTS (
         SELECT 1 FROM personal_cases chat WHERE chat.archive_card_id=c.id AND chat.owner_id=c.owner_id AND chat.status='archived'
       ))
-      ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
+      ${grouped?"AND c.id NOT IN (SELECT entry_id FROM personal_case_memory WHERE owner_id=? AND entry_type='card')":''}
+      ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(grouped?[owner]:[]),...(document_id?[document_id]:[])).all()).results
       .map(card=>({...card,entry_type:'card',memory_type:card.kind==='conversation'?'chats':card.document_id?'documents':'notes'}));
-    const notes=(await this.db().prepare(`SELECT n.id,n.card_id,n.body,n.outcome,n.rating,n.updated_at,n.version,c.title,c.document_id,c.archived,d.filename,d.format AS source_format
+    const notes=(await this.db().prepare(`SELECT n.id,n.card_id,n.body,n.outcome,n.rating,n.updated_at,n.version,c.title,c.fields_json,c.document_id,c.archived,d.filename,d.format AS source_format
       FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id AND c.owner_id=n.owner_id LEFT JOIN personal_documents d ON d.id=c.document_id
-      WHERE n.owner_id=? ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}`).bind(owner,...(document_id?[document_id]:[])).all()).results
+      WHERE n.owner_id=? ${include_archived?'':'AND c.archived=0'} ${document_id?'AND c.document_id=?':''}
+      ${grouped?"AND n.id NOT IN (SELECT entry_id FROM personal_case_memory WHERE owner_id=? AND entry_type='comment')":''}`)
+      .bind(owner,...(document_id?[document_id]:[]),...(grouped?[owner]:[])).all()).results
       .map(note=>({...note,entry_type:'comment',memory_type:'feedback'}));
     const terms=tokens(query);
-    const items=[...cards,...notes].filter(item=>(kind==='all'||item.memory_type===kind)&&terms.every(term=>norm(item.title+' '+item.body+' '+(item.outcome?resultLabel(item.outcome):'')+' '+(item.filename||'')).includes(term)))
+    const matches = (item,groupTitle='') => {
+      if (!terms.length) return true;
+      const text = norm([groupTitle,item.title,item.body,item.filename,item.outcome ? resultLabel(item.outcome) : ''].join(' '));
+      return terms.every(term=>text.includes(term));
+    };
+    const items=[...cards,...notes].filter(item=>kind==='all'||item.memory_type===kind)
       .sort((a,b)=>b.updated_at.localeCompare(a.updated_at)||a.id.localeCompare(b.id));
     const start=Math.max(0,Number(offset)||0),count=Math.max(1,Math.min(100,Number(limit)||30));
-    return{total:items.length,items:items.slice(start,start+count).map(item=>({...item,body:item.body.slice(0,650)}))};
+    if (grouped) {
+      const related = items.some(item=>item.kind==='conversation') ? await this.savedChatOrganizations(owner) : new Map();
+      return groupMemory(items,related,matches,{offset:start,limit:count,expanded,historyOffset:Math.max(0,Number(history_offset)||0)});
+    }
+    const filtered = items.filter(item=>matches(item));
+    return {total:filtered.length,items:filtered.slice(start,start+count).map(({fields_json,...item})=>({...item,body:item.body.slice(0,650)}))};
+  }
+  async savedChatOrganizations(owner) {
+    const {results} = await this.db().prepare(`
+      SELECT DISTINCT chat.archive_card_id, c.title, c.fields_json, d.format AS source_format
+      FROM personal_cases chat
+      LEFT JOIN personal_case_messages m ON m.case_id=chat.id AND m.owner_id=chat.owner_id
+      JOIN personal_cards c ON c.owner_id=chat.owner_id AND c.id IN (
+        chat.selected_card_id, json_extract(m.payload_json,'$.followup.card_id'), json_extract(m.payload_json,'$.context_card_id')
+      )
+      LEFT JOIN personal_documents d ON d.id=c.document_id AND d.owner_id=c.owner_id
+      WHERE chat.owner_id=? AND chat.status='archived' AND chat.archive_card_id IS NOT NULL
+    `).bind(owner).all();
+    const related = new Map();
+    for (const row of results) {
+      const name = organizationOf(row);
+      if (!name) continue;
+      if (!related.has(row.archive_card_id)) related.set(row.archive_card_id,new Set());
+      related.get(row.archive_card_id).add(name);
+    }
+    return related;
   }
   async get(id,{case_id=null}={}) {
     const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
@@ -124,7 +159,7 @@ export class DocumentStore {
     return { ...card, case_info, category: card.fields.Category || '', comments, comment_count:comments.length, latest_note:latest?.body.slice(0,180)||'', experience:experience(comments) };
   }
   async linkCaseMemory(case_id,type,id){if(!case_id)return;const value=await this.db().prepare("SELECT 1 FROM personal_cases WHERE id=? AND owner_id=? AND status='active'").bind(case_id,this.owner()).first();if(!value)throw new Error('This case is not available in your account.');await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id) VALUES (?,?,?,?)').bind(case_id,this.owner(),type,id).run();}
-  async note({ title, body, id = null, expected_version = null, kind = 'note', case_id = null }) {
+  async note({ title, body, organization, id = null, expected_version = null, kind = 'note', case_id = null }) {
     body = clean(body, 12000); title = clean(title || body.split('\n')[0], 140);
     if (!body || !title) throw new Error('Add some text to save this note.');
     const stamp = now(), owner = this.owner();
@@ -134,10 +169,18 @@ export class DocumentStore {
         if (old.document_id) throw new Error('Keep the original source intact. Add a correction in the card notes.');
         if(old.kind==='conversation')throw new Error('Use the saved case controls to reopen or rename this conversation.');
         if (old.version !== expected_version) throw new Error('This card changed. Reopen it before editing.');
-        await this.db().prepare('UPDATE personal_cards SET title=?,body=?,contacts_json=?,links_json=?,updated_at=?,version=version+1 WHERE id=? AND owner_id=? AND version=?').bind(title, body, JSON.stringify(contactsIn(body)), JSON.stringify(linksIn(body)), stamp, id, owner, expected_version).run();
+        const fields = old.fields;
+        if (organization !== undefined) {
+          delete fields.Organization;
+          const name = clean(organization,180);
+          if (name) fields.Organization = name;
+        }
+        await this.db().prepare('UPDATE personal_cards SET title=?,body=?,fields_json=?,contacts_json=?,links_json=?,updated_at=?,version=version+1 WHERE id=? AND owner_id=? AND version=?').bind(title, body, JSON.stringify(fields), JSON.stringify(contactsIn(body)), JSON.stringify(linksIn(body)), stamp, id, owner, expected_version).run();
       } else {
         id = randomUUID();
-        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,kind,title,body,contacts_json,links_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(id, owner, kind === 'message' ? 'message' : 'note', title, body, JSON.stringify(contactsIn(body)), JSON.stringify(linksIn(body)), stamp, stamp).run();
+        const name = clean(organization,180);
+        const fields = name ? {Organization:name} : {};
+        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,kind,title,body,fields_json,contacts_json,links_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id, owner, kind === 'message' ? 'message' : 'note', title, body, JSON.stringify(fields), JSON.stringify(contactsIn(body)), JSON.stringify(linksIn(body)), stamp, stamp).run();
       }
       await this.linkCaseMemory(case_id,'card',id);this.changed({ card_id: id }); return this.get(id);
     });
