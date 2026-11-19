@@ -15,7 +15,7 @@ const memoryRow=id=>`.memory-record[data-memory-id="${id}"]`;
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.6.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.7.0'));
   const phase=await window.hiveSmoke.phase();
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));

@@ -1,18 +1,17 @@
-# Southlake Care Navigation Support 2.6.0 — compact choices and case chats
+# Southlake Care Navigation Support 2.7.0 — service replies as cards
 
-- Responses start with two compact cards side by side. More choices and long response text can be expanded.
-- Matching services with lower saved ratings move down the list. Unrated options stay available. Ratings do not override the search/category or the need to check suitability.
-- Named case chats appear in the sidebar. Each keeps its own discussion, selected card and draft after reopening. Older messages load in pages and the assistant can search earlier discussion in that case.
-- Save a complete case to Manage memory and remove it from the sidebar, then reopen it later. Automatic message cards are consolidated into its saved case card.
-- Delete chat history removes the case and its automatically saved messages after confirmation. Separately recorded service notes, ratings and results remain.
-- Undo and Redo correct saved ratings, results and notes. They stay private to the account, reject conflicting changes and retain up to 100 correction actions. Permanent case deletion and source-file operations are separate controls.
+- Service recommendations show all returned cards together. Separate recommendation paragraphs, Read full response and Show more choices are removed.
+- Each AI-selected card holds its short reason and important eligibility, accessibility or availability checks. Cards open the existing details, personal history and provider links.
+- The assistant’s read-only presentation tool validates source IDs and formats only chosen candidates. It never records an outcome or rating. Personal-history ranking remains in place among relevant choices.
+- The card reasons and checks stay with their case reply across restart and memory-backup restore. Earlier saved service replies also use the cards-only layout.
+- Long replies open at their first card. General document answers, questions, calculations and connection errors remain readable in answer cards. Retry, case chats, selected services, saved notes and Undo/Redo remain available.
 
 ## Install or update
 
-Close the current app and run **Southlake-Care-Navigation-Support-Setup-2.6.0.exe**. The existing Windows data location and app identity are retained. An additive migration preserves cards, notes and results. Earlier versions did not persist their visible chat transcript, so those unsaved old transcripts cannot be recovered. Case conversations created in this version persist automatically. Use a memory backup when moving computers; backups now include active and saved cases.
+Close the current app and run **Southlake-Care-Navigation-Support-Setup-2.7.0.exe**. The existing Windows installation identity and data location are retained. This update adds presentation fields to existing case-message JSON; it does not replace the database. Cards, notes, ratings and cases created with version 2.6 remain available. Use a memory backup when moving computers. Transcripts from versions before 2.6 were not persisted and cannot be recovered.
 
 ## Validation and scope
 
-98 automated checks cover existing features plus case isolation, restart, archive/reopen/delete, backup compatibility, earlier-message search, retry, ranking and Undo/Redo. Native Windows checks and installer extraction are recorded in Verification.json. Documentation screenshots use isolated practice feedback, not provider performance records.
+105 automated checks passed, including card selection/validation, six-card delivery, reason/check persistence, backup remapping and case-scoped source hydration. Native Windows checks verify the all-card layout, no standalone recommendation text, checks inside cards and opening at the first card, plus existing cases, ranking, saved feedback and Undo/Redo. The installer’s extracted runtime files are compared byte-for-byte with the packaged build; details are in Verification.json. Documentation screenshots use isolated practice records.
 
-Unsigned prototype. Real recipient ChatGPT sign-in/eligibility/inference, live microphone capture on that computer, publisher signing and Southlake deployment approval remain separate checks. No private user records or credentials are included in the download. There is no automatic updater.
+Unsigned prototype. Real recipient ChatGPT sign-in/eligibility/inference, live microphone capture on that computer, publisher signing and Southlake deployment approval remain separate checks. Public-provider information and source-review dates are unchanged. No private user records or credentials are included in the download. There is no automatic updater.

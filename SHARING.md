@@ -1,6 +1,6 @@
 # Share the Windows app
 
-Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.6.0). Users choose **Southlake-Care-Navigation-Support-Setup-2.6.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
+Share the [GitHub download page](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.7.0). Users choose **Southlake-Care-Navigation-Support-Setup-2.7.0.exe** and open it; there is no ZIP to extract to install the app. The same page offers the quick-start guide and a complete source/handoff ZIP for maintainers.
 
 A C: drive link works on this computer only. To send a download link, upload the installer and share that actual file page. The public GitHub release is verified separately after upload.
 
@@ -16,7 +16,7 @@ The app independently implements the published Sign in with ChatGPT protocol. Co
 
 The same clean installer goes to each recipient. It contains the app, bundled document readers, voice model, 27 researched service pathways and an optional fictional sample, not the sender's account or imported documents. Do not send the app-data folder. To change computers, deliberately export a private memory backup, then restore it into the correct active account on the new computer. Backups contain private document text and notes, not original files or credentials.
 
-Version 1.5.0's service-navigation installer remains separately available. Version 2.6 retains the full Workspace chat and separate editable memory library. It preserves previous on-disk data without converting it or introducing shared-team memory.
+Version 1.5.0's service-navigation installer remains separately available. Version 2.7 retains the full Workspace chat and separate editable memory library. It preserves previous on-disk data without converting it or introducing shared-team memory.
 
 ## Developer handoff
 
@@ -34,7 +34,7 @@ python scripts/prepare-windows.py
 
 The document tests exercise the built background reader, so build first. The Windows staging script expects the matching official Electron runtime manifest/cache; a new build machine must supply that runtime and Inno Setup. Third-party notices are in app.asar. The installer uses the same app ID and per-user directory, preserving user data on upgrade and uninstall. Never distribute developer QA stages, test profiles or credentials.
 
-## Version 2.6 upgrade
+## Version 2.7 upgrade
 
 The Windows application and shortcuts now use Southlake Care Navigation Support. The installer keeps the existing installation ID and the Windows data location `%APPDATA%\Southlake Hive` to retain saved accounts, documents and notes. Close the previous app before updating. Public starting cards are initialized separately in each account and do not transfer anyone’s comments to another account. No automatic updater is included.
 
@@ -42,16 +42,20 @@ The Windows application and shortcuts now use Southlake Care Navigation Support.
 
 Workspace opens first as a full-width chat. Known services fills the page, with an optional floating assistant on the right. Manage memory is directly beneath Known services in the sidebar and supports searching, editing and deleting personal messages/notes/feedback; document corrections remain attached to their source cards. Messages save automatically. These remain individual records, with no shared team feedback store.
 
-Version 2.6 places Ask assistant in the upper-right of the Known services heading, clear of service rows. Manage memory is directly beneath Known services in the sidebar. Ask assistant also remains under View details; it selects the provider and opens the side panel. Minimize/Escape retains the draft and directory filters; Open Workspace continues the same conversation.
+Version 2.7 places Ask assistant in the upper-right of the Known services heading, clear of service rows. Manage memory is directly beneath Known services in the sidebar. Ask assistant also remains under View details; it selects the provider and opens the side panel. Minimize/Escape retains the draft and directory filters; Open Workspace continues the same conversation.
 
 ## Service-result handoff
 
-Version 2.6 adds a three-action service-card footer, personal history above the provider fields, and explicit Worked/Didn’t work results with optional 1–5 ratings. Records belong to the current app account and the specific service. They can be corrected/deleted in the card or Manage memory. New conversations and app restarts retain them. Memory backups include outcome/rating fields; older note-only backups remain readable.
+Version 2.7 adds a three-action service-card footer, personal history above the provider fields, and explicit Worked/Didn’t work results with optional 1–5 ratings. Records belong to the current app account and the specific service. They can be corrected/deleted in the card or Manage memory. New conversations and app restarts retain them. Memory backups include outcome/rating fields; older note-only backups remain readable.
 
 Migration `0004_personal_service_results.sql` adds nullable outcome and rating columns to the existing personal comments table. It keeps previous comments and source cards. Do not replace the user database or change the Windows app-data identity when updating. Counts describe only explicit personal reports, not general provider success rates.
 
-## Case chats and saved-input corrections in 2.6
+## Case chats and saved-input corrections in 2.7
 
 Each account has its own persisted case conversations, selected cards, drafts and correction history. Active chats appear in the sidebar. Saved cases appear as one linked conversation card in Manage memory while retaining the complete transcript in the local database. New cases keep prior chats. Automatic message memory is linked to its case; deleting a case removes those entries as well as its transcript, while explicit service feedback remains. Related correction snapshots are removed so Undo cannot resurrect a deleted case.
 
 Memory backups include active and saved cases, messages and their card links. Original files, sign-in credentials and Undo/Redo history are excluded. Existing note-only backups remain readable. The new migration is additive; do not replace the existing user database.
+
+## Cards-only service recommendations in 2.7
+
+All returned service choices appear together. Brief reasons and checks stay inside the corresponding card, with no separate recommendation text above or below the grid. Previously saved service replies also use the card layout. Card details, provider links, personal feedback and case conversations remain available. This update adds presentation fields to existing case-message JSON without replacing the database. Backups retain those fields. It introduces no shared memory or new service outcomes.

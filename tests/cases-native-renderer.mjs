@@ -14,11 +14,15 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click('#modal [data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
   click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
   const a=(await request('snapshot')).active_case.id;
-  await send('North York');
-  let assistant=document.querySelector('.message.assistant:last-child'),cards=assistant.querySelectorAll('.answer-card');assert(cards.length===2,'Show two compact choices initially.');
-  const boxes=[...cards].map(c=>c.getBoundingClientRect());assert(Math.abs(boxes[0].top-boxes[1].top)<2&&boxes.every(r=>r.height<=175),'Response cards must sit side by side and stay compact.');
-  click('.message.assistant:last-child [data-action="toggle-answer-cards"]');assert(document.querySelectorAll('.message.assistant:last-child .answer-card').length>2);click('.message.assistant:last-child [data-action="toggle-answer-cards"]');assert(document.querySelectorAll('.message.assistant:last-child .answer-card').length===2);
-  await wait(()=>document.body.dataset.view==='workspace');assert([...cards].every(c=>c.dataset.id!==serviceCard.id),'The low-rated matching service must follow unrated alternatives.');const compactChoicesCapture=await window.hiveSmoke.capture('compact-choices');
+  await send('North York transportation');
+  let assistant=document.querySelector('.message.assistant:last-child'),cards=assistant.querySelectorAll('.answer-card');
+  const savedReply=(await request('get-case',{id:a})).messages.at(-1);
+  assert(cards.length===savedReply.payload.cards.length&&cards.length>2,'Show every returned choice without expanding.');
+  assert(!assistant.querySelector('.message-text,.answer-summary,[data-action="toggle-response"],[data-action="toggle-answer-cards"]'),'Service answers must contain cards only, with no separate narrative or expansion buttons.');
+  const boxes=[...cards].map(c=>c.getBoundingClientRect());assert(Math.abs(boxes[0].top-boxes[1].top)<2&&boxes.every(r=>r.height<=245),'Response cards must sit side by side and stay compact.');
+  assert(boxes[0].top>=document.getElementById('messages').getBoundingClientRect().top,'Open a long reply at its first card, not halfway through the grid.');
+  assert([...cards].filter(c=>c.querySelector('.card-confirm')).length>0,'Provider checks must remain inside their service cards.');
+  await wait(()=>document.body.dataset.view==='workspace');assert([...cards].slice(0,2).every(c=>c.dataset.id!==serviceCard.id),'The low-rated matching service must follow unrated alternatives.');const compactChoicesCapture=await window.hiveSmoke.capture('compact-choices');
   click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));type('case-title-input','Long transport follow-up');click('[data-action="rename-case"]');await wait(()=>!document.getElementById('modal').open&&document.getElementById('assistant-title').textContent==='Long transport follow-up');
   await send('Keep the walker requirement for the return trip.');type('message','Draft retained with the long-running case.');
   click('[data-action="new-chat"]');await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
@@ -40,5 +44,5 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click('#case-archived-banner [data-action="reopen-case"]');await wait(()=>!document.getElementById('composer').hidden&&document.getElementById('message').value==='Draft retained with the long-running case.');
   click('#case-options-button');await wait(()=>document.getElementById('case-title-input'));click('[data-action="archive-case"]');await wait(()=>!document.getElementById('modal').open&&!document.querySelector(`[data-case-row="${a}"]`));assert((await request('get-case',{id:a})).archive_card_id===archiveCard,'Resaving a case must retain one library card.');
   click(`[data-case-row="${originalCase}"] [data-action="open-case"]`);await wait(()=>document.getElementById('assistant-title').textContent===(document.querySelector(`[data-case-row="${originalCase}"] strong`)?.textContent));
-  return{compact_response_choices:true,response_choices_expand_collapse:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
+  return{compact_response_choices:true,all_response_cards_visible:true,service_responses_cards_only:true,confirmation_inside_service_cards:true,personal_history_ranking:true,case_sidebar:true,named_case_rename:true,case_messages_separate:true,case_draft_retained:true,case_archive_full_history:true,case_delete_auto_memory:true,case_delete_cancel:true,case_delete_preserves_results:true,case_library_reopen:true,case_archive_no_duplicates:true,saved_rating_undo_redo:true,compactChoicesCapture,caseChatsCapture,caseLibraryCapture,archived_case_id:a,archived_case_card:archiveCard};
 }

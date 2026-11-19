@@ -1,6 +1,6 @@
 # Southlake Care Navigation Support — Windows 2.1 prototype
 
-Open **Southlake-Care-Navigation-Support-Setup-2.6.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Southlake-Care-Navigation-Support-Setup-2.7.0.exe**, choose **Install**, then **Finish**. Open **Southlake Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -70,7 +70,7 @@ Official connection reference: https://developers.openai.com/cookbook/articles/s
 
 ## Updating from version 2.0
 
-Close Southlake Hive before running the version 2.6 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
+Close Southlake Hive before running the version 2.7 installer. Open **Southlake Care Navigation Support** afterwards. Existing documents, notes and saved connections stay in the same Windows app-data folder. The default page is now the full chat, and saved cards/notes are managed separately in Manage memory. The public directory is retained. Updates are installed using the new installer; there is no automatic updater. Back up your memory before changing computers.
 
 ## Keep a case conversation
 
@@ -79,7 +79,7 @@ Close Southlake Hive before running the version 2.6 installer. Open **Southlake 
 3. Click that title in **Case chats** whenever you want to return. Its messages, selected card and draft are kept after closing the app.
 4. Use **Earlier messages** to read older discussion. The assistant can also search earlier messages in the current case.
 
-For a shorter response, two compact cards appear first. Use **Show more choices**, **Read full response**, or open a card for details. Lower-rated matching services appear later; unrated options remain available.
+Service recommendations appear as cards only, with every returned choice visible in the grid. Read each card’s short reason and Confirm check, then click it for the full details. There are no separate recommendation paragraphs or extra choices to expand. Lower-rated matching services appear later; unrated options remain available. Document answers, clarification questions, calculations and connection errors still have readable answer cards.
 
 ### Save or delete a case
 
