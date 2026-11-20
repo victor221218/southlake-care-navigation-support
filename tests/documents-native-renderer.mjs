@@ -23,14 +23,17 @@ async function revealMemoryEntry(id) {
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.15.0'));
+  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.16.0'));
   const phase=await window.hiveSmoke.phase();
   const title='Care Navigation Support';
   assert(phase.windowTitle===title&&document.title===title&&document.querySelector('.brand strong')?.textContent===title,'The current name must appear in the Windows title and sidebar.');
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));
   if(phase.reopen){
-    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==27)throw new Error('Documents or service cards changed after reopening.');
+    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==30)throw new Error('Documents or service cards changed after reopening.');
+    const own=await request('get-card',{id:phase.cold.own_service_id});
+    assert(own.source_format==='own-services'&&own.contacts.some(contact=>contact.value==='intake@example.org')&&
+      own.comments.some(note=>note.body==='Practice note: call intake before referring.'),'The own service, edited contact and note must survive restart.');
     const card=await request('get-card',{id:phase.cold.card_id});
     for(const text of [firstNote,feedback,closingNote])if(!card.comments.some(n=>n.body===text))throw new Error('A document note was lost on reopening.');
     const archived=await request('get-case',{id:phase.cold.archived_case_id});assert(archived.status==='archived'&&archived.message_count===7&&archived.messages.some(m=>m.body.includes('walker requirement'))&&archived.messages.some(m=>m.body==='Show me suitable service cards for transportation in North York.'),'Saved case history was lost after reopening.');
@@ -70,7 +73,7 @@ async function run(){try{
   const row=`.service-row[data-service-id="${serviceCard.id}"]`;
   const details=document.querySelector(row+' .service-row-actions [data-action="open-card"]').getBoundingClientRect(),ask=document.querySelector(row+' [data-action="ask-service"]').getBoundingClientRect();
   assert(ask.top>=details.bottom,'Ask assistant must remain underneath View details.');
-  const serviceCapture=await window.hiveSmoke.capture('known-services');
+  let serviceCapture=await window.hiveSmoke.capture('known-services');
   click('#service-chat-launcher');await wait(()=>document.body.dataset.serviceChatOpen==='true');
   type('message','Draft retained while browsing services.');
   const overlay=document.getElementById('chat-panel').getBoundingClientRect();
@@ -174,7 +177,7 @@ async function run(){try{
   await wait(()=>document.querySelector(directoryRating)?.textContent==='1.0/5');
   const scoreBadge=document.querySelector(directoryRating);
   assert(getComputedStyle(scoreBadge).backgroundColor===low&&
-    scoreBadge.getBoundingClientRect().left>document.querySelector(row+' .service-row-contact > div:first-child span').getBoundingClientRect().left,
+    scoreBadge.getBoundingClientRect().left>document.querySelector(row+' .service-contact-value').getBoundingClientRect().left,
     'Show the saved average to the right of the program contact.');
   click('.case-next-steps [data-action="keep-case-open"]');
   await wait(()=>!document.querySelector('.case-next-steps')&&document.body.dataset.caseChanging==='false');
@@ -249,9 +252,51 @@ async function run(){try{
   assert(document.querySelector('.memory-record-main').dataset.id===card.id);
   type('search','');filter('memory-kind-filter','documents');await wait(()=>document.querySelectorAll('.memory-record').length===4);
   const caseChecks=await runCaseChecks({request,click,type,filter,wait,assert,serviceCard,revealMemoryEntry});
+  click('[data-action="known-services"]');
+  await wait(()=>document.querySelector('.service-source-group[aria-label="Public services"] .source-tag')?.textContent==='(Public source)');
+  click('#add-service');await wait(()=>document.getElementById('service-field-name'));
+  assert(document.getElementById('service-questions').textContent.includes('phone number or email')&&
+    document.getElementById('service-questions').textContent.includes('communities'));
+  type('service-field-name','Fictional Intake Desk');
+  type('service-field-organization','Example Access');
+  type('service-field-area','Newmarket');
+  type('service-field-person','Jordan Example');
+  type('service-field-phone','905-555-0176');
+  click('[data-action="save-own-service"]');
+  await wait(()=>!document.getElementById('modal').open&&document.querySelector('.service-source-group[aria-label="Your services"] .service-row'));
+  const ownRow=document.querySelector('.service-source-group[aria-label="Your services"] .service-row');
+  const ownId=ownRow.dataset.serviceId;
+  assert(document.querySelector('.service-source-group').getAttribute('aria-label')==='Your services'&&
+    ownRow.querySelector('.service-row-contact').textContent.includes('Jordan Example (Own source)')&&
+    ownRow.querySelector('.service-contact-value').textContent==='905-555-0176');
+  ownRow.querySelector('.service-row-actions [data-action="open-card"]').click();
+  await wait(()=>document.querySelector('#modal [data-action="edit-own-service"]'));
+  click('#modal [data-action="focus-card-note"]');type('card-note','Practice note: call intake before referring.');
+  await wait(()=>document.getElementById('card-notes').textContent.includes('Practice note: call intake before referring.'));
+  click('#modal [data-action="edit-own-service"]');await wait(()=>document.getElementById('service-field-email'));
+  type('service-field-email','intake@example.org');
+  click('[data-action="save-own-service"]');
+  await wait(()=>document.querySelector('#modal #service-contacts')?.textContent.includes('intake@example.org'));
+  assert(document.getElementById('card-notes').textContent.includes('Practice note: call intake before referring.')&&
+    document.querySelector('#card-history .source-tag').textContent==='(Own source)');
+  click('#modal [data-action="close-modal"]');
+  await wait(()=>!document.getElementById('modal').open);
+  click('#import-services');
+  await wait(()=>document.getElementById('service-review-row')?.options.length===3);
+  assert(document.getElementById('service-review-count').textContent.includes('2 of 3 rows selected')&&
+    document.getElementById('service-field-name').value==='Fictional Meal Drop'&&
+    document.getElementById('service-questions').textContent.includes('phone number or email'));
+  type('service-field-email','meals@example.org');type('service-field-area','Aurora');
+  filter('service-review-row','0');
+  assert(document.getElementById('service-field-person').value==='Alex Example');
+  click('[data-action="save-own-service"]');
+  await wait(()=>!document.getElementById('modal').open&&document.querySelectorAll('[aria-label="Your services"] .service-row').length===3);
+  const [meal]=(await request('list-cards',{collection:'services',query:'meals@example.org'})).items;
+  assert(meal.source_format==='own-services'&&(await request('get-card',{id:meal.id})).fields['Eligibility notes']==='Weekday delivery');
+  serviceCapture=await window.hiveSmoke.capture('known-services');
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);
-  window.hiveSmoke.finish({ok:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
+  window.hiveSmoke.finish({ok:true,own_service_review:true,own_service_id:ownId,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
 }catch(error){const capture=await window.hiveSmoke.capture('failure');window.hiveSmoke.finish({ok:false,error:error.message||String(error),stack:error.stack,debug_text:document.body.innerText.slice(0,6000),notice_text:document.getElementById('notice')?.textContent,modal_text:document.getElementById('modal')?.innerText.slice(0,3500),failure_capture:capture});}}
 run();

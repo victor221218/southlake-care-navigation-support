@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.15 prototype
+# Care Navigation Support — Windows 2.16 prototype
 
-Open **Care-Navigation-Support-Setup-2.15.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open **Care-Navigation-Support-Setup-2.16.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -71,6 +71,12 @@ Official connection reference: https://developers.openai.com/cookbook/articles/s
 ## Updating the app
 
 Close the current app and open the new installer. After installation, open **Care Navigation Support** from the desktop or Start menu. Your saved documents, notes, ratings, cases and connections are available in the same workspace. Use **Connection & backup** to move saved information to another computer.
+
+## Add a service or spreadsheet
+
+Under **Known services**, choose **Add a service** or **Import services**. In a spreadsheet review, pick a row to check the program, coverage and contact details. Include the rows you want to save. A question identifies each missing contact or service area. You can fill it in later from **View details → Edit details**.
+
+Your entries appear at the top under **Your services** with **(Own source)** beside the contact. The preloaded entries are under **Public services** with **(Public source)**. Your saved notes and results appear in **View details** with their own source label.
 
 ## Keep a case conversation
 

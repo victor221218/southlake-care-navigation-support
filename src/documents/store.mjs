@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {DocumentCases} from './cases.mjs';
 import {compareHistory} from './ranking.mjs';
 import {groupMemory,organizationOf} from './memory-library.mjs';
+import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, isServiceSource, serviceContacts, serviceDraft, serviceFields, serviceSection} from './service-sources.mjs';
 
 const now = () => new Date().toISOString();
 const clean = (value, limit = 12000) => String(value ?? '').replace(/\u0000/g, '').trim().slice(0, limit);
@@ -9,6 +10,7 @@ const norm = value => String(value).normalize('NFKC').toLowerCase().replace(/[^\
 export const tokens = value => [...new Set(norm(value).split(' ').filter(t => t.length > 1 && !new Set(['the','and','for','can','you','please','what','with','from','that','this','have','about','find','show','tell','need','which','does','are','how','was','were','would','could','should','into','our','your','use']).has(t)))];
 const unpack = row => row && ({ ...row, fields: JSON.parse(row.fields_json || '{}'), contacts: JSON.parse(row.contacts_json || '[]'), links: JSON.parse(row.links_json || '[]'), archived: Boolean(row.archived) });
 const resultLabel = outcome => outcome === 'worked' ? 'Worked' : "Didn't work";
+const serviceFormats = `('${PUBLIC_SERVICE_FORMAT}', '${OWN_SERVICE_FORMAT}')`;
 function validResult(outcome, rating) {
   if (!['worked','not_worked'].includes(outcome)) throw new Error('Choose Worked or Didn’t work.');
   if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new Error('Choose a rating from 1 to 5, or leave it blank.');
@@ -29,6 +31,8 @@ export function contactsIn(body, fields = {}) {
 export function linksIn(body, fields = {}) {
   return [...new Set((Object.values(fields).map(String).join('\n') + '\n' + body).match(/https:\/\/[^\s<>"\[\]{}]+/g) || [])].map(value => value.replace(/[),.;]+$/, '')).filter(value => { try { const u = new URL(value); return !u.username && !u.password; } catch { return false; } }).slice(0, 12);
 }
+const cardContacts = (format,body,fields) => format === OWN_SERVICE_FORMAT
+  ? serviceContacts(serviceDraft({fields}).values) : contactsIn(body,fields);
 
 export class DocumentStore {
   constructor({ database, owner, emit = () => {} }) { Object.assign(this, { database, owner, emit }); }
@@ -36,7 +40,7 @@ export class DocumentStore {
   changed(value) { this.db().afterCommit(() => this.emit({ type: 'memory-changed', value })); return value; }
   async documents() { return (await this.db().prepare('SELECT d.*, (SELECT COUNT(*) FROM personal_cards c WHERE c.document_id=d.id AND c.archived=0) AS card_count FROM personal_documents d WHERE owner_id=? ORDER BY updated_at DESC').bind(this.owner()).all()).results.map(({ original_path, ...row }) => ({ ...row, warnings: JSON.parse(row.warnings) })); }
   async duplicate(digest) { return this.db().prepare('SELECT id, filename FROM personal_documents WHERE owner_id=? AND digest=?').bind(this.owner(), digest).first(); }
-  async sameName(filename) { return this.db().prepare('SELECT id, filename, version FROM personal_documents WHERE owner_id=? AND filename=? ORDER BY updated_at DESC LIMIT 1').bind(this.owner(), filename).first(); }
+  async sameName(filename) { return this.db().prepare(`SELECT id, filename, version FROM personal_documents WHERE owner_id=? AND filename=? AND format NOT IN ${serviceFormats} ORDER BY updated_at DESC LIMIT 1`).bind(this.owner(), filename).first(); }
   async document(id) { return this.db().prepare('SELECT * FROM personal_documents WHERE id=? AND owner_id=?').bind(id, this.owner()).first(); }
   async import(parsed, { originalPath = null, replaceId = null } = {}) {
     const owner = this.owner();
@@ -45,7 +49,7 @@ export class DocumentStore {
       const duplicate = await this.duplicate(parsed.digest);
       if (duplicate) return { duplicate: true, document_id: duplicate.id, count: 0 };
       const old = replaceId ? await this.document(replaceId) : null;
-      if (replaceId && (!old || old.filename !== parsed.filename || !parsed.stableKeys)) throw new Error('This file cannot safely update that document. Save it as a separate version.');
+      if (replaceId && (!old || old.filename !== parsed.filename || old.format !== parsed.format || !parsed.stableKeys)) throw new Error('This file cannot safely update that document. Save it as a separate version.');
       const stamp = now(), id = old?.id || randomUUID();
       if (old) {
         await this.db().prepare('UPDATE personal_documents SET digest=?,original_path=?,updated_at=?,version=version+1,warnings=? WHERE id=? AND owner_id=?').bind(parsed.digest, originalPath, stamp, JSON.stringify(parsed.warnings), id, owner).run();
@@ -54,7 +58,7 @@ export class DocumentStore {
       let added = 0, updated = 0;
       for (const section of parsed.sections) {
         const title = clean(section.title, 180), body = clean(section.body, 30000), fields = section.fields || {};
-        const values = [title, body, clean(section.locator, 220), JSON.stringify(fields), JSON.stringify(contactsIn(body, fields)), JSON.stringify(linksIn(body, fields))];
+        const values = [title, body, clean(section.locator, 220), JSON.stringify(fields), JSON.stringify(cardContacts(parsed.format, body, fields)), JSON.stringify(linksIn(body, fields))];
         const previous = old ? await this.db().prepare('SELECT id,body,fields_json FROM personal_cards WHERE document_id=? AND source_key=? AND owner_id=?').bind(id, section.key, owner).first() : null;
         if (previous) {
           await this.db().prepare('UPDATE personal_cards SET title=?,body=?,locator=?,fields_json=?,contacts_json=?,links_json=?,archived=0,updated_at=?,version=version+1 WHERE id=? AND owner_id=?').bind(...values, stamp, previous.id, owner).run();
@@ -66,6 +70,38 @@ export class DocumentStore {
       }
       return this.changed({ document_id: id, count: parsed.sections.length, added, updated, duplicate: false });
     });
+  }
+  async addOwnService(values) {
+    const section = serviceSection({key:'manual', locator:'Entered in Known services'}, values);
+    return this.import({filename:'Services added by you', digest:randomBytes(32).toString('hex'), format:OWN_SERVICE_FORMAT,
+      sections:[section], warnings:[], stableKeys:false});
+  }
+  async updateOwnService({id, expected_version, values}) {
+    return this.db().transaction(async () => {
+      const card = await this.get(id);
+      if (card.source_format !== OWN_SERVICE_FORMAT || card.archived) throw new Error('Choose a service that you added.');
+      if (card.version !== expected_version) throw new Error('This service changed. Reopen it before editing.');
+      const section = serviceSection(card, values);
+      const body = clean(section.body, 30000);
+      await this.db().prepare(`UPDATE personal_cards SET title=?,body=?,fields_json=?,contacts_json=?,links_json=?,
+        updated_at=?,version=version+1 WHERE id=? AND owner_id=?`)
+        .bind(clean(section.title, 180),body,JSON.stringify(section.fields),
+          JSON.stringify(cardContacts(OWN_SERVICE_FORMAT,body,section.fields)),JSON.stringify(linksIn(body,section.fields)),
+          now(),id,this.owner()).run();
+      return this.changed({id});
+    });
+  }
+  async ownServiceCount() {
+    const row = await this.db().prepare(`SELECT COUNT(*) AS count FROM personal_cards c
+      JOIN personal_documents d ON d.id=c.document_id AND d.owner_id=c.owner_id
+      WHERE c.owner_id=? AND c.archived=0 AND d.format=?`).bind(this.owner(),OWN_SERVICE_FORMAT).first();
+    return row.count;
+  }
+  async serviceCategories() {
+    const {results} = await this.db().prepare(`SELECT DISTINCT json_extract(c.fields_json,'$.Category') AS category
+      FROM personal_cards c JOIN personal_documents d ON d.id=c.document_id AND d.owner_id=c.owner_id
+      WHERE c.owner_id=? AND c.archived=0 AND d.format IN ${serviceFormats}`).bind(this.owner()).all();
+    return results.map(row => row.category).filter(category => typeof category==='string' && category).sort((a,b) => a.localeCompare(b));
   }
   async list({ query = '', document_id = null, collection = 'all', category = '', case_id = null, include_archived = false, limit = 60, offset = 0 } = {}) {
     if (!['all', 'services', 'personal'].includes(collection)) throw new Error('Choose a supported card collection.');
@@ -79,18 +115,30 @@ export class DocumentStore {
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
       ${case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=c.owner_id AND cm.retention='automatic' AND cm.entry_type='card' AND cm.entry_id=c.id AND cm.case_id<>?)":''}
-      ${collection === 'services' ? "AND d.format='service-directory'" : collection === 'personal' ? "AND (d.format IS NULL OR d.format<>'service-directory')" : ''}
+      ${collection === 'services' ? `AND d.format IN ${serviceFormats}` : collection === 'personal' ? `AND (d.format IS NULL OR d.format NOT IN ${serviceFormats})` : ''}
       ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : []),...(case_id?[case_id]:[])).all()).results;
     const terms = tokens(query);
     const matches = rows.map(row => {
       const title = norm(row.title), haystack = norm(row.title + ' ' + row.body + ' ' + (row.comment_text || '') + ' ' + (row.worked?'worked ':'') + (row.not_worked?"didn't work not worked ":'') + (row.filename || ''));
-      return { row, matches: terms.every(term=>haystack.includes(term)), score: terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0) + (row.source_format!=='service-directory'&&title.includes(term) ? 2 : 0), 0) };
-    }).filter(item => (!category || JSON.parse(item.row.fields_json || '{}').Category === category) && (!terms.length || item.matches)).sort((a, b) => b.score - a.score || (a.row.source_format==='service-directory'&&b.row.source_format==='service-directory'?compareHistory(a.row,b.row):0) || (collection === 'services' ? a.row.title.localeCompare(b.row.title) : 0));
+      return { row, matches: terms.every(term=>haystack.includes(term)), score: terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0) + (!isServiceSource(row.source_format)&&title.includes(term) ? 2 : 0), 0) };
+    }).filter(item => (!category || JSON.parse(item.row.fields_json || '{}').Category === category) && (!terms.length || item.matches));
+    matches.sort((a, b) => {
+      if (collection === 'services') {
+        const ownA = a.row.source_format === OWN_SERVICE_FORMAT, ownB = b.row.source_format === OWN_SERVICE_FORMAT;
+        if (ownA !== ownB) return Number(ownB) - Number(ownA);
+        if (ownA) {
+          const newest = b.row.created_at.localeCompare(a.row.created_at);
+          if (newest) return newest;
+        }
+      }
+      return b.score - a.score || (isServiceSource(a.row.source_format) && isServiceSource(b.row.source_format)
+        ? compareHistory(a.row,b.row) : 0) || (collection === 'services' ? a.row.title.localeCompare(b.row.title) : 0);
+    });
     const total = matches.length;
     return { total, items: matches.slice(Math.max(0,offset), Math.max(0,offset) + Math.max(1, Math.min(100,limit))).map(({ row }) => {
       const card = unpack(row); delete card.fields_json; delete card.contacts_json; delete card.links_json; delete card.comment_text;
       const {worked,not_worked,rating_count,rating_average,...record}=card;
-      return { ...record, experience:{worked,not_worked,rating_count,rating_average}, latest_note:card.latest_note?.slice(0,180)||'', body: card.body.slice(0, 650), category: card.fields.Category || '', area: card.fields['Service area'] || '', fields: undefined };
+      return { ...record, experience:{worked,not_worked,rating_count,rating_average}, latest_note:card.latest_note?.slice(0,180)||'', body: card.body.slice(0, 650), category: card.fields.Category || '', area: card.fields['Service area'] || '', contact_name:card.fields['Contact name']||'', fields: undefined };
     }) };
   }
   async memories({query='',document_id=null,kind='all',include_archived=false,limit=30,offset=0,
@@ -99,7 +147,7 @@ export class DocumentStore {
     const owner=this.owner();
     const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.fields_json,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
-      WHERE c.owner_id=? AND (d.format IS NULL OR d.format<>'service-directory')
+      WHERE c.owner_id=? AND (d.format IS NULL OR d.format NOT IN ${serviceFormats})
       AND (c.kind<>'conversation' OR EXISTS (
         SELECT 1 FROM personal_cases chat WHERE chat.archive_card_id=c.id AND chat.owner_id=c.owner_id AND chat.status='archived'
       ))
@@ -149,7 +197,7 @@ export class DocumentStore {
     return related;
   }
   async get(id,{case_id=null}={}) {
-    const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
+    const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format,d.original_path IS NOT NULL AS has_original FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
     if (!card) throw new Error('This card is not in your active workspace.');
     if(case_id&&await this.db().prepare("SELECT 1 FROM personal_case_memory WHERE owner_id=? AND retention='automatic' AND entry_type='card' AND entry_id=? AND case_id<>?").bind(this.owner(),id,case_id).first())throw new Error('This automatically saved message belongs to another case.');
     const comments = (await this.db().prepare('SELECT id,body,outcome,rating,created_at,updated_at,version FROM personal_comments n WHERE card_id=? AND owner_id=? '+(case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=n.owner_id AND cm.retention='automatic' AND cm.entry_type='comment' AND cm.entry_id=n.id AND cm.case_id<>?) ":'')+'ORDER BY created_at').bind(id, this.owner(),...(case_id?[case_id]:[])).all()).results;
@@ -211,7 +259,7 @@ export class DocumentStore {
     return this.db().transaction(async()=>{
       const card=await this.get(card_id);
       if(!card.document_id || (!id && (card.archived ||
-          (card.source_format!=='service-directory' && !fromCaseSuggestion)))) {
+          (!isServiceSource(card.source_format) && !fromCaseSuggestion)))) {
         throw new Error('Choose a known service to record a service result.');
       }
       const stamp=now(),owner=this.owner();
@@ -257,7 +305,9 @@ export class DocumentStore {
     return this.db().transaction(async () => {
       for (const doc of data.documents) {
         if (typeof doc.id !== 'string' || !/^[a-f0-9]{64}$/.test(doc.digest)) throw new Error('The backup contains an invalid document.');
-        const duplicate = await this.duplicate(doc.digest); const id = duplicate?.id || randomUUID(); docs.set(doc.id, { id, duplicate: Boolean(duplicate) });
+        const duplicate = await this.duplicate(doc.digest); const id = duplicate?.id || randomUUID();
+        const format = clean(doc.format,20);
+        docs.set(doc.id, {id, format, duplicate:Boolean(duplicate)});
         if (!duplicate) await this.db().prepare('INSERT INTO personal_documents (id,owner_id,filename,digest,format,imported_at,updated_at,version,warnings) VALUES (?,?,?,?,?,?,?,?,?)').bind(id,owner,clean(doc.filename,220),doc.digest,clean(doc.format,20),clean(doc.imported_at,40),clean(doc.updated_at,40),Number(doc.version)||1,'["Restored from backup; the original file is not included."]').run();
       }
       for (const card of data.cards) {
@@ -269,14 +319,15 @@ export class DocumentStore {
         if (existing) { cards.set(card.id,existing.id); continue; }
         const id = randomUUID(); cards.set(card.id,id);
         const fields = JSON.parse(card.fields_json || '{}');
-        if (!fields || Array.isArray(fields) || typeof fields !== 'object' || Object.keys(fields).length > 100) throw new Error('The backup has invalid column values.');
+        const fieldLimit = doc?.format === OWN_SERVICE_FORMAT ? 100 + serviceFields.length : 100;
+        if (!fields || Array.isArray(fields) || typeof fields !== 'object' || Object.keys(fields).length > fieldLimit) throw new Error('The backup has invalid column values.');
         const body = clean(card.body,30000);
-        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,contacts_json,links_json,archived,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,owner,doc?.id||null,card.source_key ? clean(card.source_key,500):null,doc?'document':card.kind==='conversation'?'conversation':card.kind==='message'?'message':'note',clean(card.title,180),body,clean(card.locator,220),JSON.stringify(fields),JSON.stringify(contactsIn(body,fields)),JSON.stringify(linksIn(body,fields)),card.archived?1:0,clean(card.created_at,40),clean(card.updated_at,40),Number(card.version)||1).run(); added++;
+        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,contacts_json,links_json,archived,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,owner,doc?.id||null,card.source_key ? clean(card.source_key,500):null,doc?'document':card.kind==='conversation'?'conversation':card.kind==='message'?'message':'note',clean(card.title,180),body,clean(card.locator,220),JSON.stringify(fields),JSON.stringify(cardContacts(doc?.format,body,fields)),JSON.stringify(linksIn(body,fields)),card.archived?1:0,clean(card.created_at,40),clean(card.updated_at,40),Number(card.version)||1).run(); added++;
       }
       for (const note of data.comments) if (cards.has(note.card_id)) {
         const cardId=cards.get(note.card_id), body=clean(note.body), created=clean(note.created_at,40);
         const outcome=note.outcome??null,rating=note.rating??null;
-        if(outcome!=null){validResult(outcome,rating);if((await this.get(cardId)).source_format!=='service-directory')throw new Error('A service result must belong to a known service.');}
+        if(outcome!=null){validResult(outcome,rating);if(!isServiceSource((await this.get(cardId)).source_format))throw new Error('A service result must belong to a known service.');}
         else if(rating!=null)throw new Error('A rating must belong to a reported service result.');
         const exists=await this.db().prepare('SELECT id FROM personal_comments WHERE owner_id=? AND card_id=? AND body=? AND created_at=? AND outcome IS ? AND rating IS ?').bind(owner,cardId,body,created,outcome,rating).first();
         const id=exists?.id||randomUUID();comments.set(note.id,id);

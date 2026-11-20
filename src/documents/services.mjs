@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { catalog } from '../core/catalog.mjs';
+import { PUBLIC_SERVICE_FORMAT as SERVICE_DIRECTORY_FORMAT } from './service-sources.mjs';
 
-export const SERVICE_DIRECTORY_FORMAT = 'service-directory';
+export { SERVICE_DIRECTORY_FORMAT };
 // The previously researched public pathways, with targeted contact/source checks on 18 November.
 const updates = {
   'chats-rides': { source_checked: '2026-11-18' },

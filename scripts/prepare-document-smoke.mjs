@@ -13,7 +13,11 @@ await writeFile(path.join(stage,'dist/preload.cjs'),(await readFile('src/preload
 await writeFile(path.join(stage,'document-smoke-bootstrap.cjs'),`const path=require('node:path'),fs=require('node:fs');const{app,ipcMain,dialog}=require('electron');
 const base=path.dirname(process.execPath),report=path.join(base,'document-smoke-result.json'),pointer=path.join(base,'test-profile.txt'),reopen=process.argv.includes('--hive-reopen-check');
 const profile=reopen?fs.readFileSync(pointer,'utf8'):fs.mkdtempSync(path.join(base,'isolated-documents-'));if(!path.resolve(profile).startsWith(path.resolve(base)+path.sep))throw new Error('Unexpected test profile');if(!reopen)fs.writeFileSync(pointer,profile);process.env.HIVE_QA_DATA_DIR=profile;
-dialog.showOpenDialog=async(window,options)=>{if(options.title!=='Add a document')throw new Error('Unexpected test file dialog.');return{canceled:false,filePaths:[path.join(app.getAppPath(),'assets/SAMPLE-FICTIONAL-Services.csv')]};};
+dialog.showOpenDialog=async(window,options)=>{
+  const fixtures={'Add a document':'assets/SAMPLE-FICTIONAL-Services.csv','Import services':'test-fixtures/services.xlsx'};
+  if(!fixtures[options.title])throw new Error('Unexpected test file dialog.');
+  return{canceled:false,filePaths:[path.join(app.getAppPath(),fixtures[options.title])]};
+};
 let finished=false,testWindow;const cold=reopen?JSON.parse(fs.readFileSync(path.join(base,'document-cold-result.json'),'utf8')):{};
 async function finish(result){if(finished)return;finished=true;if(result.ok&&!reopen){fs.writeFileSync(path.join(base,'document-cold-result.json'),JSON.stringify(result,null,2));app.once('will-quit',()=>app.relaunch({args:process.argv.slice(1).filter(v=>v!=='--hive-reopen-check').concat('--hive-reopen-check')}));app.quit();return;}
 fs.writeFileSync(report,JSON.stringify({...cold,...result,version:app.getVersion(),native_electron:true},null,2));if(!result.ok)testWindow?.destroy();app.quit();}

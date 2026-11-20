@@ -388,3 +388,51 @@
   background: #eaf6ee;
   border-color: #c9e3d2;
 }
+
+.service-source-group > h3 {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: #edf6f2;
+  color: #28554d;
+  font-size: 12px;
+}
+.service-source-group + .service-source-group { margin-top: 14px; }
+.service-source-group[aria-label="Public services"] > h3 { background: #eef4f8; color: #335a74; }
+.source-tag {
+  color: #566c79;
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: normal;
+}
+.service-row-contact .source-tag { display: inline; }
+.note-source-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 7px;
+}
+.note-source-heading h3 { margin: 0; }
+.library-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
+.service-editor-dialog { max-width: 720px; }
+.service-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+}
+.service-editor-fields input, .service-editor-fields textarea, .service-review-tools select { display: block; width: 100%; margin-top: 4px; }
+.service-editor-fields label, .service-review-tools label { font-size: 12px; color: #2e4f65; font-weight: 650; }
+.service-description { grid-column: 1 / -1; }
+.service-review-tools { margin-bottom: 15px; }
+.service-include { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.service-include input { width: auto; margin: 0; }
+#service-review-count { margin: 8px 0 2px; color: #355b70; font-size: 12px; }
+.service-questions {
+  margin: 10px 0 14px;
+  padding: 8px 9px 8px 25px;
+  border-radius: 7px;
+  background: #f1f6f9;
+  color: #355b70;
+  font-size: 12px;
+  line-height: 1.55;
+}

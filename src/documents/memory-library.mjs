@@ -1,3 +1,5 @@
+import {isServiceSource} from './service-sources.mjs';
+
 const organizationField = /^(?:organi[sz]ation|company|provider)(?: name)?$/i;
 const historyPageSize = 20;
 
@@ -6,7 +8,7 @@ export function organizationOf(record) {
   const named = Object.entries(fields).find(([key, value]) =>
     organizationField.test(key.trim()) && typeof value === 'string' && value.trim());
   if (named) return named[1].trim().slice(0, 180);
-  if (record.source_format === 'service-directory') return record.title.split(' · ')[0].trim();
+  if (isServiceSource(record.source_format)) return record.title.split(' · ')[0].trim();
   return '';
 }
 

@@ -8,6 +8,9 @@ import { DocumentAssistant } from '../src/documents/assistant.mjs';
 import { ensureKnownServices, knownServices, serviceDirectoryDocument, serviceCategories } from '../src/documents/services.mjs';
 import { APP_NAME, windowsDataDirectory } from '../src/app-identity.mjs';
 import { parseDocument } from '../src/documents/parse.mjs';
+import { DocumentImporter } from '../src/documents/importer.mjs';
+import { missingServiceDetails, OWN_SERVICE_FORMAT } from '../src/documents/service-sources.mjs';
+import { writeServiceFixture } from './document-fixtures.mjs';
 
 async function fixture(migrations=path.resolve('drizzle')) {
   await mkdir('.runtime/tests', { recursive: true });
@@ -15,8 +18,87 @@ async function fixture(migrations=path.resolve('drizzle')) {
   const options = { filename: path.join(folder, 'documents.sqlite'), wasm: path.resolve('node_modules/sql.js/dist/sql-wasm.wasm'), migrations, catalog: [] };
   let db = await openDatabase(options), owner = 'user-a';
   const store = new DocumentStore({ database: () => db, owner: () => owner });
-  return { store, switch(value) { owner = value; }, async reopen(updatedMigrations=options.migrations) { await db.close(); options.migrations=updatedMigrations; db = await openDatabase(options); }, close: () => db.close() };
+  return { store, folder, switch(value) { owner = value; }, async reopen(updatedMigrations=options.migrations) { await db.close(); options.migrations=updatedMigrations; db = await openDatabase(options); }, close: () => db.close() };
 }
+
+test('own service contacts, changes and results stay attached to the same private directory card', async () => {
+  const f=await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const values={name:'Fictional Shuttle',organization:'Example Agency',category:'Transportation',
+      area:'Newmarket',person:'Alex Example',phone:'905-555-0117',email:'trips@example.org',details:'Call to reserve a ride.'};
+    await f.store.addOwnService(values);
+    const {items,total}=await f.store.list({collection:'services',limit:1});
+    const [own]=items;
+    assert.equal(total,28);
+    assert.equal(own.source_format,OWN_SERVICE_FORMAT);
+    assert.equal((await f.store.list({collection:'personal'})).total,0);
+    assert.deepEqual(own.contacts.map(contact=>contact.value),['905-555-0117','trips@example.org']);
+    await f.store.comment({card_id:own.id,body:'Ask whether an escort can ride.'});
+    await f.store.serviceResult({card_id:own.id,outcome:'worked',rating:4});
+    await f.store.updateOwnService({id:own.id,expected_version:own.version,
+      values:{...values,person:'Sam Example',phone:'905-555-0197'}});
+    await assert.rejects(f.store.updateOwnService({id:own.id,expected_version:own.version,values}),/changed/);
+    const revised=await f.store.get(own.id);
+    assert.deepEqual(revised.contacts[0],{kind:'phone',name:'Sam Example',value:'905-555-0197'});
+    assert.equal(revised.comments.length,2);
+    assert.equal(revised.experience.rating_average,4);
+    const grouped=await f.store.memories({grouped:true,query:'Example Agency'});
+    assert.equal(grouped.items[0].title,'Example Agency');
+    assert.equal(grouped.record_count,2);
+    const backup=await f.store.export();
+    f.switch('recipient');
+    await ensureKnownServices(f.store);
+    assert.equal((await f.store.list({collection:'services'})).total,27);
+    await assert.rejects(f.store.get(own.id),/active workspace/);
+    await f.store.restore(backup);
+    const restored=(await f.store.list({collection:'services',limit:1})).items[0];
+    assert.equal(restored.source_format,OWN_SERVICE_FORMAT);
+    assert.equal(restored.contacts[0].value,'905-555-0197');
+    assert.equal(restored.experience.rating_average,4);
+  } finally { await f.close(); }
+});
+
+test('reviewed workbook rows become own services while retaining their fields and source file', async () => {
+  const f=await fixture();
+  try {
+    const filename=await writeServiceFixture(f.folder);
+    await ensureKnownServices(f.store);
+    const importer=new DocumentImporter({store:f.store,directory:path.join(f.folder,'files'),
+      worker:path.resolve('dist/document-worker.cjs'),pdfWorker:path.resolve('dist/pdf.worker.mjs')});
+    const preview=await importer.prepare(filename);
+    const review=await importer.reviewServices(preview.id);
+    assert.equal(review.rows.length,3);
+    assert.deepEqual(review.rows.map(row=>row.include),[true,true,false]);
+    assert.equal(review.rows[0].values.email,'rides@example.org');
+    assert.equal(missingServiceDetails(review.rows[1].values).length,2);
+    importer.setServiceRow({id:review.id,index:1,include:true,
+      values:{...review.rows[1].values,area:'Aurora',email:'meals@example.org'}});
+    const saved=await importer.confirmServices(review.id);
+    assert.equal(saved.count,2);
+    assert.equal(path.extname((await f.store.document(saved.document_id)).original_path),'.xlsx');
+    assert.equal((await importer.prepare(filename,{services:true})).duplicate,true);
+    assert.equal((await f.store.list({collection:'services'})).total,29);
+    assert((await f.store.serviceCategories()).includes('Meals and food'));
+    const [card]=(await f.store.list({collection:'services',query:'meals@example.org',category:'Meals and food'})).items;
+    const info=await f.store.get(card.id);
+    assert.equal(info.fields['Eligibility notes'],'Weekday delivery');
+    assert.equal(info.fields['Service area'],'Aurora');
+    assert.equal(info.has_original,1);
+    const regular=await importer.prepare(filename);
+    assert(!regular.previous);
+    await importer.confirm(regular.id);
+    assert.equal((await f.store.list({collection:'personal'})).total,3);
+    assert.equal((await f.store.list({collection:'services'})).total,29);
+    const backup=await f.store.export();
+    f.switch('recipient');
+    await f.store.restore(backup);
+    const [restored]=(await f.store.list({collection:'services',query:'Fictional Meal Drop'})).items;
+    assert.equal(restored.source_format,OWN_SERVICE_FORMAT);
+    assert.equal(restored.contacts[0].value,'meals@example.org');
+    assert.equal((await f.store.get(restored.id)).fields['Eligibility notes'],'Weekday delivery');
+  } finally { await f.close(); }
+});
 
 test('researched directory starts with 27 dated public services and no invented contacts or outcomes', async () => {
   assert.equal(knownServices.length, 27);

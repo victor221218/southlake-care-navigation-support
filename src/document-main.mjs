@@ -12,7 +12,8 @@ import {CaseFollowups} from './documents/case-followups.mjs';
 import {InputHistory} from './documents/input-history.mjs';
 import { cspForPath } from './security.mjs';
 import { APP_NAME, windowsDataDirectory } from './app-identity.mjs';
-import { ensureKnownServices, serviceCategories, SERVICE_DIRECTORY_FORMAT } from './documents/services.mjs';
+import { ensureKnownServices, SERVICE_DIRECTORY_FORMAT } from './documents/services.mjs';
+import { OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceSource } from './documents/service-sources.mjs';
 
 const root=app.getAppPath(),uiOrigin='hive://app';
 app.setName(APP_NAME);
@@ -29,7 +30,7 @@ const safeError=error=>({message:error.message||'This action could not complete.
 const fromApp=event=>event.sender===window?.webContents&&event.senderFrame?.url.startsWith(uiOrigin+'/');
 const idle=()=>{if(assistant.busy||importer.busy||connection.busy||pickerBusy)throw new Error('Finish the current answer, file import, or sign-in first.');};
 async function updateAccount(){try{account=await connection.session();accountError='';}catch(error){accountError=error.message;account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'};}return account;}
-async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents(),activeCase=await cases.current();return{account,accountError,documents:allDocuments.filter(d=>d.format!==SERVICE_DIRECTORY_FORMAT),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),cases:await cases.list({all:true}),active_case:activeCase,input_history:await inputHistory.state(),serviceCategories,version:app.getVersion(),platform:process.platform,models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this computer',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
+async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents(),activeCase=await cases.current();return{account,accountError,documents:allDocuments.filter(d=>!isServiceSource(d.format)),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),cases:await cases.list({all:true}),active_case:activeCase,input_history:await inputHistory.state(),serviceCategories:await store.serviceCategories(),version:app.getVersion(),platform:process.platform,models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this computer',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
 async function allowedOriginal(document){
   if(!document?.original_path)return null;
   const base=path.resolve(dataDir,'documents',owner())+path.sep,target=path.resolve(document.original_path);
@@ -47,6 +48,12 @@ async function invoke(method,args){
   if(method==='list-cards')return store.list(args);
   if(method==='list-memory')return store.memories(args);
   if(method==='get-card')return store.get(args.id);
+  if(method==='add-own-service'||method==='update-own-service'){
+    idle();
+    const result=await (method==='add-own-service'?store.addOwnService(args.values):store.updateOwnService(args));
+    assistant.clear();
+    return result;
+  }
   if(method==='list-cases')return cases.list(args);
   if(method==='get-case'){idle();return cases.hydrate(await cases.read(args.id,args));}
   if(method==='select-case'){idle();assistant.clear();await cases.activate(args.id);return cases.hydrate(await cases.read(args.id,args));}
@@ -83,11 +90,21 @@ async function invoke(method,args){
     if(source)await rm(source,{force:true}).catch(()=>{});assistant.clear();return result;
   }
   if(method==='pick-document'){
-    idle();pickerBusy=true;try{const chosen=await dialog.showOpenDialog(window,{title:'Add a document',properties:['openFile'],filters:[{name:'Supported documents',extensions:['xlsx','csv','tsv','docx','pdf','txt','md']}]});
-    if(chosen.canceled)return{cancelled:true};return await importer.prepare(chosen.filePaths[0]);}finally{pickerBusy=false;}
+    idle();pickerBusy=true;const services=args.services===true;
+    try{
+      const chosen=await dialog.showOpenDialog(window,{title:services?'Import services':'Add a document',properties:['openFile'],
+        filters:[{name:services?'Spreadsheets':'Supported documents',extensions:services?SERVICE_FILE_TYPES:['xlsx','csv','tsv','docx','pdf','txt','md']}]});
+      if(chosen.canceled)return{cancelled:true};
+      return await importer.prepare(chosen.filePaths[0],{services});
+    }finally{pickerBusy=false;}
   }
   if(method==='sample-document'){idle();return importer.prepare(path.join(root,'assets/SAMPLE-FICTIONAL-Services.csv'));}
   if(method==='confirm-import'){if(assistant.busy||connection.busy)throw new Error('Wait for the current answer or sign-in.');return importer.confirm(args.id,args.update===true);}
+  if(method==='review-service-import'){idle();return importer.reviewServices(args.id);}
+  if(method==='review-service-row'){idle();importer.setServiceRow(args);return{updated:true};}
+  if(method==='confirm-service-import'){
+    idle();const result=await importer.confirmServices(args.id);assistant.clear();return result;
+  }
   if(method==='cancel-import'){importer.cancel();return{cancelled:true};}
   if(method==='open-original'){
     const document=await store.document(args.id),source=await allowedOriginal(document);
@@ -108,7 +125,7 @@ async function invoke(method,args){
     if(size>100*1024*1024)throw new Error('This backup exceeds the 100 MB import limit.');
     return await store.restore(JSON.parse(await readFile(selected.filePaths[0],'utf8')));}finally{pickerBusy=false;}
   }
-  if(method==='starter-count'){const starter=new DocumentStore({database:()=>db,owner:()=> 'device'});const notes=await db.prepare("SELECT COUNT(*) AS count FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id JOIN personal_documents d ON d.id=c.document_id WHERE n.owner_id='device' AND d.format='service-directory'").first();return{count:(await starter.list({collection:'personal',limit:1})).total+(notes?.count||0)};}
+  if(method==='starter-count'){const starter=new DocumentStore({database:()=>db,owner:()=> 'device'});const notes=await db.prepare("SELECT COUNT(*) AS count FROM personal_comments n JOIN personal_cards c ON c.id=n.card_id JOIN personal_documents d ON d.id=c.document_id WHERE n.owner_id='device' AND d.format IN (?,?)").bind(SERVICE_DIRECTORY_FORMAT,OWN_SERVICE_FORMAT).first();return{count:(await starter.list({collection:'personal',limit:1})).total+await starter.ownServiceCount()+(notes?.count||0)};}
   if(method==='copy-starter'){idle();if(!account.connected)throw new Error('Connect the account that should receive these starter cards.');const starter=new DocumentStore({database:()=>db,owner:()=> 'device'});return store.restore(await starter.export());}
   if(method==='open-link'){
     let url;try{url=new URL(args.url);}catch{throw new Error('This link is invalid.');}

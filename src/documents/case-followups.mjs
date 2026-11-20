@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { InputHistory } from './input-history.mjs';
+import { isServiceSource } from './service-sources.mjs';
 
 export const CHAT_NOTE_LIMIT = 2000;
 const outcomes = ['worked', 'not_worked'];
@@ -96,7 +97,7 @@ export class CaseFollowups {
       if (reply_id && !payload.cards?.some(card => card.id === card_id)) throw new Error('Choose a service card from this topic.');
       const card = await this.store.get(card_id, {case_id});
       if (!card.document_id || card.archived ||
-          (card.source_format !== 'service-directory' && payload.presentation !== 'service-options')) {
+          (!isServiceSource(card.source_format) && payload.presentation !== 'service-options')) {
         throw new Error('Choose a current service recommendation.');
       }
       // Sequence zero identifies selections that started in Known services.

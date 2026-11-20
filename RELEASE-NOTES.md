@@ -1,7 +1,9 @@
-# Care Navigation Support 2.15.0
+# Care Navigation Support 2.16.0
 
-- Individual ratings use red for 1–2, yellow for 3, and green for 4–5. Your saved average appears beside the program contact in **Known services**.
-- **Manage memory** offers **Delete** beside visible notes and results in the preview and in expanded history. Each deletion asks for confirmation.
-- The release includes a verified Windows installer and Mac test downloads for Apple Silicon and Intel. Both Mac packages carry the same app files and directory as the Windows release. Native Mac testing and Apple notarization are pending.
+- **Known services** shows your entries first, followed by the public directory. Contacts show **(Own source)** or **(Public source)**.
+- **Add a service** saves one entry. **Import services** reviews Excel .xlsx, CSV and TSV rows before saving them as service cards.
+- The review asks about missing names, phone or email, and service area. Extra spreadsheet columns and source references remain available in **View details**.
+- **Edit details** updates your own service and keeps its saved feedback. Notes and results carry their own source label in **View details** and **Manage memory**.
+- The Windows installer and Mac test packages contain the same updated app. Mac launch testing and Apple notarization remain outstanding.
 
 Close the previous app before updating.
