@@ -1,6 +1,6 @@
-# Care Navigation Support — Windows 2.16 prototype
+# Care Navigation Support — Windows quick start
 
-Open **Care-Navigation-Support-Setup-2.16.0.exe**, choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards. No ZIP extraction, coding tools, terminal commands or plugin setup are needed.
+Open the **Care Navigation Support** Windows installer for your version and choose **Install**, then **Finish**. Open **Care Navigation Support** from your desktop or Start menu afterwards.
 
 This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bit Intel/AMD computers. It installs for the current Windows user. The pilot is unsigned. If Windows or your organization blocks it, ask your administrator to approve distribution. A signed publisher release is required for a routine Southlake rollout.
 
@@ -9,6 +9,8 @@ This installer supports Windows 10 version 2004 or later and Windows 11 on 64-bi
 Workspace opens as a full-width chat, with Add a document beside Speak. **Chat history** keeps your conversations and drafts. Use **Manage memory** for information you choose to keep for future reference.
 
 ## Known services are ready to browse
+
+For 2.17.0, [use the inventory and outcome guide](README.md#maintain-the-service-inventory-and-outcomes) to import an updated program list, confirm tracked outcomes and try the live ranking demo. **Needs details** identifies missing information on each card.
 
 Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. Your saved average rating appears beside the program contact. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 

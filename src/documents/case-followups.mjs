@@ -89,6 +89,24 @@ export class CaseFollowups {
     ).bind(messageId, caseId, owner).first();
   }
 
+  async latestSelection(caseId, cardId=null) {
+    return this.db().prepare(`SELECT * FROM personal_case_messages
+      WHERE case_id=? AND owner_id=? AND role='assistant' AND state='complete'
+        AND json_type(payload_json,'$.followup')='object'
+        ${cardId?"AND json_extract(payload_json,'$.followup.card_id')=?":''}
+      ORDER BY sequence DESC LIMIT 1`).bind(caseId,this.store.owner(),...(cardId?[cardId]:[])).first();
+  }
+
+  async recordFromChat({case_id,card_id,outcome,body,rating}) {
+    return this.db().transaction(async()=>{
+      const previous=await this.latestSelection(case_id,card_id);
+      const messageId=previous?.id || (await this.start({case_id,card_id})).id;
+      const already=previous && JSON.parse(previous.payload_json||'{}').followup?.result_id;
+      const saved=await this.update({case_id,message_id:messageId,step:'record',outcome,body,rating});
+      return {...saved,alreadyRecorded:Boolean(already&&already===saved.payload.followup?.result?.id)};
+    });
+  }
+
   async start({case_id, reply_id, card_id}) {
     const row = await this.db().transaction(async () => {
       const current = await this.activeCase(case_id);
@@ -184,7 +202,13 @@ export class CaseFollowups {
         case 'change':
           followup.outcome = null;
           break;
+        case 'record':
         case 'save': {
+          if (step==='record') {
+            if (!outcomes.includes(outcome)) throw new Error('Choose Worked or Didn’t work.');
+            followup.outcome=outcome;
+            followup.deferred=false;
+          }
           if (!followup.outcome || followup.deferred) throw new Error('Choose an outcome before saving.');
           const serviceResult = {
             card_id: card.id,

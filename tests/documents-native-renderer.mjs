@@ -253,7 +253,7 @@ async function run(){try{
   type('search','');filter('memory-kind-filter','documents');await wait(()=>document.querySelectorAll('.memory-record').length===4);
   const caseChecks=await runCaseChecks({request,click,type,filter,wait,assert,serviceCard,revealMemoryEntry});
   click('[data-action="known-services"]');
-  await wait(()=>document.querySelector('.service-source-group[aria-label="Public services"] .source-tag')?.textContent==='(Public source)');
+  await wait(()=>document.querySelector('.service-source-group[aria-label="Public services without recorded outcomes"] .source-tag')?.textContent==='(Public source)');
   click('#add-service');await wait(()=>document.getElementById('service-field-name'));
   assert(document.getElementById('service-questions').textContent.includes('phone number or email')&&
     document.getElementById('service-questions').textContent.includes('communities'));
@@ -263,8 +263,8 @@ async function run(){try{
   type('service-field-person','Jordan Example');
   type('service-field-phone','905-555-0176');
   click('[data-action="save-own-service"]');
-  await wait(()=>!document.getElementById('modal').open&&document.querySelector('.service-source-group[aria-label="Your services"] .service-row'));
-  const ownRow=document.querySelector('.service-source-group[aria-label="Your services"] .service-row');
+  await wait(()=>!document.getElementById('modal').open&&document.querySelector('.service-source-group[aria-label="Your services without recorded outcomes"] .service-row'));
+  const ownRow=document.querySelector('.service-source-group[aria-label="Your services without recorded outcomes"] .service-row');
   const ownId=ownRow.dataset.serviceId;
   assert(document.querySelector('.service-source-group').getAttribute('aria-label')==='Your services'&&
     ownRow.querySelector('.service-row-contact').textContent.includes('Jordan Example (Own source)')&&

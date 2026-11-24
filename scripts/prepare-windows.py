@@ -45,9 +45,8 @@ with zipfile.ZipFile(runtime['path']) as archive:
             shutil.copyfileobj(source, target)
 (stage / 'resources').mkdir(exist_ok=True)
 shutil.copyfile(root / ('.runtime/document-smoke.asar' if args.document_smoke else '.runtime/assistant-smoke.asar' if args.assistant_smoke else '.runtime/voice-smoke.asar' if args.voice_smoke else '.runtime/qa-app.asar' if args.qa else 'release/app.asar'), stage / 'resources/app.asar')
-shutil.copyfile(root / 'START-HERE.md', stage / 'START-HERE.md')
-shutil.copyfile(root / 'SHARING.md', stage / 'SHARING.md')
-shutil.copyfile(root / 'DIRECTORY-SOURCES.md', stage / 'DIRECTORY-SOURCES.md')
+for guide in ['README.md', 'START-HERE.md', 'SHARING.md', 'DIRECTORY-SOURCES.md']:
+    shutil.copyfile(root / guide, stage / guide)
 icon = root / 'assets/hive.ico'
 shutil.copyfile(icon, stage / 'hive.ico')
 if not (args.qa or args.assistant_smoke or args.voice_smoke):

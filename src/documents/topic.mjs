@@ -6,13 +6,13 @@ const categories = [
   ['Home support', /\b(?:home (?:care|help|supports?)|personal support|housekeeping)\b/, 'Home supports'],
   ['Language support', /\b(?:interpreters?|interpretation|translation|language access)\b/, 'Language access'],
   ['Mental health support', /\b(?:mental health|counselling|counseling|addiction)\b/, 'Mental health'],
-  ['Caregiver support', /\b(?:caregivers?|caregiver support|respite)\b/],
+  ['Caregiver support', /\b(?:caregivers?|respite|dementia|alzheimer)\b/],
   ['Housing support', /\b(?:housing|shelter|rent(?:al)?)\b/],
   ['Financial assistance', /\b(?:financial (?:help|support|assistance)|income support|ontario works)\b/],
   ['Social connection', /\b(?:friendly visiting|social connection|loneliness)\b/]
 ];
-const regions = [...enums.regions].sort((a, b) => b.length - a.length);
-const fold = value => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const regions = [...enums.regions, 'York Region'].sort((a, b) => b.length - a.length);
+const fold = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const transportNeeds = [
   [/\b(?:wheelchairs?|mobility scooters?)\b/, 'Wheelchair access'],
   [/\b(?:walkers?|rollators?)\b/, 'Walker access'],
@@ -32,6 +32,21 @@ export function serviceTopic(text) {
     region,
     title: region ? match.label + ' in ' + region : match.label
   };
+}
+
+export function matchesServiceTopic(card, topic) {
+  const fields=card.fields||{};
+  if (/^(?:closed|inactive|discontinued|retired)$/i.test(String(fields['Service status']||'').trim())) return false;
+  const pattern=categories.find(([label,,category])=>(category||label)===topic.category)?.[1];
+  const category=fields.Category||card.category||'';
+  if (fold(category)!==fold(topic.category) &&
+      !pattern?.test(fold([category,fields['Service Subcategory'],card.title,fields['Service details']].join(' ')))) return false;
+  if (!topic.region) return true;
+  const coverage=' '+fold([fields['Service area'],fields['Geographic Coverage / Catchment']].join(' '))+' ';
+  if (coverage.includes(' '+fold(topic.region)+' ')) return true;
+  if (topic.region!=='York Region') return false;
+  return ['Aurora','East Gwillimbury','Georgina','King','Markham','Newmarket','Richmond Hill','Vaughan','Whitchurch Stouffville']
+    .some(place=>coverage.includes(' '+fold(place)+' '));
 }
 
 export function summarizeTopic(text) {

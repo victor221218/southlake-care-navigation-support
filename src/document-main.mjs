@@ -92,7 +92,7 @@ async function invoke(method,args){
   if(method==='pick-document'){
     idle();pickerBusy=true;const services=args.services===true;
     try{
-      const chosen=await dialog.showOpenDialog(window,{title:services?'Import services':'Add a document',properties:['openFile'],
+      const chosen=await dialog.showOpenDialog(window,{title:services?'Import service inventory or navigation tracker':'Add a document',properties:['openFile'],
         filters:[{name:services?'Spreadsheets':'Supported documents',extensions:services?SERVICE_FILE_TYPES:['xlsx','csv','tsv','docx','pdf','txt','md']}]});
       if(chosen.canceled)return{cancelled:true};
       return await importer.prepare(chosen.filePaths[0],{services});
@@ -103,8 +103,10 @@ async function invoke(method,args){
   if(method==='review-service-import'){idle();return importer.reviewServices(args.id);}
   if(method==='review-service-row'){idle();importer.setServiceRow(args);return{updated:true};}
   if(method==='confirm-service-import'){
-    idle();const result=await importer.confirmServices(args.id);assistant.clear();return result;
+    idle();const result=await importer.confirmServices(args.id,args.update===true);assistant.clear();return result;
   }
+  if(method==='review-tracking-row'){idle();importer.setTrackingRow(args);return{updated:true};}
+  if(method==='confirm-tracking-import'){idle();const result=await importer.confirmTracking(args.id);assistant.clear();return result;}
   if(method==='cancel-import'){importer.cancel();return{cancelled:true};}
   if(method==='open-original'){
     const document=await store.document(args.id),source=await allowedOriginal(document);
@@ -160,7 +162,7 @@ async function boot(){
   cases=new DocumentCases({store});inputHistory=new InputHistory({store});
   followups = new CaseFollowups({cases, store, inputHistory});
   importer=new DocumentImporter({store,directory:path.join(dataDir,'documents'),worker:path.join(root,'dist/document-worker.cjs'),pdfWorker:path.join(root,'dist/pdf.worker.mjs')});
-  assistant=new DocumentAssistant({store,connection,cases,emit});
+  assistant=new DocumentAssistant({store,connection,cases,followups,emit});
   protocol.handle('hive',async request=>{
     const url=new URL(request.url);if(url.host!=='app')return new Response('Unavailable',{status:404});
     const relative=decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname),folder=relative.startsWith('/voice/')?path.join(root,'assets'):path.join(root,'dist/ui');

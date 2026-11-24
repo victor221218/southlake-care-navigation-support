@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import ExcelJS from 'exceljs';
 import mammoth from 'mammoth';
 import DOMMatrix from '@thednp/dommatrix';
+import {headerKey, INVENTORY_TEMPLATE, navigationTemplate, TRACKING_TEMPLATE, trackingRow} from './navigation-templates.mjs';
 
 export const supportedExtensions = ['xlsx','csv','tsv','docx','pdf','txt','md'];
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -41,28 +42,64 @@ function cellValue(cell) {
 }
 function tableSections(rows, name, warnings, numericCSV=false) {
   const nonempty=rows.filter(row=>row.values.some(value=>String(value??'').trim()));
-  if (!nonempty.length) return [];
-  let headerIndex=nonempty.findIndex(row=>row.values.filter(v=>String(v??'').trim()).length>=2);
+  if (!nonempty.length) return {sections:[]};
+  let headerIndex=nonempty.findIndex(row=>navigationTemplate(row.values));
+  const template=headerIndex>=0 ? navigationTemplate(nonempty[headerIndex].values) : '';
+  if (headerIndex<0) headerIndex=nonempty.findIndex(row=>row.values.filter(v=>String(v??'').trim()).length>=2);
   if (headerIndex<0) headerIndex=0;
-  if (headerIndex>0) warnings.push(name+': introductory rows above the table are kept as notes.');
+  if (headerIndex>0 && !template) warnings.push(name+': introductory rows above the table are kept as notes.');
   const first=nonempty[headerIndex], seen=new Set();
   const columns=first.values.map((value,i)=>{ let title=clean(value).slice(0,100)||'Column '+(i+1); if(seen.has(title))title+=' ('+(i+1)+')'; seen.add(title);return title; });
   if(columns.length>100)throw new Error('Limit the table to 100 columns per worksheet.');
-  const titleIndex=Math.max(0,columns.findIndex(c=>/^(?:service|program|organisation|organization|provider|name|title|service name|program name)$/i.test(c)));
+  const titleIndex=Math.max(0,columns.findIndex(c=>/^(?:service|program|organisation|organization|provider|name|title|service name|program name|program \/ clinic)$/i.test(c)));
   const idIndex=columns.findIndex(c=>/^(?:id|service id|service_id|program id|record id|reference|code)$/i.test(c));
   const result=[];
-  for(const row of nonempty.slice(0,headerIndex)) result.push({title:name+' · introduction',body:row.values.join(' | '),fields:{},locator:name+' · row '+row.number,key:name+'/intro/'+row.number,stable:false});
+  const tracking=[];
+  if (!template) for(const row of nonempty.slice(0,headerIndex)) result.push({title:name+' · introduction',body:row.values.join(' | '),fields:{},locator:name+' · row '+row.number,key:name+'/intro/'+row.number,stable:false});
   for(const row of nonempty.slice(headerIndex+1)) {
     const fields={};
     row.values.forEach((value,i)=>{ if(i>=100)throw new Error('Limit the table to 100 columns per worksheet.'); const column=columns[i]||'Column '+(i+1);if(numericCSV&&typeof value==='string'&&!/id|code|phone|postal|zip|reference/i.test(column)&&/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value.trim())&&Math.abs(Number(value))<=Number.MAX_SAFE_INTEGER)value=Number(value);if(String(value??'').trim())fields[column]=value; });
-    const title=clean(row.values[titleIndex])||name+' · row '+row.number;
-    const identity=idIndex>=0?row.values[idIndex]:row.values[titleIndex];
+    if (template===TRACKING_TEMPLATE) {
+      const item=trackingRow(fields,name+' · row '+row.number);
+      if (item) tracking.push(item);
+      continue;
+    }
+    const organization=template===INVENTORY_TEMPLATE ? fields[columns.find(c=>headerKey(c)==='partner organization')] : '';
+    const title=clean(row.values[titleIndex])||clean(organization)||name+' · row '+row.number;
+    const program=clean(row.values[titleIndex]);
+    const identity=idIndex>=0&&(template!==INVENTORY_TEMPLATE||clean(row.values[idIndex])) ? row.values[idIndex] :
+      template===INVENTORY_TEMPLATE && (organization || program)
+        ? JSON.stringify([organization,program,fields['Service type'],fields['Service Subcategory'],fields['Service location']].map(headerKey))
+        : row.values[titleIndex];
     result.push({title:title.slice(0,180),body:Object.entries(fields).map(([key,value])=>key+': '+value).join('\n'),fields,locator:name+' · row '+row.number,key:name+'/key/'+stable(identity),stable:Boolean(clean(identity))});
   }
   // A single-column sheet still keeps every row; its first row is a label.
-  if(!result.length && nonempty.length===1)result.push({title:name,body:first.values.join(' | '),fields:{},locator:name+' · row '+first.number,key:name+'/single',stable:false});
-  const counts=new Map();for(const item of result)counts.set(item.key,(counts.get(item.key)||0)+1);
-  return result.map(item=>counts.get(item.key)>1||!item.stable?{...item,key:item.key+'/row/'+item.locator,stable:false}:item);
+  if(!template && !result.length && nonempty.length===1)result.push({title:name,body:first.values.join(' | '),fields:{},locator:name+' · row '+first.number,key:name+'/single',stable:false});
+  const merged = new Map();
+  for (const section of result) {
+    if (!merged.has(section.key)) merged.set(section.key, []);
+    merged.get(section.key).push(section);
+  }
+  const sections = [...merged.values()].flatMap(group => {
+    if (group.length===1) {
+      const [first]=group;
+      return first.stable ? [first] : [{...first,key:first.key+'/row/'+first.locator}];
+    }
+    if (template!==INVENTORY_TEMPLATE || !group[0].stable || idIndex>=0) {
+      return group.map(section=>({...section,key:section.key+'/row/'+section.locator,stable:false}));
+    }
+    const fields={};
+    for (const label of new Set(group.flatMap(section=>Object.keys(section.fields)))) {
+      const values=[...new Set(group.map(section=>section.fields[label]).filter(value=>String(value??'').trim()))];
+      fields[label]=values.length===1 ? values[0] : values.join('\n');
+    }
+    fields['Source rows']=group.map(section=>section.locator).join(', ');
+    return [{...group[0],fields,body:Object.entries(fields).map(([key,value])=>key+': '+value).join('\n')}];
+  });
+  if (template===INVENTORY_TEMPLATE && sections.length<result.length) {
+    warnings.push('Rows for the same organization, program, service type and location were combined. The source rows are listed on the card.');
+  }
+  return {template,tracking,sections};
 }
 export function parseDelimited(text, separator=',') {
   const rows=[];let row=[],field='',quoted=false;
@@ -90,7 +127,7 @@ export async function parseDocument(bytes, filename, { pdfWorker }={}) {
   const extension=path.extname(filename).slice(1).toLowerCase(),warnings=[];
   if(!supportedExtensions.includes(extension))throw new Error('Use an Excel .xlsx, CSV, TSV, Word .docx, text PDF, TXT, or Markdown file. Convert older .xls or .doc files first.');
   if(bytes.length>MAX_FILE_BYTES)throw new Error('Choose a file smaller than 20 MB.');
-  let sections=[];
+  let sections=[], tables=[];
   if(['xlsx','docx'].includes(extension))checkOfficeArchive(bytes);
   if(extension==='xlsx') {
     const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(bytes, { ignoreNodes: ['drawing','picture','extLst'] });let formulas=0;
@@ -98,13 +135,13 @@ export async function parseDocument(bytes, filename, { pdfWorker }={}) {
       if(sheet.state==='hidden'||sheet.state==='veryHidden'){warnings.push(sheet.name+': hidden worksheet was not imported.');continue;}
       if(sheet.actualRowCount>5001||sheet.actualColumnCount>100)throw new Error('Limit each worksheet to 5,000 data rows and 100 columns.');
       const rows=[];sheet.eachRow((row,number)=>{const values=[];row.eachCell({includeEmpty:true},(cell,index)=>{if(cell.formula)formulas++;values[index-1]=cellValue(cell);});rows.push({number,values:Array.from(values,v=>v??'')});});
-      sections.push(...tableSections(rows,sheet.name,warnings));
+      tables.push(tableSections(rows,sheet.name,warnings));
     }
     if(formulas)warnings.push(formulas+' formula cell(s) use the last saved Excel results. Hive does not recalculate Excel formulas.');
   } else if(['csv','tsv'].includes(extension)) {
     let text=bytes[0]===0xff&&bytes[1]===0xfe?bytes.subarray(2).toString('utf16le'):bytes.toString('utf8');
     const first=text.split(/\r?\n/)[0];const separator=extension==='tsv'?'\t':first.includes(';')&&!first.includes(',')?';':',';
-    sections=tableSections(parseDelimited(text,separator),'Table',warnings,true);
+    tables=[tableSections(parseDelimited(text,separator),'Table',warnings,true)];
   } else if(extension==='docx') {
     const result=await mammoth.extractRawText({buffer:bytes},{externalFileAccess:false});
     sections=textSections(result.value,'Word');warnings.push(...result.messages.filter(m=>m.type==='warning').map(m=>m.message).slice(0,5));
@@ -130,8 +167,17 @@ export async function parseDocument(bytes, filename, { pdfWorker }={}) {
       warnings.push('PDF text order may differ from the visual layout. Check the source before relying on table values.');
     } finally {await task.destroy();}
   } else sections=textSections(bytes.toString('utf8'),extension==='md'?'Markdown':'Text');
+  const template=tables.some(t=>t.template===TRACKING_TEMPLATE)?TRACKING_TEMPLATE:
+    tables.some(t=>t.template===INVENTORY_TEMPLATE)?INVENTORY_TEMPLATE:'';
+  if (tables.length) sections=tables.filter(t=>!template||t.template===template).flatMap(t=>t.sections);
+  const digest=createHash('sha256').update(bytes).digest('hex');
+  if (template===TRACKING_TEMPLATE) {
+    const tracking=tables.filter(t=>t.template===template).flatMap(t=>t.tracking);
+    if (tracking.length>5000) throw new Error('Limit the tracker to 5,000 navigation rows.');
+    return {filename:path.basename(filename),digest,format:extension,template,tracking,sections:[],warnings:[]};
+  }
   if(!sections.length)throw new Error('No readable text was found. If this is a scan, use a searchable PDF or paste its text.');
   if(sections.length>5000||sections.reduce((sum,s)=>sum+s.body.length,0)>5000000)throw new Error('This document contains too much text. Split it into smaller files before importing.');
   if(sections.some(s=>s.body.length>30000))throw new Error('One row contains more than 30,000 characters. Split that row before importing.');
-  return {filename:path.basename(filename),digest:createHash('sha256').update(bytes).digest('hex'),format:extension,sections,warnings:[...new Set(warnings)],stableKeys:sections.every(s=>s.stable)};
+  return {filename:path.basename(filename),digest,format:extension,template,sections,warnings:[...new Set(warnings)],stableKeys:sections.every(s=>s.stable)};
 }

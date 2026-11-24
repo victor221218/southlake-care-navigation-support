@@ -1,4 +1,54 @@
-const normalized=value=>String(value||'').normalize('NFKC').toLowerCase();
-export function historyScore(card){const s=card.experience||card;return Number(s.rating_count)>0?Number(s.rating_average):3;}
-export function compareHistory(a,b){const score=historyScore(b)-historyScore(a);if(score)return score;const outcome=c=>{const s=c.experience||c;return (Number(s.worked||0)-Number(s.not_worked||0))/(Number(s.worked||0)+Number(s.not_worked||0)+2);};return outcome(b)-outcome(a);}
-export function rankResponseCards(cards,query=''){const terms=[...new Set(normalized(query).match(/[\p{L}\p{N}]{3,}/gu)||[])].filter(t=>!['please','about','service','services','would','could','need','have','that','this','with','what','show','find','recommend'].includes(t));const fit=c=>{const text=normalized(c.title+' '+c.category+' '+(c.fields?.Category||'')+' '+(c.area||c.fields?.['Service area']||'')+' '+c.body);return terms.reduce((n,t)=>n+(text.includes(t)?1:0),0);};return[...cards].sort((a,b)=>fit(b)-fit(a)||compareHistory(a,b));}
+import {headerKey} from './navigation-templates.mjs';
+import {isServiceSource, OWN_SERVICE_FORMAT} from './service-sources.mjs';
+
+const searchNoise = new Set(['please','about','service','services','would','could','need','have','that','this',
+  'with','what','show','find','recommend','recommended','rank','ranked','rankings','ranking','options','cards','for',
+  'can','you','our','using','based','experience','history','your','the']);
+
+export const rankingPolicy = 'I check that a service matches the category and area you asked for. Specific request details can move a closer match up. Among equally relevant cards, I compare your average ratings, then weigh recorded Worked and Didn’t work results. An unrated service starts at 3/5 for sorting only. Pending follow-ups and ordinary notes do not count as outcomes.';
+
+export function historyScore(card) {
+  const stats = card.experience || card;
+  return Number(stats.rating_count)>0 ? Number(stats.rating_average) : 3;
+}
+
+function outcomeBalance(card) {
+  const stats = card.experience || card;
+  const worked = Number(stats.worked || 0), failed = Number(stats.not_worked || 0);
+  return (worked-failed)/(worked+failed+2);
+}
+
+export function compareHistory(a,b) {
+  return historyScore(b)-historyScore(a) || outcomeBalance(b)-outcomeBalance(a);
+}
+
+export function directoryGroup(card) {
+  const stats=card.experience||card;
+  if (Number(stats.worked||0)+Number(stats.not_worked||0)>0) return 0;
+  return card.source_format===OWN_SERVICE_FORMAT ? 1 : 2;
+}
+
+function historyReason(card) {
+  const stats=card.experience||card;
+  const worked=Number(stats.worked||0), failed=Number(stats.not_worked||0);
+  if (!worked && !failed) return 'No recorded outcomes yet.';
+  const rating=stats.rating_count
+    ? 'Your average is '+Number(stats.rating_average).toFixed(1)+'/5 from '+stats.rating_count+' rating'+(stats.rating_count===1?'':'s')+'. '
+    : 'No rating recorded. ';
+  return rating+worked+' worked, '+failed+' didn’t work in your records.';
+}
+
+export function rankResponseCards(cards, query='', topic=null) {
+  const scopedTerms = new Set(headerKey(topic?.title).split(' '));
+  const terms=[...new Set(headerKey(query).split(' '))]
+    .filter(word=>word.length>=3&&!searchNoise.has(word)&&!scopedTerms.has(word));
+  const matched=card=>{
+    const searchable=headerKey([card.title,card.category,card.fields?.Category,card.area,card.fields?.['Service area'],card.body].join(' '));
+    return terms.filter(word=>searchable.includes(word));
+  };
+  return cards.map(card=>({card,words:matched(card)}))
+    .sort((a,b)=>b.words.length-a.words.length||compareHistory(a.card,b.card))
+    .map(({card,words})=>isServiceSource(card.source_format)?{
+      ...card,card_rank_reason:(words.length?'Matched '+words.slice(0,6).join(', ')+'. ':'')+historyReason(card)
+    }:card);
+}

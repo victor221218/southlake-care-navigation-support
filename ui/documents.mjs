@@ -2,6 +2,7 @@ import { Voice } from './voice.mjs';
 import { escapeHTML as e } from './render-text.mjs';
 import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceSource, serviceFields,
   cleanServiceFields, serviceDraft, missingServiceDetails} from '../src/documents/service-sources.mjs';
+import {directoryGroup} from '../src/documents/ranking.mjs';
 const api=(method,args={})=>window.hive.request(method,args),$=id=>document.getElementById(id);
 let state,query='',documentFilter='',libraryMode='workspace',navigationSequence=0,serviceChatOpen=false,assistantReturnFocus=null,memoryKind='all',category='',includeArchived=false,offset=0,messages=[],busy=false,importing=false,selected=null,preview=null,noteEditor=null,noteTimer,feedbackEditor=null,feedbackSaving=false,voicePrefix='',connectionBusy=false,cardLoadSequence=0,activeCase=null,activeOwner=null,caseChanging=false,caseSequence=0,caseHasMore=false,caseFilter='',caseDraftTimer,caseDraftQueue=Promise.resolve();
 const modal=$('modal');
@@ -15,6 +16,7 @@ let caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHisto
 let expandedMemoryGroup = '', memoryHistoryOffset = 0;
 let manualWrapUp = false;
 let serviceEditor = null;
+let trackingReview = null;
 const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
 const deleteChatHelp = 'Discard a practice or inaccurate conversation.';
 const date=value=>{try{return new Date(value).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch{return value;}};
@@ -65,6 +67,7 @@ function answerCardHTML(card, reply) {
     ${card.card_reason ? `<span class="card-reason"><b>Why consider</b>${e(card.card_reason)}</span>` :
       `<span class="card-excerpt">${e(card.body?.split('\n')[0]?.slice(0,120) || 'Open to see details')}</span>`}
     ${card.card_confirm || service ? `<span class="card-confirm"><b>Confirm</b>${e(card.card_confirm || 'Eligibility, service area, accessibility, fees and current capacity with intake.')}</span>` : ''}
+    ${card.card_rank_reason ? `<span class="card-reason"><b>Why this rank</b>${e(card.card_rank_reason)}</span>` : ''}
     <span class="answer-card-bottom">${contact && !service && !pickable ? `<span>${e(contact.value)}</span>` : ''}
       ${summary?.rating_count ? averageRatingBadge(summary,{showCount:true}) :
         card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count === 1 ? '' : 's'}</small>` : ''}</span>`;
@@ -190,6 +193,7 @@ function serviceRowHTML(card) {
       <span class="card-kicker">${e(card.category||'Known service')}</span>
       ${button('open-card',e(card.title),'service-title',attrs)}
       <p>${e(card.body?.split('\n')[0]||'')}</p><span class="service-area">${e(card.area||'Confirm the service area with intake')}</span>
+      ${card.missing_details?.length ? `<small class="service-gaps">Needs details · ${e(card.missing_details.join(', '))}</small>` : ''}
     </div>
     <div class="service-row-contact">
       <div><strong>${e(own&&person?person:'Program contact')} ${sourceTag(card.source_format)}</strong>
@@ -204,9 +208,9 @@ function serviceRowHTML(card) {
     </article>`;
 }
 function serviceDirectoryHTML(cards) {
-  const own=cards.filter(card=>card.source_format===OWN_SERVICE_FORMAT);
-  const publicCards=cards.filter(card=>card.source_format===PUBLIC_SERVICE_FORMAT);
-  return [[own,'Your services'],[publicCards,'Public services']].filter(([items])=>items.length)
+  const groups=['Services with recorded outcomes','Your services without recorded outcomes','Public services without recorded outcomes']
+    .map((title,index)=>[cards.filter(card=>directoryGroup(card)===index),title]);
+  return groups.filter(([items])=>items.length)
     .map(([items,title])=>`<section class="service-source-group" aria-label="${title}">
       <h3>${title}</h3>${items.map(serviceRowHTML).join('')}</section>`).join('');
 }
@@ -558,7 +562,7 @@ async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner
   $('category-filter').innerHTML='<option value="">All service categories</option>'+(state.serviceCategories||[]).map(c=>`<option value="${e(c)}">${e(c)}</option>`).join('');$('category-filter').value=category;renderLibraryMode();renderModel();renderCases();renderUndo();await loadCards();const identity=state.account.profileId||'device';if(!activeCase||activeOwner!==identity){activeCase=null;activeOwner=identity;await loadCase(state.active_case.id,{activate:false});}else if(activeCase.id===state.active_case.id){activeCase={...activeCase,...state.active_case};renderCaseTitle();}}
 async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='workspace')return;
   const services=libraryMode==='services';
-  const result=await api(services?'list-cards':'list-memory',services?{query,collection:'services',category,limit:30,offset}:
+  const result=await api(services?'list-cards':'list-memory',services?{query,collection:'services',directory:true,category,limit:30,offset}:
     {query,document_id:documentFilter||null,kind:memoryKind,include_archived:includeArchived,limit:30,offset,
       grouped:true,expanded:expandedMemoryGroup,history_offset:memoryHistoryOffset});
   if(sequence!==cardLoadSequence)return;
@@ -669,10 +673,11 @@ function discardResult(){return !feedbackEditor||JSON.stringify(resultDraft())==
 async function openModal(content,kind=''){if(feedbackSaving)throw new Error('Wait for the service result to finish saving.');if(!discardResult())throw new Error('Save the result or choose Cancel result before leaving.');await flushNote();noteEditor=null;feedbackEditor=null;cardHistory=null;modal.className=kind;modal.innerHTML=content;if(!modal.open)modal.showModal();}
 function modalHead(title,subtitle=''){return`<div class="modal-heading"><div><h2 id="modal-title">${e(title)}</h2>${subtitle?`<p>${e(subtitle)}</p>`:''}</div>${button('close-modal','×','icon-button','aria-label="Close panel"')}</div>`;}
 async function closeModal(){
-  if(feedbackSaving||serviceEditor?.saving)throw new Error('Wait for the service to finish saving.');
+  if(feedbackSaving||serviceEditor?.saving||trackingReview?.saving)throw new Error('Wait for the service to finish saving.');
   if(!discardResult())return false;
   await flushNote();
-  if(serviceEditor?.importId)await api('cancel-import');
+  if(serviceEditor?.importId||trackingReview)await api('cancel-import');
+  trackingReview=null;
   serviceEditor=null;noteEditor=null;feedbackEditor=null;cardHistory=null;
   modal.close();modal.replaceChildren();return true;
 }
@@ -726,17 +731,17 @@ async function openCard(id, {replyId=null,fromFollowup=false}={}) {
     (addFromDetails?button('focus-card-note','Add a note','secondary'):'')+
     (card.document_id?button('open-original','Open original file ↗','secondary',`data-id="${e(card.document_id)}"`):
       button('edit-note','Edit note','secondary',idAttr))+button('delete-card','Delete card','danger quiet',idAttr);
-  const missing=own?missingServiceDetails(serviceDraft(card).values):[];
+  const missing=card.missing_details||[];
+  const gaps=missing.length?`<p class="callout">Needs details · ${e(missing.join(', '))}</p>`:'';
   const ownDetails=own?`<section class="detail-section">
     <div class="section-title"><h3>Service details</h3>
       ${button('edit-own-service','Edit details','secondary',idAttr)}</div>
-    ${missing.length?`<ul class="service-questions">${missing.map(question=>`<li>${e(question)}</li>`).join('')}</ul>`:''}
     ${cardFields}
     ${card.has_original?button('open-original','Open source file ↗','quiet',`data-id="${e(card.document_id)}"`):''}
     </section>`:'';
   await openModal(modalHead(card.title,fileLabel(card))+`<div class="detail-body">
     ${card.archived?'<p class="callout">This row was removed in a newer import. Its notes have been kept.</p>':''}
-    ${own?notes+contacts+ownDetails:servicePreview?notes+cardFields:cardFields+contacts+notes}${links}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
+    ${gaps}${own?notes+contacts+ownDetails:servicePreview?notes+cardFields:cardFields+contacts+notes}${links}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
   noteEditor={cardId:id,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};
   $('card-note').addEventListener('input',()=>{noteEditor.body=$('card-note').value;$('note-status').textContent='Saving…';clearTimeout(noteTimer);noteTimer=setTimeout(()=>flushNote().catch(fail),800);});
   await refreshCardHistoryControls(id);
@@ -791,6 +796,9 @@ function serviceEditorHTML(editor) {
     <label class="service-include"><input id="include-service-row" type="checkbox" ${row.include?'checked':''}> Include this row</label>
     <p id="service-review-count" role="status"></p>
     <p class="subtle">Rows without a name start unchecked. Give them a name and include them if they belong in the directory.</p>
+    ${editor.previous?`<p class="callout">${editor.previous.can_update?
+      'Update the saved inventory to keep feedback on matching cards. Rows removed from the workbook are kept as previous rows.':
+      'Matching rows need unique Service IDs before this inventory can be updated.'}</p>`:''}
     ${editor.warnings.map(warning=>`<p class="callout">${e(warning)}</p>`).join('')}</div>`:'';
   const fields=serviceFields.map(([name,label,limit])=>{
     const value=e(row.values[name]||'');
@@ -806,7 +814,8 @@ function serviceEditorHTML(editor) {
       <div class="service-editor-fields">${fields}<datalist id="service-category-choices">${options}</datalist></div>
       <p id="service-editor-error" class="callout" hidden></p>
     </div><div class="modal-footer">
-      ${button('save-own-service',editor.importId?'Add selected services':'Save service','primary')}
+      ${editor.previous?.can_update?button('update-service-inventory','Update saved inventory','primary'):''}
+      ${button('save-own-service',editor.importId?'Add selected services':'Save service',editor.previous?.can_update?'secondary':'primary')}
       ${button('close-modal','Cancel','quiet')}</div>`;
 }
 function updateServiceEditor() {
@@ -826,7 +835,8 @@ function updateServiceEditor() {
 async function openServiceEditor(card=null, review=null) {
   const rows=review?review.rows.map(row=>({...row,incomplete:Boolean(missingServiceDetails(row.values).length)})):[{values:serviceDraft(card||{}).values,include:true}];
   const index=review?Math.max(0, rows.findIndex(row=>missingServiceDetails(row.values).length)):0;
-  const editor={card, rows, index, importId:review?.id, filename:review?.filename, warnings:review?.warnings||[], changed:new Set(), saving:false};
+  const editor={card, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
+    warnings:review?.warnings||[], changed:new Set(), saving:false};
   await openModal(serviceEditorHTML(editor),'service-editor-dialog');
   serviceEditor=editor;
   updateServiceEditor();
@@ -839,7 +849,7 @@ async function reviewServiceFile(result) {
   await openServiceEditor(null,result);
   preview=null;
 }
-async function saveOwnService() {
+async function saveOwnService(update=false) {
   const editor=serviceEditor;
   if(!editor||editor.saving)return;
   const {card,rows,importId,changed}=editor;
@@ -864,7 +874,7 @@ async function saveOwnService() {
     if (importId) {
       // Keep each review update below the request size limit, even for large spreadsheets.
       for(const index of changed)await api('review-service-row',{id:importId,index,...rows[index]});
-      count=(await api('confirm-service-import',{id:importId})).count;
+      count=(await api('confirm-service-import',{id:importId,update})).count;
     } else if (card) {
       await api('update-own-service',{id:card.id,expected_version:card.version,values:rows[0].values});
     } else {
@@ -894,9 +904,61 @@ async function saveOwnService() {
     controls.forEach(control=>control.disabled=false);
   }
 }
+async function reviewTrackingFile(review) {
+  await openModal(modalHead('Review navigation outcomes',review.filename)+`<div class="detail-body">
+    <p>Check the matching service and result against the Navigation worksheet. Only selected outcomes are saved.</p>
+    <p class="subtle">The review shows the partner, inquiry date and source row. Case closure alone gives no service result.</p>
+    ${review.rows.length ? `<div class="tracking-rows">${review.rows.map((row,index)=>{
+      const available=!row.duplicate&&row.options.length>0;
+      return `<fieldset data-tracking-row="${index}">
+        <legend>${e(row.provider)} · ${e(row.locator)}${row.date?' · '+e(row.date):''}</legend>
+        ${available ? `<label><input type="checkbox" data-tracker="include" ${row.include?'checked':''}> Include outcome</label>
+          <label>Service<select data-tracker="card_id"><option value="">Choose service</option>${row.options.map(card=>
+            `<option value="${e(card.id)}" ${row.card_id===card.id?'selected':''}>${e(card.title)}</option>`).join('')}</select></label>
+          <label>Result<select data-tracker="outcome"><option value="">Review in workbook</option>
+            <option value="worked" ${row.outcome==='worked'?'selected':''}>Worked</option>
+            <option value="not_worked" ${row.outcome==='not_worked'?'selected':''}>Didn’t work</option></select></label>` :
+          `<p class="subtle">${row.duplicate?'Already recorded. Edit the outcome in Manage memory.':'No matching service. Add the program to Known services and review the file again.'}</p>`}
+      </fieldset>`;
+    }).join('')}</div>` : '<p>No rows with a partner agency were found in Navigation.</p>'}
+    <p id="tracking-import-error" class="callout" role="status" hidden></p>
+    </div><div class="modal-footer">${review.rows.some(row=>!row.duplicate&&row.options.length)?button('save-tracking-results','Save selected outcomes','primary'):''}
+    ${button('close-modal','Cancel','quiet')}</div>`,'service-editor-dialog');
+  trackingReview={...review,saving:false};
+}
+async function saveTrackingResults() {
+  const review=trackingReview;
+  if(!review||review.saving)return;
+  review.saving=true;
+  const controls=[...modal.querySelectorAll('button,input,select')];
+  controls.forEach(control=>control.disabled=true);
+  try {
+    for (const fieldset of modal.querySelectorAll('[data-tracking-row]')) {
+      const include=fieldset.querySelector('[data-tracker="include"]');
+      if(!include)continue;
+      await api('review-tracking-row',{id:review.id,index:Number(fieldset.dataset.trackingRow),include:include.checked,
+        card_id:fieldset.querySelector('[data-tracker="card_id"]').value,
+        outcome:fieldset.querySelector('[data-tracker="outcome"]').value});
+    }
+    const result=await api('confirm-tracking-import',{id:review.id});
+    trackingReview=null;
+    await closeModal();
+    await refresh();
+    notice(result.count+' service outcome'+(result.count===1?'':'s')+' saved.');
+  } catch(error) {
+    const status=$('tracking-import-error');
+    if(!status)throw error;
+    status.textContent=error.message;
+    status.hidden=false;
+  } finally {
+    review.saving=false;
+    controls.forEach(control=>control.disabled=false);
+  }
+}
 async function importDocument(sample=false,services=false){
   if(busy||importing)return;importing=true;$('add-document').disabled=true;$('add-document').textContent='Reading document…';
   try{const result=await api(sample?'sample-document':'pick-document',{services});if(result.cancelled)return;
+    if(result.tracking){await reviewTrackingFile(result);return;}
     if(services){await reviewServiceFile(result);return;}
     if(result.duplicate){libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;await refresh();$('document-filter').value=documentFilter;notice('This document is already saved. Open Manage memory to review its cards.');return;}
     preview=result;
@@ -1030,6 +1092,8 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='add-own-service')await openServiceEditor();
     else if(action==='edit-own-service')await openServiceEditor(await api('get-card',{id:target.dataset.id}));
     else if(action==='save-own-service')await saveOwnService();
+    else if(action==='update-service-inventory')await saveOwnService(true);
+    else if(action==='save-tracking-results')await saveTrackingResults();
     else if(action==='sample')await importDocument(true);
     else if(action==='save-import')await saveImport();
     else if(action==='update-import')await saveImport(true);

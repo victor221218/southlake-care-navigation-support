@@ -1,3 +1,10 @@
+# Care Navigation Support 2.17.0
+
+- The inventory importer recognizes the **Service Inventory** column headings and lets you update matching cards while keeping their feedback.
+- The **Navigation** worksheet imports reviewed provider outcomes into the local workspace. Known services shows recorded experience and missing source details.
+- Report a clear service result by typing or speaking in chat. The app saves it locally. Ask for ranked service cards and then ask how the options were ranked.
+- [The inventory and outcome guide](README.md#maintain-the-service-inventory-and-outcomes) describes the format, update steps and a fictional demo.
+
 # Care Navigation Support 2.16.0
 
 - **Known services** shows your entries first, followed by the public directory. Contacts show **(Own source)** or **(Public source)**.

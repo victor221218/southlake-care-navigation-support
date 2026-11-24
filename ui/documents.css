@@ -436,3 +436,21 @@
   font-size: 12px;
   line-height: 1.55;
 }
+.service-gaps {
+  display: block;
+  color: #675227;
+  margin-top: 4px;
+}
+
+.tracking-rows fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #cfdbe4;
+  border-radius: 8px;
+}
+.tracking-rows legend {
+  padding: 0 6px;
+  font-weight: 600;
+}

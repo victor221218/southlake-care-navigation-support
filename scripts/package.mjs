@@ -7,7 +7,7 @@ await mkdir(stage, { recursive: true });
 for (const folder of ['dist', 'assets', 'drizzle']) await cp(folder, path.join(stage, folder), { recursive: true });
 const project = JSON.parse(await readFile('package.json', 'utf8'));
 await writeFile(path.join(stage, 'package.json'), JSON.stringify({ name: project.name, productName: project.productName, version: project.version, main: project.main }));
-for (const name of ['START-HERE.md', 'SHARING.md', 'DIRECTORY-SOURCES.md']) await cp(name, path.join(stage, name));
+for (const name of ['README.md', 'START-HERE.md', 'SHARING.md', 'DIRECTORY-SOURCES.md']) await cp(name, path.join(stage, name));
 const notices = [];
 async function licenses(directory) {
   for (const item of await readdir(directory, { withFileTypes: true })) {

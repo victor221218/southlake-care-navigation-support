@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import ExcelJS from 'exceljs';
 import { mkdir, mkdtemp, readFile, writeFile, copyFile } from 'node:fs/promises';
 import { openDatabase } from '../src/database.mjs';
 import { DocumentStore } from '../src/documents/store.mjs';
@@ -9,6 +10,9 @@ import { ensureKnownServices, knownServices, serviceDirectoryDocument, serviceCa
 import { APP_NAME, windowsDataDirectory } from '../src/app-identity.mjs';
 import { parseDocument } from '../src/documents/parse.mjs';
 import { DocumentImporter } from '../src/documents/importer.mjs';
+import { DocumentCases } from '../src/documents/cases.mjs';
+import { CaseFollowups } from '../src/documents/case-followups.mjs';
+import { InputHistory } from '../src/documents/input-history.mjs';
 import { missingServiceDetails, OWN_SERVICE_FORMAT } from '../src/documents/service-sources.mjs';
 import { writeServiceFixture } from './document-fixtures.mjs';
 
@@ -20,6 +24,128 @@ async function fixture(migrations=path.resolve('drizzle')) {
   const store = new DocumentStore({ database: () => db, owner: () => owner });
   return { store, folder, switch(value) { owner = value; }, async reopen(updatedMigrations=options.migrations) { await db.close(); options.migrations=updatedMigrations; db = await openDatabase(options); }, close: () => db.close() };
 }
+
+function importerFor(f) {
+  return new DocumentImporter({store:f.store,directory:path.join(f.folder,'files'),
+    worker:path.resolve('dist/document-worker.cjs'),pdfWorker:path.resolve('dist/pdf.worker.mjs')});
+}
+
+test('inventory finds its real headers, combines repeated program rows and preserves feedback on update', async () => {
+  const f=await fixture();
+  try {
+    const importer=importerFor(f);
+    const filename=path.join(f.folder,'Fictional inventory.xlsx');
+    const writeInventory=async phone=>{
+      const book=new ExcelJS.Workbook();
+      book.addWorksheet('Quick guide').addRows([['Service', 'Note'],['Example text', 'Not a program row']]);
+      const sheet=book.addWorksheet('Service Inventory');
+      sheet.addRows([
+        ['Fictional inventory'],
+        ['Service','','Referrals','Contacts'],
+        ['Partner / organization','Program / clinic','Service type','Services offered','Georgina','Main contact phone',
+          'Eligibility','Information source','Last verified date'],
+        ['Example Birch','Respite','Caregiver support','In-person respite','Yes',phone,'Adults','Provider list','2026-11-24'],
+        ['Example Birch','Respite','Caregiver support','Virtual respite','Yes','','Adults','Partner list','2026-11-24'],
+        ['Example Fern','Check-in','Caregiver support']
+      ]);
+      await book.xlsx.writeFile(filename);
+    };
+    await writeInventory('905-555-0117');
+    const review=await importer.prepare(filename,{services:true});
+    assert.equal(review.rows.length,2);
+    assert.equal(review.rows[0].values.area,'Georgina');
+    assert.match(review.rows[0].values.details,/Virtual respite/);
+    await importer.confirmServices(review.id);
+    const [ready,missing]=(await f.store.list({collection:'services'})).items.sort((a,b)=>a.title.localeCompare(b.title));
+    assert.equal(ready.title,'Example Birch · Respite');
+    assert(missing.missing_details.includes('service area'));
+    assert(missing.missing_details.includes('phone or email'));
+    await f.store.serviceResult({card_id:ready.id,outcome:'worked',rating:4});
+    await writeInventory('905-555-0197');
+    const revision=await importer.prepare(filename,{services:true});
+    assert.equal(revision.previous.can_update,true);
+    const saved=await importer.confirmServices(revision.id,true);
+    assert.equal(saved.updated,2);
+    const updated=await f.store.get(ready.id);
+    assert.equal(updated.contacts[0].value,'905-555-0197');
+    assert.equal(updated.experience.rating_average,4);
+    assert.match(updated.fields['Information source'],/Partner list/);
+    assert.match(updated.fields['Source rows'],/row 5/);
+  } finally { await f.close(); }
+});
+
+test('tracker imports only reviewed provider outcomes and deduplicates after reimport and backup', async () => {
+  const f=await fixture();
+  try {
+    await f.store.addOwnService({name:'Referral desk',organization:'Example Agency',category:'Home supports'});
+    const [card]=(await f.store.list({collection:'services'})).items;
+    const filename=path.join(f.folder,'Fictional navigation.csv'),importer=importerFor(f);
+    await writeFile(filename,[
+      'Date of Inquiry,Client Name / ID,Client Phone,Partner Agency,Status,Details / Discussion,Outcome / Next Steps,Case Closed',
+      '2026-11-24,EXAMPLE-PRIVATE-ID,000-000-0000,Example Agency,Closed,DEMO-PRIVATE-NOTE,Did not work,Yes',
+      '2026-11-24,EXAMPLE-PENDING-ID,,Example Agency,Closed,,Referral sent,Yes'
+    ].join('\n'));
+    const review=await importer.prepare(filename,{services:true});
+    assert.equal(review.tracking,true);
+    assert.deepEqual(review.rows.map(row=>row.include),[true,false]);
+    assert(!JSON.stringify(review).includes('PRIVATE'));
+    assert.equal((await importer.confirmTracking(review.id)).count,1);
+    const saved=await f.store.get(card.id);
+    assert.equal(saved.experience.not_worked,1);
+    assert.equal(saved.experience.rating_count,0);
+    assert.equal(saved.has_original,0);
+    const repeated=await importer.prepare(filename,{services:true});
+    assert.equal(repeated.rows[0].duplicate,true);
+    assert.equal(repeated.rows[1].outcome,null);
+    const backup=await f.store.export();
+    assert(!JSON.stringify(backup).includes('PRIVATE'));
+    f.switch('recipient');
+    await f.store.restore(backup);
+    const restored=await importer.prepare(filename,{services:true});
+    assert.equal(restored.rows[0].duplicate,true);
+    assert.equal((await f.store.list({collection:'personal'})).total,0);
+  } finally { await f.close(); }
+});
+
+test('a spoken-style result is saved to the right card, ranks lower in a new case, and is explained', async () => {
+  const f=await fixture();
+  try {
+    for (const organization of ['Example Alder Society of Sample County','Example Bay Society']) {
+      await f.store.addOwnService({name:'Respite',organization,category:'Caregiver support',area:'Georgina',
+        details:organization.includes('Alder')?'Supports caregivers in York Region.':''});
+    }
+    const cases=new DocumentCases({store:f.store});
+    const inputHistory=new InputHistory({store:f.store});
+    const followups=new CaseFollowups({cases,store:f.store,inputHistory});
+    const assistant=new DocumentAssistant({store:f.store,cases,followups,
+      connection:{session:async()=>{throw new Error('This demo should stay local');}}});
+    const original=await cases.create();
+    const ask='Find caregiver support in York Region. Show ranked service cards.';
+    const before=await assistant.chat({case_id:original.id,text:ask,remember:false});
+    const [alder,bay]=before.cards;
+    assert.match(alder.title,/Example Alder/);
+    const possible=await assistant.chat({case_id:original.id,
+      text:'We tried Example Aldar Society of Sample County and it did not work.',remember:false});
+    assert.match(possible.text,/Which service/);
+    assert.equal((await f.store.get(alder.id)).experience.not_worked,0);
+    const report='We tried Example Alder Society of Sample County and it did not work. Rating one out of five.';
+    const saved=await assistant.chat({case_id:original.id,text:report,remember:false});
+    assert.match(saved.text,/Saved Didn’t work · 1\/5/);
+    assert.equal((await f.store.get(alder.id)).experience.rating_average,1);
+    const repeat=await assistant.chat({case_id:original.id,text:report,remember:false});
+    assert.match(repeat.text,/already has a result/);
+    assert.equal((await f.store.get(alder.id)).experience.not_worked,1);
+    await f.reopen();
+    const fresh=await cases.create();
+    const ranked=await assistant.chat({case_id:fresh.id,text:ask,remember:false});
+    assert.deepEqual(ranked.cards.map(card=>card.id),[bay.id,alder.id]);
+    assert.match(ranked.cards[1].card_rank_reason,/1\.0\/5/);
+    const why=await assistant.chat({case_id:fresh.id,text:'How did you rank the options?',remember:false});
+    assert.match(why.text,/1\. Example Bay Society/);
+    assert.match(why.text,/2\. Example Alder Society.*1\.0\/5/);
+    assert.equal((await f.store.list({collection:'services',directory:true})).items[0].id,alder.id);
+  } finally { await f.close(); }
+});
 
 test('own service contacts, changes and results stay attached to the same private directory card', async () => {
   const f=await fixture();
