@@ -50,7 +50,7 @@ async function invoke(method,args){
   if(method==='get-card')return store.get(args.id);
   if(method==='add-own-service'||method==='update-own-service'){
     idle();
-    const result=await (method==='add-own-service'?store.addOwnService(args.values):store.updateOwnService(args));
+    const result=await (method==='add-own-service'?store.addOwnService(args.values,{fromChat:args.from_chat===true}):store.updateOwnService(args));
     assistant.clear();
     return result;
   }

@@ -359,7 +359,7 @@ async function refreshCardHistoryControls(id=noteEditor?.cardId) {
   cardHistory = history;
   renderUndo();
 }
-function renderCaseTitle(){if(!activeCase)return;$('assistant-title').textContent=activeCase.title;$('case-options-button').hidden=false;$('composer').hidden=activeCase.status==='archived';$('selected-context').hidden=activeCase.status==='archived';$('case-archived-banner').hidden=activeCase.status!=='archived';$('case-archived-banner').innerHTML=activeCase.status==='archived'?`<span>Saved in the memory library</span>${button('reopen-case','Reopen conversation','secondary',`data-id="${e(activeCase.id)}"`)}`:'';}
+function renderCaseTitle(){if(!activeCase)return;$('assistant-title').textContent=activeCase.title;$('case-options-button').hidden=false;$('chat-add-service').hidden=activeCase.status==='archived';$('composer').hidden=activeCase.status==='archived';$('selected-context').hidden=activeCase.status==='archived';$('case-archived-banner').hidden=activeCase.status!=='archived';$('case-archived-banner').innerHTML=activeCase.status==='archived'?`<span>Saved in the memory library</span>${button('reopen-case','Reopen conversation','secondary',`data-id="${e(activeCase.id)}"`)}`:'';}
 function scheduleCaseDraft() {
   clearTimeout(caseDraftTimer);
   caseDraftTimer = setTimeout(() => flushCaseDraft().catch(fail), 500);
@@ -387,6 +387,7 @@ const fromCaseMessage = message => ({
   ...message.payload, error: message.state === 'error'
 });
 function updateFollowupControls() {
+  $('chat-add-service').disabled = busy || caseChanging;
   $('messages').querySelectorAll('[data-action="chat-followup-start"],[data-action="chat-followup-step"],[data-action="open-chat-service-form"],[data-followup-field]').forEach(control => {
     control.disabled = busy || caseChanging;
   });
@@ -604,7 +605,7 @@ function shell(){
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
   <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('add-own-service','Add a service','primary','id="add-service" hidden')}${button('import-services','Import services','secondary','id="import-services" hidden')}${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Personal notes</option><option value="feedback">Service results & notes</option><option value="chats">Saved conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Confirm current eligibility and capacity with the provider.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
-  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New chat','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
+  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('add-chat-service','Add a service','secondary','id="chat-add-service" hidden')}${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New chat','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
   $('case-search').addEventListener('input',()=>{
     caseFilter=$('case-search').value;
     $('case-list').scrollTop=0;
@@ -825,14 +826,14 @@ function serviceEditorHTML(editor) {
     const property=`id="service-field-${name}" data-service-field="${name}" maxlength="${limit}"`;
     return `<label ${name==='details'?'class="service-description"':''}>${e(label)}
       ${name==='details'?`<textarea ${property} rows="3">${value}</textarea>`:
-        `<input ${property} value="${value}" ${name==='category'?'list="service-category-choices"':name==='name'&&editor.importId?'aria-required="true"':''}>`}</label>`;
+        `<input ${property} value="${value}" ${name==='category'?'list="service-category-choices" placeholder="Choose or type a category"':name==='name'&&editor.importId?'aria-required="true"':''}>`}</label>`;
   }).join('');
   const options=(state?.serviceCategories||[]).map(category=>`<option value="${e(category)}"></option>`).join('');
   return modalHead(editor.importId?'Review services':editor.card?'Edit service details':'Add a service',editor.filename||'Own source')+
     `<div class="detail-body service-editor-body">${list}
       ${editor.importId?'':'<p class="subtle">Enter one detail to save. You can fill in the rest later.</p>'}
-      <ul id="service-questions" class="service-questions" aria-live="polite"></ul>
       <div class="service-editor-fields">${fields}<datalist id="service-category-choices">${options}</datalist></div>
+      <ul id="service-questions" class="service-questions" aria-live="polite"></ul>
       <p id="service-editor-error" class="callout" hidden></p>
     </div><div class="modal-footer">
       ${editor.previous?.can_update?button('update-service-inventory','Update saved inventory','primary'):''}
@@ -853,16 +854,16 @@ function updateServiceEditor() {
     $('service-review-row').options[index].textContent=(row.values.name||'Unnamed service')+' · '+row.locator;
   }
 }
-async function openServiceEditor({card=null, review=null, chatForm=null}={}) {
+async function openServiceEditor({card=null, review=null, chatForm=null, fromChat=false}={}) {
   const rows=review?review.rows.map(row=>({...row,incomplete:Boolean(missingServiceDetails(row.values).length)})):
     [{values:chatForm?cleanServiceFields(chatForm.values):serviceDraft(card||{},{nameFromOrganization:false}).values,include:true}];
   const index=review?Math.max(0, rows.findIndex(row=>missingServiceDetails(row.values).length)):0;
-  const editor={card, chatForm, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
+  const editor={card, chatForm, fromChat, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
     warnings:review?.warnings||[], changed:new Set(), saving:false};
   await openModal(serviceEditorHTML(editor),'service-editor-dialog');
   serviceEditor=editor;
   updateServiceEditor();
-  if (chatForm) $('service-field-name').focus();
+  if (chatForm||fromChat) $(rows[index].values.category?'service-field-name':'service-field-category').focus();
 }
 async function openChatServiceForm(messageId) {
   const message=messages.find(item=>item.id===messageId&&item.presentation==='service-form');
@@ -881,7 +882,7 @@ async function reviewServiceFile(result) {
 async function saveOwnService(update=false) {
   const editor=serviceEditor;
   if(!editor||editor.saving)return;
-  const {card,chatForm,rows,importId,changed}=editor;
+  const {card,chatForm,fromChat,rows,importId,changed}=editor;
   const invalid=importId?rows.findIndex(row=>row.include&&!cleanServiceFields(row.values).name):-1;
   if (invalid>=0) {
     editor.index=invalid;
@@ -902,6 +903,7 @@ async function saveOwnService(update=false) {
   controls.forEach(control=>control.disabled=true);
   try {
     let count=1;
+    let savedCardId=card?.id;
     if (importId) {
       // Keep each review update below the request size limit, even for large spreadsheets.
       for(const index of changed)await api('review-service-row',{id:importId,index,...rows[index]});
@@ -913,7 +915,8 @@ async function saveOwnService(update=false) {
       const reply=messages.find(message=>message.id===chatForm.message_id);
       if (reply) reply.cards=[{id:card_id}];
     } else {
-      await api('add-own-service',{values:rows[0].values});
+      const added=await api('add-own-service',{values:rows[0].values,from_chat:fromChat});
+      savedCardId=added.card_id;
     }
     editor.saving=false;
     serviceEditor=null;
@@ -922,10 +925,10 @@ async function saveOwnService(update=false) {
       renderMessages();
       await refresh();
       document.querySelector(`[data-service-form-saved="${CSS.escape(chatForm.message_id)}"]`)?.focus();
-    } else if (card) {
-      if (selected?.id===card.id) {selected=await api('get-card',{id:card.id});context();}
+    } else if (card||fromChat) {
+      if (selected?.id===savedCardId) {selected=await api('get-card',{id:savedCardId});context();}
       await refresh();
-      await openCard(card.id);
+      await openCard(savedCardId);
     } else {
       if(libraryMode!=='services')await changeLibraryMode('services');
       query='';category='';offset=0;$('search').value='';
@@ -1129,6 +1132,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='import-services')await importDocument(false,true);
     else if(action==='review-import-services'&&preview)await reviewServiceFile(await api('review-service-import',{id:preview.id}));
     else if(action==='add-own-service')await openServiceEditor();
+    else if(action==='add-chat-service'){await pauseVoice();await openServiceEditor({fromChat:true});}
     else if(action==='edit-own-service')await openServiceEditor({card:await api('get-card',{id:target.dataset.id})});
     else if(action==='open-chat-service-form')await openChatServiceForm(target.dataset.id);
     else if(action==='save-own-service')await saveOwnService();

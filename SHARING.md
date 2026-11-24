@@ -1,10 +1,10 @@
 # Share the Windows app
 
-Share the [direct Windows installer download](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.2/Care-Navigation-Support-Setup-2.17.2.exe). The [2.17.2 release notes](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.2) explain what changed. The [original 2.16.0 handoff](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.16.0) includes the complete source package, guides, and Mac test downloads.
+Share the [direct Windows installer download](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.3/Care-Navigation-Support-Setup-2.17.3.exe). The [2.17.3 release notes](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.3) explain what changed. The [original 2.16.0 handoff](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.16.0) includes the complete source package, guides, and Mac test downloads.
 
 Suggested message:
 
-> [Download Care Navigation Support for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.2/Care-Navigation-Support-Setup-2.17.2.exe). Open the installer, choose Install, then Finish. Open the app from the desktop afterwards. Connect your own eligible ChatGPT account, then use the full Workspace chat or Add a document beside Speak. The quick-start guide shows the first steps. Your saved cards and notes are private to your installation/account.
+> [Download Care Navigation Support for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.3/Care-Navigation-Support-Setup-2.17.3.exe). Open the installer, choose Install, then Finish. Open the app from the desktop afterwards. Connect your own eligible ChatGPT account, then use the full Workspace chat or Add a document beside Speak. The quick-start guide shows the first steps. Your saved cards and notes are private to your installation/account.
 
 ## Administrator checks
 

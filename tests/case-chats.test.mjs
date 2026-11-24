@@ -458,6 +458,39 @@ const showOptions=options=>({type:'function_call',name:'present_service_options'
 const option=id=>({id,reason:'A possible match for this request.',confirm:'Confirm the pickup address and boarding help with intake.'});
 function online(f,fetcher){const assistant=new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:true}),accessToken:async()=> 'test-only'},fetcher});assistant.model='fixture';return assistant;}
 
+test('a connected service-form response takes priority over recommendations and prefills supplied details only', async()=>{
+  const f=await fixture();
+  try {
+    const existing=await service(f);
+    let requests=0;
+    const assistant=online(f,async(_url,request)=>{
+      requests++;
+      const body=JSON.parse(request.body);
+      assert(body.tools.some(tool=>tool.name==='open_service_form'&&tool.parameters.properties.category));
+      assert(body.instructions.includes('call open_service_form first'));
+      return streamed([
+        showOptions([option(existing.id)]),
+        {type:'function_call',name:'open_service_form',call_id:'new-service',
+          arguments:JSON.stringify({name:'Example Community Support',area:'Aurora',phone:'905-555-0199'})}
+      ]);
+    });
+    const answer=await assistant.chat({
+      text:'Could we keep Example Community Support in the service directory? They serve Aurora.',
+      card_id:existing.id,remember:false
+    });
+    assert.equal(requests,1);
+    assert.equal(answer.presentation,'service-form');
+    assert.deepEqual(answer.cards,[]);
+    assert.equal(answer.service_form.name,'Example Community Support');
+    assert.equal(answer.service_form.area,'Aurora');
+    assert.equal(answer.service_form.phone,'');
+    assert.equal(await f.store.ownServiceCount(),0);
+    const persisted=(await f.cases.hydrate(await f.cases.read(answer.case_id))).messages.at(-1).payload;
+    assert.deepEqual(persisted.service_form,answer.service_form);
+    assert.deepEqual(persisted.cards,[]);
+  } finally { await f.close(); }
+});
+
 test('a provider question without a service presentation keeps its actual answer readable after reopening',async()=>{const f=await fixture();try{const card=await service(f),assistant=online(f,async()=>streamed([{type:'message',content:[{type:'output_text',text:'The source says riders must enter the vehicle with minimal assistance. Confirm the boarding help with intake.'}]}]));const result=await assistant.chat({text:'Explain this provider’s boarding requirements.',card_id:card.id,remember:false});assert.equal(result.presentation,'answer');assert.equal(result.cards[0].id,card.id);await f.reopen();const reply=(await f.cases.hydrate(await f.cases.read(result.case_id))).messages.at(-1);assert.equal(reply.payload.presentation,'answer');assert(reply.body.includes('minimal assistance'));}finally{await f.close();}});
 
 test('service presentation finishes with only chosen cards and keeps the reason and checks inside each card',async()=>{const f=await fixture();try{await ensureKnownServices(f.store);const services=(await f.store.list({collection:'services',category:'Transportation'})).items,chosen=services.slice(0,3);let calls=0;const assistant=online(f,async(url,request)=>{calls++;const body=JSON.parse(request.body);assert(body.instructions.includes('no separate text above or below'));assert(body.tools.some(t=>t.name==='present_service_options'));return streamed([{type:'function_call',name:'search_cards',call_id:'search',arguments:JSON.stringify({query:'Transportation',limit:12})},showOptions(chosen.map(c=>option(c.id)))]);});const result=await assistant.chat({text:'Find transportation.',remember:false});assert.equal(calls,1,'A presentation should not need another prose-generating round.');assert.equal(result.presentation,'service-options');assert.equal(result.source,'chatgpt');assert.deepEqual(new Set(result.cards.map(c=>c.id)),new Set(chosen.map(c=>c.id)));assert(!result.cards.some(c=>c.id===services[3].id));for(const card of result.cards){assert.equal(card.card_reason,option(card.id).reason);assert.equal(card.card_confirm,option(card.id).confirm);}assert.equal((await f.store.get(chosen[0].id)).comments.length,0,'Formatting must never fabricate a service outcome.');assert((await f.cases.read(result.case_id)).messages.at(-1).body.includes('Confirm the pickup address'));}finally{await f.close();}});

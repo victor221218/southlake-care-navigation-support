@@ -1,3 +1,9 @@
+# Care Navigation Support 2.17.3
+
+- Choose **Add a service** above chat to open the form immediately.
+- Add-service requests open the form with **Category** at the top. The form can prefill a category or details you supplied.
+- Save with any detail you have and complete the card later in **Known services**.
+
 # Care Navigation Support 2.17.2
 
 - Ask “Can you add a service for me?” to open the service form in chat.

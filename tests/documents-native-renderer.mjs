@@ -30,7 +30,7 @@ async function run(){try{
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));
   if(phase.reopen){
-    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==31)throw new Error('Documents or service cards changed after reopening.');
+    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==32)throw new Error('Documents or service cards changed after reopening.');
     const partial=await request('get-card',{id:phase.cold.chat_service_id});
     assert(partial.contacts.some(contact=>contact.value==='905-555-0191')&&partial.missing_details.includes('service name'),
       'The partial service saved from chat must survive restart.');
@@ -302,14 +302,32 @@ async function run(){try{
   serviceCapture=await window.hiveSmoke.capture('known-services');
   click('[data-action="new-chat"]');
   await wait(()=>document.body.dataset.view==='workspace'&&document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
-  type('message','Can you add in a service for me');click('[data-action="send"]');
-  await wait(()=>document.querySelector('#modal[open].service-editor-dialog #service-field-name'));
+  type('message','Draft question for later.');
+  click('#chat-add-service');
+  await wait(()=>document.querySelector('#modal[open].service-editor-dialog #service-field-category'));
+  const visibleCategory=document.getElementById('service-field-category');
+  assert(visibleCategory===document.querySelector('.service-editor-fields input')&&
+    [...visibleCategory.list.options].some(option=>option.value==='Transportation'),
+    'Category should be the first field and list known categories.');
+  assert((await window.hiveSmoke.capture('add-service-form')).ok,'Capture the category-first form for review.');
+  type('service-field-organization','Example Service Form Desk');
+  type('service-field-category','Home supports');
+  click('#modal [data-action="save-own-service"]');
+  await wait(()=>document.querySelector('#modal[open] #modal-title')?.textContent==='Example Service Form Desk');
+  assert(document.body.dataset.view==='workspace'&&document.getElementById('message').value==='Draft question for later.',
+    'Saving through the chat button keeps the conversation and unsent draft.');
+  click('#modal [data-action="close-modal"]');
+  await wait(()=>!document.getElementById('modal').open);
+  type('message','Okay, could you help me add a new transportation service?');click('[data-action="send"]');
+  await wait(()=>document.querySelector('#modal[open].service-editor-dialog #service-field-category'));
+  assert(document.getElementById('service-field-category').value==='Transportation','A category stated in the prompt should be carried into the form.');
   assert(document.querySelector('.message.assistant:last-child .service-form-reply')&&
     !document.querySelector('.message.assistant:last-child .answer-cards'),'Adding a service must open its form instead of returning search results.');
   click('#modal [data-action="close-modal"]');
   await wait(()=>!document.getElementById('modal').open);
   click('.service-form-reply [data-action="open-chat-service-form"]');
   await wait(()=>document.querySelector('#modal[open] #service-field-phone'));
+  type('service-field-category','');
   click('#modal [data-action="save-own-service"]');
   await wait(()=>!document.getElementById('service-editor-error').hidden);
   assert(document.getElementById('service-editor-error').textContent.includes('at least one detail'));
@@ -325,6 +343,14 @@ async function run(){try{
   click('[data-action="known-services"]');await wait(()=>document.body.dataset.view==='services');
   type('search','905-555-0191');
   await wait(()=>document.querySelector('.service-row[data-service-id="'+chatServiceId+'"] .service-gaps')?.textContent.includes('service name'));
+  click('#service-chat-launcher');
+  await wait(()=>document.body.dataset.serviceChatOpen==='true');
+  type('message','Can you show me a form to add a service?');click('[data-action="send"]');
+  await wait(()=>document.querySelector('#modal[open] #service-field-category'));
+  assert(document.body.dataset.view==='services'&&document.getElementById('search').value==='905-555-0191',
+    'Opening the form from the floating chat should leave the directory filter in place.');
+  click('#modal [data-action="close-modal"]');
+  await wait(()=>!document.getElementById('modal').open);
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);

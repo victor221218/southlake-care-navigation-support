@@ -13,7 +13,7 @@ import { DocumentImporter } from '../src/documents/importer.mjs';
 import { DocumentCases } from '../src/documents/cases.mjs';
 import { CaseFollowups } from '../src/documents/case-followups.mjs';
 import { InputHistory } from '../src/documents/input-history.mjs';
-import { missingServiceDetails, OWN_SERVICE_FORMAT, serviceFormFromMessage } from '../src/documents/service-sources.mjs';
+import { mayRequestServiceForm, missingServiceDetails, OWN_SERVICE_FORMAT, serviceFormFromMessage } from '../src/documents/service-sources.mjs';
 import { writeServiceFixture } from './document-fixtures.mjs';
 
 async function fixture(migrations=path.resolve('drizzle')) {
@@ -160,7 +160,28 @@ test('chat opens a service form, saves a partial card once, and restores the lin
     assert.equal(reply.presentation,'service-form');
     assert.deepEqual(reply.cards,[]);
     assert.equal(await f.store.ownServiceCount(),0);
-    assert.equal(serviceFormFromMessage('Can you add a service result?'),null);
+    for (const prompt of [
+      'Can you add a service result?',
+      'Can you add a service to this case?',
+      'Add a note to a transportation service',
+      'Add a phone number to the transportation service',
+      'Open the transportation service',
+      'Find transportation services in North York',
+      'List transportation services in North York',
+      'Put me in touch with a transportation provider'
+    ]) {
+      assert.equal(serviceFormFromMessage(prompt),null,prompt);
+      assert.equal(mayRequestServiceForm(prompt),false,prompt);
+    }
+    assert.ok(serviceFormFromMessage('I have a new provider to add to Known services.'));
+    assert.ok(serviceFormFromMessage('Um, I have a provider to add to Known services.'));
+    assert.ok(serviceFormFromMessage('Can you show me a form to add a service?'));
+    assert.equal(serviceFormFromMessage('Add Example Community Ride to my own services.').name,'Example Community Ride');
+    assert.equal(serviceFormFromMessage('Can you add the following service?\nProgram / clinic: Example Access Line').name,'Example Access Line');
+    const contextual=await assistant.chat({case_id:record.id,text:'Okay, could you help me add a new transportation service?'});
+    assert.equal(contextual.presentation,'service-form');
+    assert.equal(contextual.service_form.category,'Transportation');
+    assert.deepEqual(contextual.cards,[]);
     const draft = serviceFormFromMessage('Please add a new service called Example Ride.\nPhone: 905-555-0129\nService area: Aurora');
     assert.equal(draft.name,'Example Ride');
     assert.equal(draft.phone,'905-555-0129');
@@ -175,16 +196,16 @@ test('chat opens a service form, saves a partial card once, and restores the lin
     assert.equal(entry.title,'Example Intake Desk');
     assert.equal(entry.source_format,OWN_SERVICE_FORMAT);
     assert.equal(entry.fields['Service or program'],undefined);
-    assert.ok(entry.missing_details.includes('service name')&&entry.missing_details.includes('phone or email'));
+    assert.ok(['service name','category','phone or email'].every(gap=>entry.missing_details.includes(gap)));
     await f.reopen();
     const savedChat = await cases.hydrate(await cases.read(record.id));
-    assert.equal(savedChat.messages.at(-1).payload.cards[0].id,entry.id);
+    assert.equal(savedChat.messages.find(message=>message.id===reply.turn_id).payload.cards[0].id,entry.id);
 
     const backup = await f.store.export();
     f.switch('restored-service-form');
     await f.store.restore(backup);
     const copy = (await cases.list()).items[0];
-    const form = (await cases.hydrate(await cases.read(copy.id))).messages.at(-1).payload;
+    const form = (await cases.hydrate(await cases.read(copy.id))).messages.find(message=>message.payload.cards?.length).payload;
     assert.equal(form.service_form.organization,'Example Intake Desk');
     assert.equal(form.cards[0].title,entry.title);
     assert.notEqual(form.cards[0].id,entry.id);

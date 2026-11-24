@@ -76,7 +76,7 @@ Close the current app and open the new installer. After installation, open **Car
 
 ## Add a service or spreadsheet
 
-Ask “Can you add a service for me?” in chat or choose **Known services → Add a service**. Fill in what you know and choose **Save service**. A phone number, organization, or short description is enough to create a card. Find it under **Known services**. Open **View details → Edit details** to fill in the rest.
+Choose **Add a service** at the top of chat, or ask “Could you help me add a new transportation service?” The form opens with **Category** first, followed by program, organization, coverage and contact fields. Choose or type a category when you know it. Fill in one or more details and choose **Save service**. Find the card in **Known services** and use **View details → Edit details** to fill in the rest.
 
 To load a spreadsheet, choose **Known services → Import services**. In the review, pick a row to check the program, coverage and contact details. Include the rows you want to save.
 

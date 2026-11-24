@@ -2,15 +2,15 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.2.** Add a service directly from chat and save it with the information you have. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
+**Prototype source version 2.17.3.** Add a service directly from chat and save it with the information you have. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
 ## Downloads and guides
 
-**[Download for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.2/Care-Navigation-Support-Setup-2.17.2.exe)**
+**[Download for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.3/Care-Navigation-Support-Setup-2.17.3.exe)**
 
-[What's new in 2.17.2](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.2) · [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) · [All releases](https://github.com/victor221218/southlake-care-navigation-support/releases)
+[What's new in 2.17.3](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.3) · [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) · [All releases](https://github.com/victor221218/southlake-care-navigation-support/releases)
 
 ### [Download the original 2.16.0 handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip)
 
@@ -18,7 +18,7 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.2/Care-Navigation-Support-Setup-2.17.2.exe) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.3/Care-Navigation-Support-Setup-2.17.3.exe) |
 | **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Mac-Apple-Silicon-2.16.0-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Mac-Intel-2.16.0-Test.zip) |
 | **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
 | **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip) |
