@@ -1,3 +1,9 @@
+# Care Navigation Support 2.17.2
+
+- Ask “Can you add a service for me?” to open the service form in chat.
+- Fill in the details you have and choose **Save service**. Partial entries appear in Known services with **Needs details**.
+- Choose **View saved service** in the conversation to return to the new card.
+
 # Care Navigation Support 2.17.1
 
 - Recommendation cards stay compact. Open **View details** and expand **Why this rank** for the card's explanation, or ask about the full order in chat.

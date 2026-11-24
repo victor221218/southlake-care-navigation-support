@@ -30,7 +30,10 @@ async function run(){try{
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));
   if(phase.reopen){
-    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==30)throw new Error('Documents or service cards changed after reopening.');
+    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==31)throw new Error('Documents or service cards changed after reopening.');
+    const partial=await request('get-card',{id:phase.cold.chat_service_id});
+    assert(partial.contacts.some(contact=>contact.value==='905-555-0191')&&partial.missing_details.includes('service name'),
+      'The partial service saved from chat must survive restart.');
     const own=await request('get-card',{id:phase.cold.own_service_id});
     assert(own.source_format==='own-services'&&own.contacts.some(contact=>contact.value==='intake@example.org')&&
       own.comments.some(note=>note.body==='Practice note: call intake before referring.'),'The own service, edited contact and note must survive restart.');
@@ -297,9 +300,34 @@ async function run(){try{
   const [meal]=(await request('list-cards',{collection:'services',query:'meals@example.org'})).items;
   assert(meal.source_format==='own-services'&&(await request('get-card',{id:meal.id})).fields['Eligibility notes']==='Weekday delivery');
   serviceCapture=await window.hiveSmoke.capture('known-services');
+  click('[data-action="new-chat"]');
+  await wait(()=>document.body.dataset.view==='workspace'&&document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+  type('message','Can you add in a service for me');click('[data-action="send"]');
+  await wait(()=>document.querySelector('#modal[open].service-editor-dialog #service-field-name'));
+  assert(document.querySelector('.message.assistant:last-child .service-form-reply')&&
+    !document.querySelector('.message.assistant:last-child .answer-cards'),'Adding a service must open its form instead of returning search results.');
+  click('#modal [data-action="close-modal"]');
+  await wait(()=>!document.getElementById('modal').open);
+  click('.service-form-reply [data-action="open-chat-service-form"]');
+  await wait(()=>document.querySelector('#modal[open] #service-field-phone'));
+  click('#modal [data-action="save-own-service"]');
+  await wait(()=>!document.getElementById('service-editor-error').hidden);
+  assert(document.getElementById('service-editor-error').textContent.includes('at least one detail'));
+  type('service-field-phone','905-555-0191');click('#modal [data-action="save-own-service"]');
+  await wait(()=>!document.getElementById('modal').open&&document.querySelector('.service-form-reply [data-service-form-saved]'));
+  const savedForm=document.querySelector('.service-form-reply [data-service-form-saved]');
+  const chatServiceId=savedForm.dataset.id;
+  savedForm.click();
+  await wait(()=>document.querySelector('#modal[open] #service-contacts')?.textContent.includes('905-555-0191'));
+  assert(document.querySelector('#modal .callout').textContent.includes('service name'));
+  click('#modal [data-action="close-modal"]');
+  await wait(()=>!document.getElementById('modal').open);
+  click('[data-action="known-services"]');await wait(()=>document.body.dataset.view==='services');
+  type('search','905-555-0191');
+  await wait(()=>document.querySelector('.service-row[data-service-id="'+chatServiceId+'"] .service-gaps')?.textContent.includes('service name'));
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);
-  window.hiveSmoke.finish({ok:true,own_service_review:true,own_service_id:ownId,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
+  window.hiveSmoke.finish({ok:true,own_service_review:true,own_service_id:ownId,chat_service_id:chatServiceId,chat_service_form_verified:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
 }catch(error){const capture=await window.hiveSmoke.capture('failure');window.hiveSmoke.finish({ok:false,error:error.message||String(error),stack:error.stack,debug_text:document.body.innerText.slice(0,6000),notice_text:document.getElementById('notice')?.textContent,modal_text:document.getElementById('modal')?.innerText.slice(0,3500),failure_capture:capture});}}
 run();

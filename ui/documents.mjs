@@ -387,7 +387,7 @@ const fromCaseMessage = message => ({
   ...message.payload, error: message.state === 'error'
 });
 function updateFollowupControls() {
-  $('messages').querySelectorAll('[data-action="chat-followup-start"],[data-action="chat-followup-step"],[data-followup-field]').forEach(control => {
+  $('messages').querySelectorAll('[data-action="chat-followup-start"],[data-action="chat-followup-step"],[data-action="open-chat-service-form"],[data-followup-field]').forEach(control => {
     control.disabled = busy || caseChanging;
   });
 }
@@ -630,10 +630,21 @@ function shell(){
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage().catch(fail);}});
   renderLibraryMode();renderMessages();
 }
+function renderChatServiceForm(message) {
+  const saved = message.cards?.[0];
+  const description = saved ? 'Service saved in Known services.' : message.text;
+  const action = saved ? button('open-card','View saved service','secondary',`data-id="${e(saved.id)}" data-service-form-saved="${e(message.id)}"`) :
+    activeCase?.status==='active' ? button('open-chat-service-form','Open service form','primary',`data-id="${e(message.id)}"`) : '';
+  return `<article class="message assistant" data-message-sequence="${message.sequence||''}">
+    <div class="message-label">ASSISTANT</div><div class="answer-summary service-form-reply">
+      <p>${e(description)}</p>${action}
+    </div></article>`;
+}
 function renderMessages(forceScroll=false, {scrollToReply=false}={}){
   const viewport=$('messages'),follow=forceScroll||viewport.scrollHeight-viewport.scrollTop-viewport.clientHeight<80,previous=viewport.scrollTop;
   viewport.innerHTML=(caseHasMore?button('earlier-messages','↑ Earlier messages','quiet earlier-messages'):'')+(messages.length?messages.map((m,index)=>{
     if (m.followup) return renderChatFollowup(m);
+    if (m.role==='assistant' && m.presentation==='service-form' && !m.error) return renderChatServiceForm(m);
     const pending=m.role==='assistant'&&busy&&index===messages.length-1&&!m.source;
     const cardsOnly=Boolean(m.cards?.length)&&m.role==='assistant'&&!m.error&&(m.presentation==='service-options'||!m.presentation&&!m.calculations?.length&&m.cards?.some(isService));
     const answer=pending?'<div class="answer-summary answer-pending" role="status">Finding the useful details…</div>':cardsOnly?'':`<div class="${m.role==='assistant'?'answer-summary'+(m.error?' answer-error':''):'message-text'}">${textHTML(m.text||'No answer is available. Please retry.')}</div>`;
@@ -663,9 +674,17 @@ async function sendMessage(retryText=null,retryTurnId=null){
     await flushCaseDraft();
     manualWrapUp=false;
     messages.push({role:'user',text});response={role:'assistant',text:''};messages.push(response);$('message').value='';renderMessages(true);
-    const answer=await api('chat',{text,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer);response.error=answer.source==='error';await refresh();
+    const answer=await api('chat',{text,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer,{id:answer.turn_id});response.error=answer.source==='error';await refresh();
   }catch(error){if(response){response.text=error.message;response.error=true;response.source='error';}else fail(error);}
-  finally{if(response&&response.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}setBusy(false);renderMessages(true,{scrollToReply:true});$('message').focus();}
+  finally{
+    if(response?.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}
+    setBusy(false);
+    renderMessages(true,{scrollToReply:true});
+    if (response?.presentation==='service-form' && !response.error && !modal.open &&
+      response.case_id===activeCase?.id && !$('chat-panel').hidden) {
+      await openChatServiceForm(response.turn_id);
+    } else $('message').focus();
+  }
 }
 function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div></div>`:'';}
 function resultDraft(){return feedbackEditor?{outcome:feedbackEditor.outcome,rating:$('result-rating')?.value||'',body:$('result-note')?.value||''}:null;}
@@ -806,11 +825,12 @@ function serviceEditorHTML(editor) {
     const property=`id="service-field-${name}" data-service-field="${name}" maxlength="${limit}"`;
     return `<label ${name==='details'?'class="service-description"':''}>${e(label)}
       ${name==='details'?`<textarea ${property} rows="3">${value}</textarea>`:
-        `<input ${property} value="${value}" ${name==='category'?'list="service-category-choices"':name==='name'?'aria-required="true"':''}>`}</label>`;
+        `<input ${property} value="${value}" ${name==='category'?'list="service-category-choices"':name==='name'&&editor.importId?'aria-required="true"':''}>`}</label>`;
   }).join('');
   const options=(state?.serviceCategories||[]).map(category=>`<option value="${e(category)}"></option>`).join('');
   return modalHead(editor.importId?'Review services':editor.card?'Edit service details':'Add a service',editor.filename||'Own source')+
     `<div class="detail-body service-editor-body">${list}
+      ${editor.importId?'':'<p class="subtle">Enter one detail to save. You can fill in the rest later.</p>'}
       <ul id="service-questions" class="service-questions" aria-live="polite"></ul>
       <div class="service-editor-fields">${fields}<datalist id="service-category-choices">${options}</datalist></div>
       <p id="service-editor-error" class="callout" hidden></p>
@@ -833,32 +853,42 @@ function updateServiceEditor() {
     $('service-review-row').options[index].textContent=(row.values.name||'Unnamed service')+' · '+row.locator;
   }
 }
-async function openServiceEditor(card=null, review=null) {
-  const rows=review?review.rows.map(row=>({...row,incomplete:Boolean(missingServiceDetails(row.values).length)})):[{values:serviceDraft(card||{}).values,include:true}];
+async function openServiceEditor({card=null, review=null, chatForm=null}={}) {
+  const rows=review?review.rows.map(row=>({...row,incomplete:Boolean(missingServiceDetails(row.values).length)})):
+    [{values:chatForm?cleanServiceFields(chatForm.values):serviceDraft(card||{},{nameFromOrganization:false}).values,include:true}];
   const index=review?Math.max(0, rows.findIndex(row=>missingServiceDetails(row.values).length)):0;
-  const editor={card, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
+  const editor={card, chatForm, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
     warnings:review?.warnings||[], changed:new Set(), saving:false};
   await openModal(serviceEditorHTML(editor),'service-editor-dialog');
   serviceEditor=editor;
   updateServiceEditor();
+  if (chatForm) $('service-field-name').focus();
+}
+async function openChatServiceForm(messageId) {
+  const message=messages.find(item=>item.id===messageId&&item.presentation==='service-form');
+  if (!message || activeCase?.status!=='active') throw new Error('Open this conversation to finish the service form.');
+  if (message.cards?.[0]) return openCard(message.cards[0].id);
+  await openServiceEditor({chatForm:{case_id:activeCase.id,message_id:message.id,values:message.service_form}});
 }
 async function reviewServiceFile(result) {
   if(result.duplicate){
     notice('These service cards are already in Known services.');
     return;
   }
-  await openServiceEditor(null,result);
+  await openServiceEditor({review:result});
   preview=null;
 }
 async function saveOwnService(update=false) {
   const editor=serviceEditor;
   if(!editor||editor.saving)return;
-  const {card,rows,importId,changed}=editor;
-  const invalid=rows.findIndex(row=>row.include&&!cleanServiceFields(row.values).name);
+  const {card,chatForm,rows,importId,changed}=editor;
+  const invalid=importId?rows.findIndex(row=>row.include&&!cleanServiceFields(row.values).name):-1;
   if (invalid>=0) {
     editor.index=invalid;
     modal.innerHTML=serviceEditorHTML(editor);
     updateServiceEditor();
+    $('service-editor-error').textContent='Enter a name for this row, or uncheck it to skip it.';
+    $('service-editor-error').hidden=false;
     $('service-field-name').focus();
     return;
   }
@@ -878,13 +908,21 @@ async function saveOwnService(update=false) {
       count=(await api('confirm-service-import',{id:importId,update})).count;
     } else if (card) {
       await api('update-own-service',{id:card.id,expected_version:card.version,values:rows[0].values});
+    } else if (chatForm) {
+      const {card_id}=await api('save-service-form',{...chatForm,values:rows[0].values});
+      const reply=messages.find(message=>message.id===chatForm.message_id);
+      if (reply) reply.cards=[{id:card_id}];
     } else {
       await api('add-own-service',{values:rows[0].values});
     }
     editor.saving=false;
     serviceEditor=null;
     await closeModal();
-    if (card) {
+    if (chatForm) {
+      renderMessages();
+      await refresh();
+      document.querySelector(`[data-service-form-saved="${CSS.escape(chatForm.message_id)}"]`)?.focus();
+    } else if (card) {
       if (selected?.id===card.id) {selected=await api('get-card',{id:card.id});context();}
       await refresh();
       await openCard(card.id);
@@ -1091,7 +1129,8 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='import-services')await importDocument(false,true);
     else if(action==='review-import-services'&&preview)await reviewServiceFile(await api('review-service-import',{id:preview.id}));
     else if(action==='add-own-service')await openServiceEditor();
-    else if(action==='edit-own-service')await openServiceEditor(await api('get-card',{id:target.dataset.id}));
+    else if(action==='edit-own-service')await openServiceEditor({card:await api('get-card',{id:target.dataset.id})});
+    else if(action==='open-chat-service-form')await openChatServiceForm(target.dataset.id);
     else if(action==='save-own-service')await saveOwnService();
     else if(action==='update-service-inventory')await saveOwnService(true);
     else if(action==='save-tracking-results')await saveTrackingResults();

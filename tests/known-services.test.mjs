@@ -13,7 +13,7 @@ import { DocumentImporter } from '../src/documents/importer.mjs';
 import { DocumentCases } from '../src/documents/cases.mjs';
 import { CaseFollowups } from '../src/documents/case-followups.mjs';
 import { InputHistory } from '../src/documents/input-history.mjs';
-import { missingServiceDetails, OWN_SERVICE_FORMAT } from '../src/documents/service-sources.mjs';
+import { missingServiceDetails, OWN_SERVICE_FORMAT, serviceFormFromMessage } from '../src/documents/service-sources.mjs';
 import { writeServiceFixture } from './document-fixtures.mjs';
 
 async function fixture(migrations=path.resolve('drizzle')) {
@@ -144,6 +144,50 @@ test('a spoken-style result is saved to the right card, ranks lower in a new cas
     assert.match(why.text,/1\. Example Bay Society/);
     assert.match(why.text,/2\. Example Alder Society.*1\.0\/5/);
     assert.equal((await f.store.list({collection:'services',directory:true})).items[0].id,alder.id);
+  } finally { await f.close(); }
+});
+
+test('chat opens a service form, saves a partial card once, and restores the link', async () => {
+  const f = await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const cases = new DocumentCases({store:f.store});
+    const assistant = new DocumentAssistant({store:f.store,cases,connection:{
+      session:async()=>assert.fail('The add-service form should be prepared locally')
+    }});
+    const record = await cases.create();
+    const reply = await assistant.chat({case_id:record.id,text:'Can you add in a service for me'});
+    assert.equal(reply.presentation,'service-form');
+    assert.deepEqual(reply.cards,[]);
+    assert.equal(await f.store.ownServiceCount(),0);
+    assert.equal(serviceFormFromMessage('Can you add a service result?'),null);
+    const draft = serviceFormFromMessage('Please add a new service called Example Ride.\nPhone: 905-555-0129\nService area: Aurora');
+    assert.equal(draft.name,'Example Ride');
+    assert.equal(draft.phone,'905-555-0129');
+    assert.equal(draft.area,'Aurora');
+
+    const input = {case_id:record.id,message_id:reply.turn_id,values:{organization:'Example Intake Desk'}};
+    await assert.rejects(cases.saveServiceForm({...input,values:{}}),/Enter at least one detail/);
+    const [saved,retry] = await Promise.all([cases.saveServiceForm(input),cases.saveServiceForm(input)]);
+    assert.equal(saved.card_id,retry.card_id);
+    assert.equal(await f.store.ownServiceCount(),1);
+    const entry = await f.store.get(saved.card_id);
+    assert.equal(entry.title,'Example Intake Desk');
+    assert.equal(entry.source_format,OWN_SERVICE_FORMAT);
+    assert.equal(entry.fields['Service or program'],undefined);
+    assert.ok(entry.missing_details.includes('service name')&&entry.missing_details.includes('phone or email'));
+    await f.reopen();
+    const savedChat = await cases.hydrate(await cases.read(record.id));
+    assert.equal(savedChat.messages.at(-1).payload.cards[0].id,entry.id);
+
+    const backup = await f.store.export();
+    f.switch('restored-service-form');
+    await f.store.restore(backup);
+    const copy = (await cases.list()).items[0];
+    const form = (await cases.hydrate(await cases.read(copy.id))).messages.at(-1).payload;
+    assert.equal(form.service_form.organization,'Example Intake Desk');
+    assert.equal(form.cards[0].title,entry.title);
+    assert.notEqual(form.cards[0].id,entry.id);
   } finally { await f.close(); }
 });
 

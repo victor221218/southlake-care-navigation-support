@@ -10,7 +10,7 @@ Workspace opens as a full-width chat, with Add a document beside Speak. **Chat h
 
 ## Known services are ready to browse
 
-For 2.17.1, [use the inventory and outcome guide](README.md#maintain-the-service-inventory-and-outcomes) to import an updated program list, confirm tracked outcomes and try the live ranking demo. **Needs details** identifies missing information on each card.
+Use the [inventory and outcome guide](README.md#maintain-the-service-inventory-and-outcomes) to import an updated program list, confirm tracked outcomes and try the live ranking demo. **Needs details** identifies missing information on each card.
 
 Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. Your saved average rating appears beside the program contact. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 
@@ -76,7 +76,9 @@ Close the current app and open the new installer. After installation, open **Car
 
 ## Add a service or spreadsheet
 
-Under **Known services**, choose **Add a service** or **Import services**. In a spreadsheet review, pick a row to check the program, coverage and contact details. Include the rows you want to save. A question identifies each missing contact or service area. You can fill it in later from **View details → Edit details**.
+Ask “Can you add a service for me?” in chat or choose **Known services → Add a service**. Fill in what you know and choose **Save service**. A phone number, organization, or short description is enough to create a card. Find it under **Known services**. Open **View details → Edit details** to fill in the rest.
+
+To load a spreadsheet, choose **Known services → Import services**. In the review, pick a row to check the program, coverage and contact details. Include the rows you want to save.
 
 Your entries appear at the top under **Your services** with **(Own source)** beside the contact. The preloaded entries are under **Public services** with **(Public source)**. Your saved notes and results appear in **View details** with their own source label.
 

@@ -1,12 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import {hydrateFollowup, restoreFollowup} from './case-followups.mjs';
 import {summarizeTopic} from './topic.mjs';
+import {cleanServiceFields} from './service-sources.mjs';
 const stamp=()=>new Date().toISOString();
 const clean=(value,max=80)=>String(value??'').replace(/\u0000/g,'').trim().slice(0,max);
 const cardRef=card=>({id:card.id,...(card.card_reason?{card_reason:clean(card.card_reason,220)}:{}),
   ...(card.card_confirm?{card_confirm:clean(card.card_confirm,260)}:{}),
   ...(card.card_rank_reason?{card_rank_reason:clean(card.card_rank_reason,440)}:{})});
-const presentation=value=>['service-options','answer'].includes(value)?value:undefined;
+const presentation=value=>['service-options','answer','service-form'].includes(value)?value:undefined;
 const unpack=row=>({...row,payload:JSON.parse(row.payload_json||'{}')});
 const followupJoins = `
   LEFT JOIN personal_cards provider ON provider.owner_id=c.owner_id AND provider.archived=0
@@ -107,7 +108,49 @@ export class DocumentCases {
     await this.db().prepare("UPDATE personal_case_messages SET payload_json=json_set(payload_json,'$.saved',json(?)) WHERE id=? AND case_id=? AND owner_id=?")
       .bind(JSON.stringify(saved),turn.user_id,turn.case_id,this.owner()).run();
   }
-  async finish(turn,result){const payload={source:result.source,error:result.source==='error',saved:Boolean(result.saved),presentation:presentation(result.presentation),cards:(result.cards||[]).slice(0,6).map(cardRef),calculations:result.calculations||[],connection_needed:result.connection_needed};await this.db().transaction(async()=>{await this.row(turn.case_id);await this.db().prepare('UPDATE personal_case_messages SET body=?,payload_json=?,state=?,updated_at=? WHERE id=? AND owner_id=?').bind(clean(result.text,60000),JSON.stringify(payload),result.source==='error'?'error':'complete',stamp(),turn.assistant_id,this.owner()).run();await this.markSaved(turn,Boolean(result.saved));await this.db().prepare('UPDATE personal_cases SET updated_at=? WHERE id=? AND owner_id=?').bind(stamp(),turn.case_id,this.owner()).run();this.changed({case_id:turn.case_id});});}
+  async finish(turn,result) {
+    const payload = {
+      source:result.source, error:result.source==='error', saved:Boolean(result.saved),
+      presentation:presentation(result.presentation), cards:(result.cards||[]).slice(0,6).map(cardRef),
+      calculations:result.calculations||[], connection_needed:result.connection_needed
+    };
+    if (payload.presentation==='service-form') payload.service_form=cleanServiceFields(result.service_form);
+    await this.db().transaction(async () => {
+      await this.row(turn.case_id);
+      await this.db().prepare('UPDATE personal_case_messages SET body=?,payload_json=?,state=?,updated_at=? WHERE id=? AND owner_id=?')
+        .bind(clean(result.text,60000),JSON.stringify(payload),payload.error?'error':'complete',stamp(),turn.assistant_id,this.owner()).run();
+      await this.markSaved(turn,Boolean(result.saved));
+      await this.db().prepare('UPDATE personal_cases SET updated_at=? WHERE id=? AND owner_id=?')
+        .bind(stamp(),turn.case_id,this.owner()).run();
+      this.changed({case_id:turn.case_id});
+    });
+  }
+  async saveServiceForm({case_id,message_id,values}) {
+    return this.db().transaction(async () => {
+      const record = await this.row(case_id);
+      if (record.status!=='active') throw new Error('Reopen this saved case to add the service.');
+      const message = await this.db().prepare("SELECT payload_json FROM personal_case_messages WHERE id=? AND case_id=? AND owner_id=? AND role='assistant' AND state='complete'")
+        .bind(message_id,case_id,record.owner_id).first();
+      const payload = JSON.parse(message?.payload_json||'{}');
+      if (payload.presentation!=='service-form') throw new Error('Open the service form in this conversation before saving.');
+      const priorId = payload.cards?.[0]?.id;
+      if (priorId) {
+        const existing = await this.db().prepare('SELECT id FROM personal_cards WHERE id=? AND owner_id=? AND archived=0')
+          .bind(priorId,record.owner_id).first();
+        if (existing) return {card_id:existing.id};
+      }
+      const service = await this.store.addOwnService(values,{fromChat:true});
+      payload.cards = [{id:service.card_id}];
+      payload.service_form = cleanServiceFields(values);
+      const time = stamp();
+      await this.db().prepare('UPDATE personal_case_messages SET payload_json=?,updated_at=? WHERE id=? AND owner_id=?')
+        .bind(JSON.stringify(payload),time,message_id,record.owner_id).run();
+      await this.db().prepare('UPDATE personal_cases SET updated_at=? WHERE id=? AND owner_id=?')
+        .bind(time,case_id,record.owner_id).run();
+      this.changed({case_id});
+      return {card_id:service.card_id};
+    });
+  }
   async hydrate(record){for(const message of record.messages){const cards=[];for(const ref of message.payload.cards||[]){try{const card=await this.store.get(ref.id,{case_id:record.id});cards.push({...card,...cardRef(ref),body:card.body.slice(0,650),fields:undefined,comments:undefined});}catch{}}message.payload.cards=cards;
       if(message.payload.followup)message.payload.followup=await hydrateFollowup(message.payload.followup,this.store,record.id);
       if(message.state==='pending'){message.body=message.body||'This answer was interrupted. Retry the question to continue.';message.payload.error=true;message.payload.source='error';await this.db().prepare("UPDATE personal_case_messages SET state='error',body=? WHERE id=? AND owner_id=?").bind(message.body,message.id,this.owner()).run();message.state='error';}}return record;}
@@ -199,7 +242,26 @@ export class DocumentCases {
   }
   async export(){const tables={cases:'personal_cases',case_messages:'personal_case_messages',case_memory:'personal_case_memory'};const result={};for(const [key,table] of Object.entries(tables))result[key]=(await this.db().prepare('SELECT * FROM '+table+' WHERE owner_id=?').bind(this.owner()).all()).results.map(({owner_id,...row})=>row);return result;}
   async restore(data,{cards,comments}){if(!data.cases)return; if(!Array.isArray(data.cases)||data.cases.length>2000||!Array.isArray(data.case_messages)||data.case_messages.length>100000||!Array.isArray(data.case_memory))throw new Error('The backup contains invalid case chats.');const map=new Map();for(const c of data.cases){if(!['active','archived'].includes(c.status)||typeof c.id!=='string'||!clean(c.title))throw new Error('The backup contains an invalid case.');const existing=await this.db().prepare('SELECT id FROM personal_cases WHERE owner_id=? AND origin_id=?').bind(this.owner(),c.origin_id||c.id).first();const id=existing?.id||randomUUID();map.set(c.id,id);if(!existing)await this.db().prepare('INSERT INTO personal_cases(id,owner_id,origin_id,title,status,selected_card_id,archive_card_id,draft,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id,this.owner(),clean(c.origin_id||c.id,100),clean(c.title),c.status,cards.get(c.selected_card_id)||null,cards.get(c.archive_card_id)||null,clean(c.draft,12000),clean(c.created_at,40),clean(c.updated_at,40),Number(c.version)||1).run();}
-    for(const m of data.case_messages){if(!map.has(m.case_id)||!['user','assistant'].includes(m.role)||!Number.isInteger(m.sequence)||m.sequence<1||typeof m.body!=='string')throw new Error('The backup contains an invalid chat message.');const caseId=map.get(m.case_id),origin=clean(m.origin_id||m.id,100);if(await this.db().prepare('SELECT id FROM personal_case_messages WHERE case_id=? AND origin_id=?').bind(caseId,origin).first())continue;const raw=JSON.parse(m.payload_json||'{}'),payload={source:raw.source,error:Boolean(raw.error),saved:Boolean(raw.saved),context_card_id:m.role==='user'?cards.get(raw.context_card_id):undefined,presentation:presentation(raw.presentation),followup:m.role==='assistant'?restoreFollowup(raw.followup,{cards,comments}):undefined,cards:(raw.cards||[]).slice(0,6).map(c=>({...cardRef(c),id:cards.get(c.id)})).filter(c=>c.id),calculations:Array.isArray(raw.calculations)?raw.calculations.slice(0,10):[]};await this.db().prepare('INSERT INTO personal_case_messages(id,owner_id,case_id,origin_id,sequence,role,body,payload_json,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(randomUUID(),this.owner(),caseId,origin,m.sequence,m.role,clean(m.body,60000),JSON.stringify(payload),['complete','error','pending'].includes(m.state)?m.state:'complete',clean(m.created_at,40),clean(m.updated_at,40)).run();}
+    for (const m of data.case_messages) {
+      if (!map.has(m.case_id)||!['user','assistant'].includes(m.role)||!Number.isInteger(m.sequence)||m.sequence<1||typeof m.body!=='string') {
+        throw new Error('The backup contains an invalid chat message.');
+      }
+      const caseId=map.get(m.case_id), origin=clean(m.origin_id||m.id,100);
+      if (await this.db().prepare('SELECT id FROM personal_case_messages WHERE case_id=? AND origin_id=?').bind(caseId,origin).first()) continue;
+      const raw=JSON.parse(m.payload_json||'{}');
+      const payload={
+        source:raw.source,error:Boolean(raw.error),saved:Boolean(raw.saved),
+        context_card_id:m.role==='user'?cards.get(raw.context_card_id):undefined,
+        presentation:presentation(raw.presentation),
+        followup:m.role==='assistant'?restoreFollowup(raw.followup,{cards,comments}):undefined,
+        cards:(raw.cards||[]).slice(0,6).map(c=>({...cardRef(c),id:cards.get(c.id)})).filter(c=>c.id),
+        calculations:Array.isArray(raw.calculations)?raw.calculations.slice(0,10):[]
+      };
+      if (m.role==='assistant' && payload.presentation==='service-form') payload.service_form=cleanServiceFields(raw.service_form);
+      await this.db().prepare('INSERT INTO personal_case_messages(id,owner_id,case_id,origin_id,sequence,role,body,payload_json,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+        .bind(randomUUID(),this.owner(),caseId,origin,m.sequence,m.role,clean(m.body,60000),JSON.stringify(payload),
+          ['complete','error','pending'].includes(m.state)?m.state:'complete',clean(m.created_at,40),clean(m.updated_at,40)).run();
+    }
     for(const ref of data.case_memory){const entry=ref.entry_type==='card'?cards.get(ref.entry_id):comments.get(ref.entry_id);if(map.has(ref.case_id)&&entry)await this.db().prepare('INSERT OR IGNORE INTO personal_case_memory(case_id,owner_id,entry_type,entry_id,retention) VALUES (?,?,?,?,?)').bind(map.get(ref.case_id),this.owner(),ref.entry_type,entry,ref.retention==='explicit'?'explicit':'automatic').run();}
   }
 }

@@ -2,15 +2,15 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.1.** This version supports the service inventory and navigation tracker and uses recorded service outcomes to explain recommendation order. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
+**Prototype source version 2.17.2.** Add a service directly from chat and save it with the information you have. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
 ## Downloads and guides
 
-**[Download for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.1/Care-Navigation-Support-Setup-2.17.1.exe)**
+**[Download for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.2/Care-Navigation-Support-Setup-2.17.2.exe)**
 
-[What's new in 2.17.1](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.1) · [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) · [All releases](https://github.com/victor221218/southlake-care-navigation-support/releases)
+[What's new in 2.17.2](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.2) · [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) · [All releases](https://github.com/victor221218/southlake-care-navigation-support/releases)
 
 ### [Download the original 2.16.0 handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip)
 
@@ -18,7 +18,7 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.1/Care-Navigation-Support-Setup-2.17.1.exe) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.2/Care-Navigation-Support-Setup-2.17.2.exe) |
 | **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Mac-Apple-Silicon-2.16.0-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Mac-Intel-2.16.0-Test.zip) |
 | **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
 | **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip) |
@@ -141,7 +141,7 @@ Use one row per program and location. The following column labels define the imp
 1. In **Known services**, choose **Import services** and select the local inventory in Excel, CSV or TSV format. Review the proposed cards and the source rows. The app recognizes the column labels below grouped headings and keeps other populated columns with the service.
 2. Use **Needs details** in Known services to find gaps in contact, coverage, intake, eligibility or verification. Open the card and choose **Edit details** to correct an entry you added. Update the workbook too if it remains your source.
 3. When you receive changes, edit the full inventory workbook and keep its filename. Keep existing Service IDs or the same organization, program, service type, subcategory and location so the app can match rows. Import the revised workbook and select **Update saved inventory**. The app updates matching cards in place and keeps attached ratings and notes. Review included rows before saving. Rows omitted from an update are kept as previous rows.
-4. For new providers, add a row to the workbook or use **Add a service** in the app. GitHub carries the code and field guide. Keep working spreadsheets and case results in the local workspace.
+4. For new providers, add a row to the workbook, choose **Add a service** in Known services, or ask “Can you add a service for me?” in chat. Enter any detail you have and choose **Save service**. An incomplete card appears under **Known services** with a **Needs details** label. Open **View details → Edit details** to fill in the rest. Keep working spreadsheets and case results in the local workspace.
 
 Known services shows **Services with recorded outcomes**, then your services and public services without recorded outcomes. A note alone leaves the result open. Cards retain their **Own source** or **Public source** label.
 

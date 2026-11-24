@@ -76,17 +76,23 @@ export class DocumentStore {
       return this.changed({ document_id: id, count: parsed.sections.length, added, updated, duplicate: false });
     });
   }
-  async addOwnService(values) {
-    const section = serviceSection({key:'manual', locator:'Entered in Known services'}, values);
-    return this.import({filename:'Services added by you', digest:randomBytes(32).toString('hex'), format:OWN_SERVICE_FORMAT,
-      sections:[section], warnings:[], stableKeys:false});
+  async addOwnService(values, {fromChat = false} = {}) {
+    const locator = fromChat ? 'Entered from chat' : 'Entered in Known services';
+    const section = serviceSection({key:'manual', locator}, values, {allowMissingName:true});
+    return this.db().transaction(async () => {
+      const result = await this.import({filename:'Services added by you', digest:randomBytes(32).toString('hex'),
+        format:OWN_SERVICE_FORMAT, sections:[section], warnings:[], stableKeys:false});
+      const card = await this.db().prepare('SELECT id FROM personal_cards WHERE document_id=? AND owner_id=?')
+        .bind(result.document_id,this.owner()).first();
+      return {...result,card_id:card.id};
+    });
   }
   async updateOwnService({id, expected_version, values}) {
     return this.db().transaction(async () => {
       const card = await this.get(id);
       if (card.source_format !== OWN_SERVICE_FORMAT || card.archived) throw new Error('Choose a service that you added.');
       if (card.version !== expected_version) throw new Error('This service changed. Reopen it before editing.');
-      const section = serviceSection(card, values);
+      const section = serviceSection(card, values, {allowMissingName:true});
       const body = clean(section.body, 30000);
       await this.db().prepare(`UPDATE personal_cards SET title=?,body=?,fields_json=?,contacts_json=?,links_json=?,
         updated_at=?,version=version+1 WHERE id=? AND owner_id=?`)

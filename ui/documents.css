@@ -415,6 +415,7 @@
 .note-source-heading h3 { margin: 0; }
 .library-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
 .service-editor-dialog { max-width: 720px; }
+.service-form-reply > button { margin-top: 10px; }
 .service-editor-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0,1fr));

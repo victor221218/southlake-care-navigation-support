@@ -44,7 +44,7 @@ export function serviceContacts(values) {
       .map(value => ({kind:'email', value, name})));
 }
 
-export function serviceDraft(section = {}) {
+export function serviceDraft(section = {}, {nameFromOrganization = true} = {}) {
   const mapped = {};
   const other = [];
   for (const [label, value] of Object.entries(section.fields || {})) {
@@ -57,13 +57,35 @@ export function serviceDraft(section = {}) {
   const places = ['Georgina','East Gwillimbury','Bradford / West Gwillimbury','Newmarket','Aurora','Alliston / New Tecumseth']
     .filter(place=>/^(?:yes|y|true|1|x|✓|✔)$/i.test(String(section.fields?.[place]??'').trim()));
   if (!values.area && places.length) values.area=places.join(', ');
-  values.name ||= values.organization;
+  if (nameFromOrganization) values.name ||= values.organization;
   return {values, other};
 }
 
+const requestLeadIn = /^(?:please\s+)?(?:(?:(?:can|could|would) you|i(?:['’]d| would) like (?:you )?to|i (?:want|need) (?:you )?to|help me)\s+)?(?:please\s+)?/i;
+const addServiceRequest = /^(?:add(?:\s+in)?|create|register|log|save)\s+(?:(?:a|an|this|the|another)\s+)?(?:new\s+)?(?:service|program|provider)\b/i;
+const otherServiceAction = /^(?:request|result|rating|note|feedback|follow[- ]?up|to (?:this|the|my) (?:case|request|chat))\b/i;
+
+export function serviceFormFromMessage(message) {
+  const request = message.trim().replace(requestLeadIn, '');
+  const intro = request.match(addServiceRequest);
+  if (!intro) return null;
+  const remainder = request.slice(intro[0].length).replace(/^\s*[:,]?\s*/, '');
+  if (otherServiceAction.test(remainder)) return null;
+  const fragments = remainder.split(/\r?\n|;|[.,]\s+(?=[\p{L} /()]{2,50}:)/u);
+  const fields = {};
+  const named = fragments[0].match(/^(?:called|named)\s+(?:"([^"]+)"|“([^”]+)”|([^,?!]+))/i);
+  if (named) fields['Service or program'] = (named[1] || named[2] || named[3]).replace(/[.?!]+$/, '');
+  for (const fragment of fragments) {
+    const parts = fragment.match(/^\s*([\p{L} /()]{2,50})\s*:\s*(.+)$/u);
+    if (parts) fields[parts[1]] = parts[2];
+  }
+  return serviceDraft({fields}, {nameFromOrganization:false}).values;
+}
+
 export function directoryGaps(card) {
-  const values=serviceDraft(card).values;
+  const values=serviceDraft(card,{nameFromOrganization:false}).values;
   const missing=[];
+  if (card.source_format===OWN_SERVICE_FORMAT && !values.name) missing.push('service name');
   if (!card.contacts?.length) missing.push('phone or email');
   if (!values.area) missing.push('service area');
   if (!values.eligibility) missing.push('eligibility');
@@ -80,13 +102,16 @@ export function missingServiceDetails(values) {
   return missing;
 }
 
-export function serviceSection(section, input) {
+export function serviceSection(section, input, {allowMissingName = false} = {}) {
   const values = cleanServiceFields(input);
-  if (!values.name) throw new Error('Enter a service or program name before saving.');
+  if (!allowMissingName && !values.name) throw new Error('Enter a service or program name before saving.');
+  if (!Object.values(values).some(Boolean)) {
+    throw new Error('Enter at least one detail, such as the organization, phone number, or a short description.');
+  }
   const standard = serviceFields.flatMap(([key, label]) => values[key] ? [[label, values[key]]] : []);
   const fields = Object.fromEntries([...serviceDraft(section).other, ...standard]);
-  const title = values.organization && header(values.organization) !== header(values.name)
-    ? values.organization + ' · ' + values.name : values.name;
+  const title = values.organization && values.name && header(values.organization) !== header(values.name)
+    ? values.organization + ' · ' + values.name : values.name || values.organization || 'Unnamed service';
   const body = [values.details, ...Object.entries(fields).filter(([label]) => label !== 'Service details')
     .map(([label, value]) => label + ': ' + value)].filter(Boolean).join('\n');
   return {...section, title, fields, body};

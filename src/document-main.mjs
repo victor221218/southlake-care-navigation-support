@@ -61,6 +61,7 @@ async function invoke(method,args){
   if(method==='rename-case'){idle();return cases.rename(args);}
   if(method==='suggest-case-title'){idle();return cases.suggestedTitle(args.id);}
   if(method==='case-context')return cases.context(args);
+  if(method==='save-service-form'){idle();const result=await cases.saveServiceForm(args);assistant.clear();return result;}
   if(method==='start-service-followup'){idle();return followups.start(args);}
   if(method==='update-service-followup'){
     idle();
