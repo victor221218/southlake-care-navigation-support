@@ -1,5 +1,6 @@
 import { Voice } from './voice.mjs';
 import { escapeHTML as e } from './render-text.mjs';
+import { enums } from '../src/core/catalog.mjs';
 import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceSource, serviceFields,
   cleanServiceFields, serviceDraft, missingServiceDetails} from '../src/documents/service-sources.mjs';
 import {directoryGroup} from '../src/documents/ranking.mjs';
@@ -7,6 +8,10 @@ const api=(method,args={})=>window.hive.request(method,args),$=id=>document.getE
 let state,query='',documentFilter='',libraryMode='workspace',navigationSequence=0,serviceChatOpen=false,assistantReturnFocus=null,memoryKind='all',category='',includeArchived=false,offset=0,messages=[],busy=false,importing=false,selected=null,preview=null,noteEditor=null,noteTimer,feedbackEditor=null,feedbackSaving=false,voicePrefix='',connectionBusy=false,cardLoadSequence=0,activeCase=null,activeOwner=null,caseChanging=false,caseSequence=0,caseHasMore=false,caseFilter='',caseDraftTimer,caseDraftQueue=Promise.resolve();
 const modal=$('modal');
 const feedbackDrafts=new Map();
+const serviceFormDrafts = new Map();
+const serviceAreaChoices = ['York Region', ...enums.regions.toSorted((a,b)=>a.localeCompare(b,'en-CA'))];
+const basicServiceFields = new Set(['category','name','area','phone']);
+const customServiceArea = '__custom__';
 const feedbackLabels = {
   needed: 'Feedback needed',
   unselected: 'No service selected',
@@ -16,6 +21,7 @@ let caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHisto
 let expandedMemoryGroup = '', memoryHistoryOffset = 0;
 let manualWrapUp = false;
 let serviceEditor = null;
+let showRemovedServices = false;
 let trackingReview = null;
 const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
 const deleteChatHelp = 'Discard a practice or inaccurate conversation.';
@@ -60,7 +66,7 @@ function answerCardHTML(card, reply) {
   const summary = card.experience;
   const service = isService(card);
   const pickable = reply.id && !reply.error && activeCase?.status === 'active' &&
-    !card.archived && card.document_id && (service || reply.presentation === 'service-options');
+    !card.archived && !card.removed_from_directory && card.document_id && (service || reply.presentation === 'service-options');
   const details = `data-id="${e(card.id)}"`;
   const ranking = card.card_rank_reason ? ` data-rank-reason="${e(card.card_rank_reason)}"` : '';
   const content = `<span class="card-kicker">${e(card.category || card.filename || (card.kind === 'conversation' ? 'Saved case' : 'Saved information'))} ${sourceTag(card.source_format)}</span>
@@ -186,6 +192,9 @@ function serviceRowHTML(card) {
   const person=card.contact_name || card.contacts.find(contact=>contact.name)?.name;
   const score=averageRatingBadge(card.experience);
   const attrs=`data-id="${e(card.id)}"`;
+  const manage=card.removed_from_directory
+    ? button('restore-known-service','Restore','secondary',`${attrs} aria-label="Restore ${e(card.title)} to Known services"`)
+    : button('remove-known-service','Remove','quiet danger',`${attrs} aria-label="Remove ${e(card.title)} from Known services"`);
   return `<article class="service-row" data-service-id="${e(card.id)}">
     <div class="service-row-info">
       ${card.comment_count ? `<div class="service-experience-preview">${experienceHTML(card.experience,{showRating:false})}
@@ -204,11 +213,12 @@ function serviceRowHTML(card) {
       ${score ? `<div class="service-row-score"><strong>Avg. rating</strong>${score}</div>` : ''}
     </div>
     <div class="service-row-actions">${button('open-card','View details','secondary',attrs)}
-      ${button('ask-service','Ask assistant','quiet',attrs)}</div>
+      ${card.removed_from_directory?'':button('ask-service','Ask assistant','quiet',attrs)}
+      ${manage}</div>
     </article>`;
 }
 function serviceDirectoryHTML(cards) {
-  const groups=['Services with recorded outcomes','Your services without recorded outcomes','Public services without recorded outcomes']
+  const groups=showRemovedServices?[[cards,'Removed services']]:['Services with recorded outcomes','Your services without recorded outcomes','Public services without recorded outcomes']
     .map((title,index)=>[cards.filter(card=>directoryGroup(card)===index),title]);
   return groups.filter(([items])=>items.length)
     .map(([items,title])=>`<section class="service-source-group" aria-label="${title}">
@@ -388,9 +398,12 @@ const fromCaseMessage = message => ({
 });
 function updateFollowupControls() {
   $('chat-add-service').disabled = busy || caseChanging;
-  $('messages').querySelectorAll('[data-action="chat-followup-start"],[data-action="chat-followup-step"],[data-action="open-chat-service-form"],[data-followup-field]').forEach(control => {
+  $('messages').querySelectorAll('[data-action="chat-followup-start"],[data-action="chat-followup-step"],[data-followup-field]').forEach(control => {
     control.disabled = busy || caseChanging;
   });
+  for (const form of $('messages').querySelectorAll('[data-service-form]')) {
+    form.querySelector('fieldset').disabled = busy || caseChanging || Boolean(serviceFormDrafts.get(form.dataset.serviceForm)?.saving);
+  }
 }
 function rememberFeedbackDraft(target) {
   if (!target.matches('[data-followup-field]') || !activeCase || caseChanging || busy) return;
@@ -553,17 +566,17 @@ function renderLibraryMode(){
   $('library-title').textContent=services?'Service directory':'Memory library';$('view-label').textContent=services?'KNOWN SERVICES':memory?'MANAGE MEMORY':'WORKSPACE';
   $('file-count').textContent=services?(state?.services?.total||0)+' service cards':memory?'Saved information':'Chat';
   $('document-filter').hidden=!memory;$('memory-kind-filter').hidden=!memory;$('category-filter').hidden=!services;$('library-source-note').hidden=!services;$('manage-files').hidden=!memory;$('add-memory').hidden=!memory;
-  $('add-service').hidden=!services;$('import-services').hidden=!services;
+  $('add-service').hidden=!services;$('import-services').hidden=!services;$('service-visibility').hidden=!services;
   $('search').placeholder=services?'Search a service, place or phone number':'Search an organization, service or note';
   document.querySelectorAll('[data-library-mode]').forEach(b=>{const active=b.dataset.libraryMode===libraryMode;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
 }
-async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
-async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';$('case-search').value='';}$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent=(state.platform==='darwin'?'macOS':'Windows')+' · version '+state.version;
+async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;showRemovedServices=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('service-visibility').value='active';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
+async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';$('case-search').value='';serviceFormDrafts.clear();}$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent=(state.platform==='darwin'?'macOS':'Windows')+' · version '+state.version;
   $('document-filter').innerHTML='<option value="">All sources</option>'+state.documents.map(d=>`<option value="${e(d.id)}">${e(d.filename)} (${d.card_count})</option>`).join('');if(documentFilter&&!state.documents.some(d=>d.id===documentFilter))documentFilter='';$('document-filter').value=documentFilter;
   $('category-filter').innerHTML='<option value="">All service categories</option>'+(state.serviceCategories||[]).map(c=>`<option value="${e(c)}">${e(c)}</option>`).join('');$('category-filter').value=category;renderLibraryMode();renderModel();renderCases();renderUndo();await loadCards();const identity=state.account.profileId||'device';if(!activeCase||activeOwner!==identity){activeCase=null;activeOwner=identity;await loadCase(state.active_case.id,{activate:false});}else if(activeCase.id===state.active_case.id){activeCase={...activeCase,...state.active_case};renderCaseTitle();}}
 async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='workspace')return;
   const services=libraryMode==='services';
-  const result=await api(services?'list-cards':'list-memory',services?{query,collection:'services',directory:true,category,limit:30,offset}:
+  const result=await api(services?'list-cards':'list-memory',services?{query,collection:'services',directory:true,category,removed_services:showRemovedServices,limit:30,offset}:
     {query,document_id:documentFilter||null,kind:memoryKind,include_archived:includeArchived,limit:30,offset,
       grouped:true,expanded:expandedMemoryGroup,history_offset:memoryHistoryOffset});
   if(sequence!==cardLoadSequence)return;
@@ -573,12 +586,33 @@ async function loadCards(){const sequence=++cardLoadSequence;if(libraryMode==='w
   const filters=Boolean(query||category||documentFilter||memoryKind!=='all');
   $('cards').className='cards-scroll '+(services?'service-rows':'memory-groups');
   $('cards').innerHTML=result.items.length?(services?serviceDirectoryHTML(result.items):result.items.map(memoryGroupHTML).join('')):
-    `<div class="empty-library"><h3>${filters?'No matching items':services?'No services available':'No saved memory yet'}</h3>
+    `<div class="empty-library"><h3>${filters?'No matching items':services?(showRemovedServices?'No removed services':'No services available'):'No saved memory yet'}</h3>
     <p>${filters?'Try a shorter search or change the filter.':services?'':'Add a conversation to the library or save a service note to see it here.'}</p>
     ${!services&&!filters?button('sample','Try a sample spreadsheet','quiet'):''}</div>`;
   $('paging').innerHTML=result.total>30?button('previous','← Previous','quiet',offset===0?'disabled':'')+
     `<span>${offset+1}–${Math.min(offset+30,result.total)} of ${result.total}${services?'':' groups'}</span>`+
     button('next','Next →','quiet',offset+30>=result.total?'disabled':''):'';
+}
+async function setKnownServiceRemoved(target, removed) {
+  const id=target.dataset.id;
+  if (modal.open&&!await closeModal()) return;
+  target.disabled=true;
+  try {
+    await api('set-service-removed',{id,removed});
+    for (const message of messages) {
+      for (const card of message.cards||[]) if (card.id===id) card.removed_from_directory=removed;
+    }
+    if (removed&&selected?.id===id) {
+      selected=null;
+      context();
+      await flushCaseDraft();
+    }
+    renderMessages();
+    await refresh();
+    notice(removed?'Moved to Removed services.':'Restored to Known services.');
+  } finally {
+    target.disabled=false;
+  }
 }
 async function changeMemoryHistory(target) {
   const group = target.dataset.groupId;
@@ -604,7 +638,7 @@ function shell(){
   <div id="case-action-menu" class="case-action-menu" popover="auto" aria-label="Conversation actions"></div>
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
-  <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('add-own-service','Add a service','primary','id="add-service" hidden')}${button('import-services','Import services','secondary','id="import-services" hidden')}${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Personal notes</option><option value="feedback">Service results & notes</option><option value="chats">Saved conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Confirm current eligibility and capacity with the provider.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
+  <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('add-own-service','Add a service','primary','id="add-service" hidden')}${button('import-services','Import services','secondary','id="import-services" hidden')}${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="service-visibility" aria-label="Filter by service visibility" hidden><option value="active">Active services</option><option value="removed">Removed services</option></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Personal notes</option><option value="feedback">Service results & notes</option><option value="chats">Saved conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Confirm current eligibility and capacity with the provider.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
   <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('add-chat-service','Add a service','secondary','id="chat-add-service" hidden')}${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New chat','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
   $('case-search').addEventListener('input',()=>{
     caseFilter=$('case-search').value;
@@ -623,23 +657,140 @@ function shell(){
   $('message').addEventListener('input',scheduleCaseDraft);
   $('messages').addEventListener('input',event=>rememberFeedbackDraft(event.target));
   $('messages').addEventListener('change',event=>rememberFeedbackDraft(event.target));
+  $('messages').addEventListener('input',event=>{
+    const form=event.target.closest('[data-service-form]');
+    if (form) updateInlineServiceForm(form,event.target.name);
+  });
+  $('messages').addEventListener('toggle',event=>{
+    const form=event.target.closest('[data-service-form]');
+    if (form?.isConnected&&event.target.matches('.inline-service-more')&&event.target.open!==Boolean(serviceFormDrafts.get(form.dataset.serviceForm)?.expanded)) {
+      const id=form.dataset.serviceForm;
+      const draft=inlineServiceDraft(id,messages.find(message=>message.id===id)?.service_form);
+      draft.expanded=event.target.open;
+      serviceFormDrafts.set(id,draft);
+    }
+  },true);
+  $('messages').addEventListener('submit',event=>{
+    if (!event.target.matches('[data-service-form]')) return;
+    event.preventDefault();
+    saveInlineServiceForm(event.target).catch(fail);
+  });
   $('search').addEventListener('input',()=>{query=$('search').value;offset=0;memoryHistoryOffset=0;clearTimeout(shell.searchTimer);shell.searchTimer=setTimeout(()=>loadCards().catch(fail),150);});
   $('document-filter').addEventListener('change',()=>{documentFilter=$('document-filter').value;includeArchived=false;offset=0;memoryHistoryOffset=0;loadCards().catch(fail);});
   $('category-filter').addEventListener('change',()=>{category=$('category-filter').value;offset=0;loadCards().catch(fail);});
+  $('service-visibility').addEventListener('change',()=>{
+    showRemovedServices=$('service-visibility').value==='removed';
+    offset=0;
+    loadCards().catch(fail);
+  });
   $('memory-kind-filter').addEventListener('change',()=>{memoryKind=$('memory-kind-filter').value;offset=0;memoryHistoryOffset=0;loadCards().catch(fail);});
   $('composer').addEventListener('submit',event=>{event.preventDefault();sendMessage().catch(fail);});
   $('message').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage().catch(fail);}});
   renderLibraryMode();renderMessages();
 }
+function inlineServiceDraft(messageId, fields) {
+  const prior=serviceFormDrafts.get(messageId);
+  if (prior) return prior;
+  const values=cleanServiceFields(fields);
+  const known=serviceAreaChoices.find(area=>area.toLowerCase()===values.area.toLowerCase());
+  return {
+    caseId:activeCase?.id, values, area:known||(values.area?customServiceArea:''), otherArea:known?'':values.area,
+    expanded:false, error:'', saving:false
+  };
+}
+function renderInlineServiceField([name,label,limit], draft, categoryList) {
+  if (name==='area') {
+    const options=[['','Choose an area'], ...serviceAreaChoices.map(area=>[area,area]), [customServiceArea,'Other or multiple areas']];
+    return `<label>Service area<select name="area_choice">${options.map(([value,text])=>
+      `<option value="${e(value)}" ${draft.area===value?'selected':''}>${e(text)}</option>`).join('')}</select></label>
+      <label class="inline-service-wide" data-custom-service-area ${draft.area===customServiceArea?'':'hidden'}>Other or multiple areas
+        <input name="area_other" maxlength="${limit}" value="${e(draft.otherArea)}" placeholder="Enter the area or communities served"></label>`;
+  }
+  const value=e(draft.values[name]||'');
+  if (name==='details') return `<label class="inline-service-wide">${e(label)}<textarea name="${name}" rows="2" maxlength="${limit}">${value}</textarea></label>`;
+  return `<label>${e(label)}<input name="${name}" maxlength="${limit}" value="${value}"
+    ${name==='category'?`list="${categoryList}" placeholder="Choose or type a category"`:name==='phone'?'inputmode="tel"':name==='email'?'inputmode="email"':''}></label>`;
+}
 function renderChatServiceForm(message) {
-  const saved = message.cards?.[0];
-  const description = saved ? 'Service saved in Known services.' : message.text;
-  const action = saved ? button('open-card','View saved service','secondary',`data-id="${e(saved.id)}" data-service-form-saved="${e(message.id)}"`) :
-    activeCase?.status==='active' ? button('open-chat-service-form','Open service form','primary',`data-id="${e(message.id)}"`) : '';
+  const saved=message.cards?.[0];
+  const draft=inlineServiceDraft(message.id,message.service_form);
+  const formTitle=`service-form-title-${e(message.id)}`;
+  const categoryList=`service-categories-${e(message.id)}`;
+  const fields=basic=>serviceFields.filter(([name])=>basicServiceFields.has(name)===basic)
+    .map(field=>renderInlineServiceField(field,draft,categoryList)).join('');
+  const categories=(state?.serviceCategories||[]).map(category=>`<option value="${e(category)}"></option>`).join('');
+  const content=saved||activeCase?.status!=='active'
+    ? `<div class="answer-summary service-form-reply">
+        <p>${saved?'Service saved in Known services.':'Reopen this conversation to finish the service form.'}</p>
+        ${saved?button('open-card','View saved service','secondary',`data-id="${e(saved.id)}" data-service-form-saved="${e(message.id)}"`):''}
+      </div>`
+    : `<form class="answer-summary service-form-reply inline-service-form" aria-labelledby="${formTitle}" data-service-form="${e(message.id)}">
+        <h3 id="${formTitle}">Add a service</h3>
+        <p>Fill in any one detail to save.</p>
+        <fieldset>
+          <div class="inline-service-fields">${fields(true)}<datalist id="${categoryList}">${categories}</datalist></div>
+          <details class="inline-service-more" ${draft.expanded?'open':''}><summary>More details</summary>
+            <div class="inline-service-fields">${fields(false)}</div>
+          </details>
+          <p class="inline-service-error" role="alert" ${draft.error?'':'hidden'}>${e(draft.error)}</p>
+          <button type="submit" class="primary">${draft.saving?'Saving…':'Save service'}</button>
+        </fieldset>
+      </form>`;
   return `<article class="message assistant" data-message-sequence="${message.sequence||''}">
-    <div class="message-label">ASSISTANT</div><div class="answer-summary service-form-reply">
-      <p>${e(description)}</p>${action}
-    </div></article>`;
+    <div class="message-label">ASSISTANT</div>${content}</article>`;
+}
+function rememberInlineServiceForm(form) {
+  const id=form.dataset.serviceForm;
+  const message=messages.find(item=>item.id===id);
+  const draft=inlineServiceDraft(id,message?.service_form);
+  const data=new FormData(form);
+  draft.area=String(data.get('area_choice')||'');
+  draft.otherArea=String(data.get('area_other')||'');
+  draft.values=Object.fromEntries(serviceFields.map(([name])=>[name,String(data.get(name)||'')]));
+  draft.values.area=draft.area===customServiceArea?draft.otherArea:draft.area;
+  draft.expanded=form.querySelector('details').open;
+  serviceFormDrafts.set(id,draft);
+  return draft;
+}
+function updateInlineServiceForm(form, changedField) {
+  if (form.querySelector('fieldset').disabled) return;
+  const draft=rememberInlineServiceForm(form);
+  if (changedField==='area_choice') form.querySelector('[data-custom-service-area]').hidden=draft.area!==customServiceArea;
+  draft.error='';
+  form.querySelector('.inline-service-error').hidden=true;
+}
+async function saveInlineServiceForm(form) {
+  const messageId=form.dataset.serviceForm;
+  const caseId=activeCase?.id;
+  if (busy||caseChanging||activeCase?.status!=='active'||form.querySelector('fieldset').disabled) return;
+  const draft=rememberInlineServiceForm(form);
+  draft.error='';
+  draft.saving=true;
+  updateFollowupControls();
+  form.querySelector('button[type="submit"]').textContent='Saving…';
+  try {
+    const {card_id}=await api('save-service-form',{case_id:caseId,message_id:messageId,values:draft.values});
+    serviceFormDrafts.delete(messageId);
+    const reply=activeCase?.id===caseId&&messages.find(message=>message.id===messageId);
+    if (reply) {
+      reply.cards=[{id:card_id}];
+      renderMessages();
+      document.querySelector(`[data-service-form-saved="${CSS.escape(messageId)}"]`)?.focus({preventScroll:true});
+    }
+  } catch(error) {
+    draft.error=error.message;
+    const current=$('messages').querySelector(`[data-service-form="${CSS.escape(messageId)}"]`);
+    if (current) {
+      const status=current.querySelector('.inline-service-error');
+      status.textContent=draft.error;
+      status.hidden=false;
+    }
+  } finally {
+    draft.saving=false;
+    const current=$('messages').querySelector(`[data-service-form="${CSS.escape(messageId)}"]`);
+    if (current) current.querySelector('button[type="submit"]').textContent='Save service';
+    updateFollowupControls();
+  }
 }
 function renderMessages(forceScroll=false, {scrollToReply=false}={}){
   const viewport=$('messages'),follow=forceScroll||viewport.scrollHeight-viewport.scrollTop-viewport.clientHeight<80,previous=viewport.scrollTop;
@@ -665,7 +816,7 @@ function renderMessages(forceScroll=false, {scrollToReply=false}={}){
   }
 }
 function setBusy(value){busy=value;$('send-button').textContent=value?'Stop':'Send ↑';$('message').disabled=value||caseChanging;$('add-document').disabled=value||caseChanging||importing;$('voice-button').disabled=value||caseChanging;renderAssistantSurface();renderUndo();updateFollowupControls();}
-async function sendMessage(retryText=null,retryTurnId=null){
+async function sendMessage(retryText=null,retryTurnId=null,{keepDraft=false}={}){
   if(busy){await api('stop');return;}if(caseChanging)return;
   setBusy(true);let response=null;
   try{
@@ -674,17 +825,18 @@ async function sendMessage(retryText=null,retryTurnId=null){
     if(activeCase?.status==='archived')throw new Error('Reopen this saved case to continue.');
     await flushCaseDraft();
     manualWrapUp=false;
-    messages.push({role:'user',text});response={role:'assistant',text:''};messages.push(response);$('message').value='';renderMessages(true);
+    messages.push({role:'user',text});response={role:'assistant',text:''};messages.push(response);
+    if (!keepDraft) $('message').value='';
+    renderMessages(true);
     const answer=await api('chat',{text,case_id:activeCase?.id,retry_turn_id:retryTurnId,card_id:selected?.id||null});Object.assign(response,answer,{id:answer.turn_id});response.error=answer.source==='error';await refresh();
   }catch(error){if(response){response.text=error.message;response.error=true;response.source='error';}else fail(error);}
   finally{
     if(response?.turn_id&&activeCase){try{const result=await api('get-case',{id:activeCase.id});activeCase=result;caseHasMore=result.has_more;caseHasNewer=result.has_newer;messages=result.messages.map(fromCaseMessage);renderCaseTitle();}catch{}}
     setBusy(false);
     renderMessages(true,{scrollToReply:true});
-    if (response?.presentation==='service-form' && !response.error && !modal.open &&
-      response.case_id===activeCase?.id && !$('chat-panel').hidden) {
-      await openChatServiceForm(response.turn_id);
-    } else $('message').focus();
+    if (keepDraft) await flushCaseDraft();
+    const form=response?.turn_id&&$('messages').querySelector(`[data-service-form="${CSS.escape(response.turn_id)}"]`);
+    if (!$('chat-panel').hidden) (form?.elements.name||$('message')).focus({preventScroll:true});
   }
 }
 function context(){ $('selected-context').innerHTML=selected?`<div class="context-chip ${isService(selected)?'service-context':''}"><div class="context-main"><span>Working with <strong>${e(selected.title)}</strong></span>${button('clear-selection','×','icon-button','aria-label="Stop working with this card"')}</div></div>`:'';}
@@ -742,11 +894,13 @@ async function openCard(id, {replyId=null,fromFollowup=false,rankReason=''}={}) 
       ${button('copy-contact','Copy','quiet',`${idAttr} data-value="${e(contact.value)}"`)}</div>`).join('')}</section>`:'';
   const links=card.links?.length?`<section class="detail-section"><h3>Source links</h3>${card.links.map(url=>
     button('open-link',e(url)+' ↗','source-link',`data-url="${e(url)}"`)).join('')}</section>`:'';
-  const pick=servicePreview&&!fromFollowup&&!card.archived?button('use-service-from-details','Use this service','primary',
+  const pick=servicePreview&&!fromFollowup&&!card.archived&&!card.removed_from_directory?button('use-service-from-details','Use this service','primary',
     `${idAttr} data-reply-id="${e(replyId||'')}"`):'';
   const provider=card.links?.find(url=>url===card.fields?.['Provider page']);
+  const restore=service&&!card.archived&&card.removed_from_directory
+    ? button('restore-known-service','Restore to Known services','secondary',idAttr):'';
   const footer=service?pick+button('use-card','Ask more about this card','secondary',idAttr)+
-    (provider?button('open-link','Provider page ↗','secondary',`data-url="${e(provider)}"`):''):
+    (provider?button('open-link','Provider page ↗','secondary',`data-url="${e(provider)}"`):'')+restore:
     pick+button('use-card','Ask about this card',pick?'secondary':'primary',idAttr)+
     (addFromDetails?button('focus-card-note','Add a note','secondary'):'')+
     (card.document_id?button('open-original','Open original file ↗','secondary',`data-id="${e(card.document_id)}"`):
@@ -761,6 +915,7 @@ async function openCard(id, {replyId=null,fromFollowup=false,rankReason=''}={}) 
     ${card.has_original?button('open-original','Open source file ↗','quiet',`data-id="${e(card.document_id)}"`):''}
     </section>`:'';
   await openModal(modalHead(card.title,fileLabel(card))+`<div class="detail-body">
+    ${card.removed_from_directory?'<p class="callout">Removed from Known services. Use Restore to show it again.</p>':''}
     ${card.archived?'<p class="callout">This row was removed in a newer import. Its notes have been kept.</p>':''}
     ${gaps}${ranking}${own?notes+contacts+ownDetails:servicePreview?notes+cardFields:cardFields+contacts+notes}${links}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
   noteEditor={cardId:id,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};
@@ -854,22 +1009,15 @@ function updateServiceEditor() {
     $('service-review-row').options[index].textContent=(row.values.name||'Unnamed service')+' · '+row.locator;
   }
 }
-async function openServiceEditor({card=null, review=null, chatForm=null, fromChat=false}={}) {
+async function openServiceEditor({card=null, review=null}={}) {
   const rows=review?review.rows.map(row=>({...row,incomplete:Boolean(missingServiceDetails(row.values).length)})):
-    [{values:chatForm?cleanServiceFields(chatForm.values):serviceDraft(card||{},{nameFromOrganization:false}).values,include:true}];
+    [{values:serviceDraft(card||{},{nameFromOrganization:false}).values,include:true}];
   const index=review?Math.max(0, rows.findIndex(row=>missingServiceDetails(row.values).length)):0;
-  const editor={card, chatForm, fromChat, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
+  const editor={card, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
     warnings:review?.warnings||[], changed:new Set(), saving:false};
   await openModal(serviceEditorHTML(editor),'service-editor-dialog');
   serviceEditor=editor;
   updateServiceEditor();
-  if (chatForm||fromChat) $(rows[index].values.category?'service-field-name':'service-field-category').focus();
-}
-async function openChatServiceForm(messageId) {
-  const message=messages.find(item=>item.id===messageId&&item.presentation==='service-form');
-  if (!message || activeCase?.status!=='active') throw new Error('Open this conversation to finish the service form.');
-  if (message.cards?.[0]) return openCard(message.cards[0].id);
-  await openServiceEditor({chatForm:{case_id:activeCase.id,message_id:message.id,values:message.service_form}});
 }
 async function reviewServiceFile(result) {
   if(result.duplicate){
@@ -882,7 +1030,7 @@ async function reviewServiceFile(result) {
 async function saveOwnService(update=false) {
   const editor=serviceEditor;
   if(!editor||editor.saving)return;
-  const {card,chatForm,fromChat,rows,importId,changed}=editor;
+  const {card,rows,importId,changed}=editor;
   const invalid=importId?rows.findIndex(row=>row.include&&!cleanServiceFields(row.values).name):-1;
   if (invalid>=0) {
     editor.index=invalid;
@@ -903,32 +1051,22 @@ async function saveOwnService(update=false) {
   controls.forEach(control=>control.disabled=true);
   try {
     let count=1;
-    let savedCardId=card?.id;
     if (importId) {
       // Keep each review update below the request size limit, even for large spreadsheets.
       for(const index of changed)await api('review-service-row',{id:importId,index,...rows[index]});
       count=(await api('confirm-service-import',{id:importId,update})).count;
     } else if (card) {
       await api('update-own-service',{id:card.id,expected_version:card.version,values:rows[0].values});
-    } else if (chatForm) {
-      const {card_id}=await api('save-service-form',{...chatForm,values:rows[0].values});
-      const reply=messages.find(message=>message.id===chatForm.message_id);
-      if (reply) reply.cards=[{id:card_id}];
     } else {
-      const added=await api('add-own-service',{values:rows[0].values,from_chat:fromChat});
-      savedCardId=added.card_id;
+      await api('add-own-service',{values:rows[0].values});
     }
     editor.saving=false;
     serviceEditor=null;
     await closeModal();
-    if (chatForm) {
-      renderMessages();
+    if (card) {
+      if (selected?.id===card.id) {selected=await api('get-card',{id:card.id});context();}
       await refresh();
-      document.querySelector(`[data-service-form-saved="${CSS.escape(chatForm.message_id)}"]`)?.focus();
-    } else if (card||fromChat) {
-      if (selected?.id===savedCardId) {selected=await api('get-card',{id:savedCardId});context();}
-      await refresh();
-      await openCard(savedCardId);
+      await openCard(card.id);
     } else {
       if(libraryMode!=='services')await changeLibraryMode('services');
       query='';category='';offset=0;$('search').value='';
@@ -1106,6 +1244,9 @@ document.addEventListener('click',async event=>{const target=event.target.closes
       try{
         await flushCaseDraft();
         await api(action,{id,expected_version:Number(target.dataset.version),include_notes});
+        if (action==='delete-case') for (const [messageId,draft] of serviceFormDrafts) {
+          if (draft.caseId===id) serviceFormDrafts.delete(messageId);
+        }
         if(modal.open)await closeModal();
         if(activeCase?.id===id){activeCase=null;selected=null;messages=[];context();}
         await refresh();
@@ -1132,9 +1273,9 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='import-services')await importDocument(false,true);
     else if(action==='review-import-services'&&preview)await reviewServiceFile(await api('review-service-import',{id:preview.id}));
     else if(action==='add-own-service')await openServiceEditor();
-    else if(action==='add-chat-service'){await pauseVoice();await openServiceEditor({fromChat:true});}
+    else if(action==='remove-known-service'||action==='restore-known-service')await setKnownServiceRemoved(target,action==='remove-known-service');
+    else if(action==='add-chat-service'){await pauseVoice();await sendMessage('Add a service',null,{keepDraft:true});}
     else if(action==='edit-own-service')await openServiceEditor({card:await api('get-card',{id:target.dataset.id})});
-    else if(action==='open-chat-service-form')await openChatServiceForm(target.dataset.id);
     else if(action==='save-own-service')await saveOwnService();
     else if(action==='update-service-inventory')await saveOwnService(true);
     else if(action==='save-tracking-results')await saveTrackingResults();
@@ -1226,7 +1367,7 @@ window.hive.subscribe(event=>{
   if(event.type==='memory-changed'){clearTimeout(refresh.timer);refresh.timer=setTimeout(()=>refresh().catch(fail),120);}
   if(event.type==='cases-changed'){clearTimeout(refreshCaseList.timer);refreshCaseList.timer=setTimeout(()=>refreshCaseList().catch(fail),150);}
   if(event.type==='closing-requested'){
-    (async()=>{try{if(feedbackSaving||caseChanging){notice('Wait for the current change to finish before closing.',true);return;}if(!discardResult())return;await flushNote();await flushCaseDraft();if(voice.listening)await voice.stop();await api('close-after-save');}catch(error){notice('The app stayed open because a note has not saved: '+error.message,true);}})();
+    (async()=>{try{if(feedbackSaving||caseChanging||Array.from(serviceFormDrafts.values()).some(draft=>draft.saving)){notice('Wait for the current change to finish before closing.',true);return;}if(!discardResult())return;await flushNote();await flushCaseDraft();if(voice.listening)await voice.stop();await api('close-after-save');}catch(error){notice('The app stayed open because a note has not saved: '+error.message,true);}})();
   }
 });
 shell();refresh().then(()=>api('ui-ready')).catch(error=>{$('cards').innerHTML=`<p class="callout">${e(error.message)}</p>`;fail(error);});

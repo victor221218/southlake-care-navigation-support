@@ -4,6 +4,12 @@ const click=selector=>{const target=document.querySelector(selector);if(!target)
 const type=(id,value)=>{const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));};
 const filter=(id,value)=>{const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('change',{bubbles:true}));};
 const request=(method,args={})=>window.hive.request(method,args);
+const latestServiceForm=()=>Array.from(document.querySelectorAll('#messages form[data-service-form]')).at(-1);
+function fillServiceField(name,value) {
+  const field=latestServiceForm().elements.namedItem(name);
+  field.value=value;
+  field.dispatchEvent(new Event('input',{bubbles:true}));
+}
 const firstNote='Practice observation: phone ahead to check accessible capacity.';
 const feedback='This did not work. They had no space on Tuesday.';
 const closingNote='Closing check: call the listed contact before referring.';
@@ -30,7 +36,9 @@ async function run(){try{
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));
   if(phase.reopen){
-    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==32)throw new Error('Documents or service cards changed after reopening.');
+    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==31)throw new Error('Documents or service cards changed after reopening.');
+    const removed=await request('list-cards',{collection:'services',removed_services:true});
+    assert(removed.items.some(card=>card.id===phase.cold.removed_service_id&&card.area==='Aurora'),'The removed service and its chosen area must survive restart.');
     const partial=await request('get-card',{id:phase.cold.chat_service_id});
     assert(partial.contacts.some(contact=>contact.value==='905-555-0191')&&partial.missing_details.includes('service name'),
       'The partial service saved from chat must survive restart.');
@@ -304,56 +312,76 @@ async function run(){try{
   await wait(()=>document.body.dataset.view==='workspace'&&document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
   type('message','Draft question for later.');
   click('#chat-add-service');
-  await wait(()=>document.querySelector('#modal[open].service-editor-dialog #service-field-category'));
-  const visibleCategory=document.getElementById('service-field-category');
-  assert(visibleCategory===document.querySelector('.service-editor-fields input')&&
-    [...visibleCategory.list.options].some(option=>option.value==='Transportation'),
-    'Category should be the first field and list known categories.');
-  assert((await window.hiveSmoke.capture('add-service-form')).ok,'Capture the category-first form for review.');
-  type('service-field-organization','Example Service Form Desk');
-  type('service-field-category','Home supports');
-  click('#modal [data-action="save-own-service"]');
-  await wait(()=>document.querySelector('#modal[open] #modal-title')?.textContent==='Example Service Form Desk');
-  assert(document.body.dataset.view==='workspace'&&document.getElementById('message').value==='Draft question for later.',
-    'Saving through the chat button keeps the conversation and unsent draft.');
-  click('#modal [data-action="close-modal"]');
-  await wait(()=>!document.getElementById('modal').open);
-  type('message','Okay, could you help me add a new transportation service?');click('[data-action="send"]');
-  await wait(()=>document.querySelector('#modal[open].service-editor-dialog #service-field-category'));
-  assert(document.getElementById('service-field-category').value==='Transportation','A category stated in the prompt should be carried into the form.');
-  assert(document.querySelector('.message.assistant:last-child .service-form-reply')&&
-    !document.querySelector('.message.assistant:last-child .answer-cards'),'Adding a service must open its form instead of returning search results.');
-  click('#modal [data-action="close-modal"]');
-  await wait(()=>!document.getElementById('modal').open);
-  click('.service-form-reply [data-action="open-chat-service-form"]');
-  await wait(()=>document.querySelector('#modal[open] #service-field-phone'));
-  type('service-field-category','');
-  click('#modal [data-action="save-own-service"]');
-  await wait(()=>!document.getElementById('service-editor-error').hidden);
-  assert(document.getElementById('service-editor-error').textContent.includes('at least one detail'));
-  type('service-field-phone','905-555-0191');click('#modal [data-action="save-own-service"]');
-  await wait(()=>!document.getElementById('modal').open&&document.querySelector('.service-form-reply [data-service-form-saved]'));
-  const savedForm=document.querySelector('.service-form-reply [data-service-form-saved]');
+  await wait(()=>latestServiceForm()?.elements.namedItem('area_choice'));
+  const firstForm=latestServiceForm();
+  const firstFormId=firstForm.dataset.serviceForm;
+  const areaChoice=firstForm.elements.namedItem('area_choice');
+  assert(!document.getElementById('modal').open&&firstForm.querySelectorAll(':scope > fieldset > .inline-service-fields > label:not([hidden])').length===4&&
+    !firstForm.querySelector('.inline-service-more').open&&[...areaChoice.options].some(option=>option.value==='Aurora'),
+    'Show a short form in chat with a service-area dropdown and extra fields collapsed.');
+  assert((await window.hiveSmoke.capture('add-service-form')).ok,'Capture the inline form for review.');
+  firstForm.querySelector('summary').click();
+  await wait(()=>firstForm.querySelector('details').open);
+  fillServiceField('organization','Example Service Form Desk');
+  fillServiceField('category','Home supports');
+  fillServiceField('area_choice','Aurora');
+  firstForm.querySelector('button[type="submit"]').click();
+  await wait(()=>document.querySelector('[data-service-form-saved="'+firstFormId+'"]'));
+  const deskId=document.querySelector('[data-service-form-saved="'+firstFormId+'"]').dataset.id;
+  assert((await request('get-card',{id:deskId})).fields['Service area']==='Aurora');
+  assert(document.body.dataset.view==='workspace'&&document.getElementById('message').value==='Draft question for later.'&&
+    !document.getElementById('modal').open,'Saving the form in chat keeps the unsent draft and avoids a modal.');
+
+  type('message','can you help me add in a service');click('[data-action="send"]');
+  await wait(()=>latestServiceForm()&&latestServiceForm().dataset.serviceForm!==firstFormId);
+  const emptyForm=latestServiceForm();
+  const phoneFormId=emptyForm.dataset.serviceForm;
+  assert(!document.querySelector('.message.assistant:last-child .answer-cards')&&!document.getElementById('modal').open);
+  emptyForm.querySelector('button[type="submit"]').click();
+  await wait(()=>!latestServiceForm().querySelector('.inline-service-error').hidden);
+  assert(latestServiceForm().querySelector('.inline-service-error').textContent.includes('at least one detail'));
+  fillServiceField('phone','905-555-0191');
+  latestServiceForm().querySelector('button[type="submit"]').click();
+  await wait(()=>document.querySelector('[data-service-form-saved="'+phoneFormId+'"]'));
+  const savedForm=document.querySelector('[data-service-form-saved="'+phoneFormId+'"]');
   const chatServiceId=savedForm.dataset.id;
   savedForm.click();
   await wait(()=>document.querySelector('#modal[open] #service-contacts')?.textContent.includes('905-555-0191'));
   assert(document.querySelector('#modal .callout').textContent.includes('service name'));
   click('#modal [data-action="close-modal"]');
   await wait(()=>!document.getElementById('modal').open);
+
   click('[data-action="known-services"]');await wait(()=>document.body.dataset.view==='services');
   type('search','905-555-0191');
-  await wait(()=>document.querySelector('.service-row[data-service-id="'+chatServiceId+'"] .service-gaps')?.textContent.includes('service name'));
+  const savedServiceRow='[data-service-id="'+chatServiceId+'"]';
+  await wait(()=>document.querySelector(savedServiceRow+' .service-gaps')?.textContent.includes('service name'));
+  click(savedServiceRow+' [data-action="remove-known-service"]');
+  await wait(()=>!document.querySelector(savedServiceRow));
+  filter('service-visibility','removed');
+  await wait(()=>document.querySelector(savedServiceRow+' [data-action="restore-known-service"]'));
+  click(savedServiceRow+' [data-action="restore-known-service"]');
+  await wait(()=>!document.querySelector(savedServiceRow));
+  filter('service-visibility','active');
+  await wait(()=>document.querySelector(savedServiceRow+' [data-action="remove-known-service"]'));
+
   click('#service-chat-launcher');
   await wait(()=>document.body.dataset.serviceChatOpen==='true');
-  type('message','Can you show me a form to add a service?');click('[data-action="send"]');
-  await wait(()=>document.querySelector('#modal[open] #service-field-category'));
-  assert(document.body.dataset.view==='services'&&document.getElementById('search').value==='905-555-0191',
-    'Opening the form from the floating chat should leave the directory filter in place.');
-  click('#modal [data-action="close-modal"]');
-  await wait(()=>!document.getElementById('modal').open);
+  type('message','Okay, could you help me add a new transportation service?\nService area: Aurora and Newmarket');click('[data-action="send"]');
+  await wait(()=>latestServiceForm()?.elements.namedItem('area_other').value==='Aurora and Newmarket');
+  assert(latestServiceForm().elements.namedItem('category').value==='Transportation'&&
+    !latestServiceForm().querySelector('[data-custom-service-area]').hidden&&
+    document.body.dataset.view==='services'&&document.getElementById('search').value==='905-555-0191'&&!document.getElementById('modal').open,
+    'The floating chat shows the same form with an editable multi-area value and preserves the directory filter.');
+  click('#minimize-assistant');
+  type('search','Example Service Form Desk');
+  const deskRow='[data-service-id="'+deskId+'"]';
+  await wait(()=>document.querySelector(deskRow+' [data-action="remove-known-service"]'));
+  click(deskRow+' [data-action="remove-known-service"]');
+  await wait(()=>!document.querySelector(deskRow));
+  const serviceChecks={chat_service_id:chatServiceId, removed_service_id:deskId, chat_service_form_verified:true, known_service_removal_verified:true};
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);
-  window.hiveSmoke.finish({ok:true,own_service_review:true,own_service_id:ownId,chat_service_id:chatServiceId,chat_service_form_verified:true,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
+  window.hiveSmoke.finish({ok:true,own_service_review:true,own_service_id:ownId,...serviceChecks,card_id:card.id,service_card_id:serviceCard.id,...caseChecks,bundled_native_parsers:parserChecks,preloaded_public_services:27,service_card_three_actions:true,service_history_before_category:true,service_result_save_rating:true,service_result_edit_delete:true,service_result_no_double_save:true,service_result_default_note_correction:true,service_result_draft_guard:true,service_selection_no_outcome:true,service_contact_after_selection:true,keep_chat_open_after_completion:true,service_result_memory_edit:true,service_navigation_retains_latest_view:true,serviceCardCapture,resultFormCapture,directoryWithHistory,default_workspace:true,full_width_chat:true,compact_window_composer_visible:true,no_keep_message_checkbox:true,ordinary_turns_stay_in_chat:true,explicit_note_saving:true,organization_memory_search_and_expand:true,service_rows_full_width:true,known_services_full_page:true,assistant_in_services_heading:true,header_button_does_not_cover_rows:true,manage_memory_under_known_services:true,floating_assistant:true,floating_launcher:true,floating_chat_keeps_directory_width:true,floating_draft_and_filters_retained:true,floating_escape_restores_focus:true,floating_compact_window:true,floating_open_workspace_preserves_context:true,ask_assistant_under_details:true,memory_manager_edit_feedback:true,memory_manager_edit_note:true,memory_preview_delete:true,service_score_coloring:true,memory_manager_delete:true,delete_cancel_preserves_memory:true,service_filter_and_search:true,service_contact_and_source_controls:true,service_note_autosave:true,renamed_app_verified:true,logo_in_sidebar_and_welcome:true,upload_beside_speak_verified:true,sidebar_cleanup_verified:true,workspace_capture:workspaceCapture,compact_capture:compactCapture,known_services_capture:serviceCapture,floating_capture:floatingCapture,floating_compact_capture:floatingCompactCapture,memory_capture:memoryCapture,import_preview_verified:true,import_saved_four_cards:true,card_note_autosave_verified:true,selected_card_feedback_verified:true,new_conversation_keeps_cards:true,notes_searchable_on_correct_card:true,no_live_ai_request:true,no_live_microphone_opened:true});
 }catch(error){const capture=await window.hiveSmoke.capture('failure');window.hiveSmoke.finish({ok:false,error:error.message||String(error),stack:error.stack,debug_text:document.body.innerText.slice(0,6000),notice_text:document.getElementById('notice')?.textContent,modal_text:document.getElementById('modal')?.innerText.slice(0,3500),failure_capture:capture});}}
 run();

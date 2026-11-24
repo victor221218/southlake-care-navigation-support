@@ -9,7 +9,7 @@ const now = () => new Date().toISOString();
 const clean = (value, limit = 12000) => String(value ?? '').replace(/\u0000/g, '').trim().slice(0, limit);
 const norm = value => String(value).normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 export const tokens = value => [...new Set(norm(value).split(' ').filter(t => t.length > 1 && !new Set(['the','and','for','can','you','please','what','with','from','that','this','have','about','find','show','tell','need','which','does','are','how','was','were','would','could','should','into','our','your','use']).has(t)))];
-const unpack = row => row && ({ ...row, fields: JSON.parse(row.fields_json || '{}'), contacts: JSON.parse(row.contacts_json || '[]'), links: JSON.parse(row.links_json || '[]'), archived: Boolean(row.archived) });
+const unpack = row => row && ({ ...row, fields: JSON.parse(row.fields_json || '{}'), contacts: JSON.parse(row.contacts_json || '[]'), links: JSON.parse(row.links_json || '[]'), archived: Boolean(row.archived), removed_from_directory: Boolean(row.removed_from_directory) });
 const resultLabel = outcome => outcome === 'worked' ? 'Worked' : "Didn't work";
 const serviceFormats = `('${PUBLIC_SERVICE_FORMAT}', '${OWN_SERVICE_FORMAT}')`;
 function validResult(outcome, rating) {
@@ -108,6 +108,17 @@ export class DocumentStore {
       WHERE c.owner_id=? AND c.archived=0 AND d.format=?`).bind(this.owner(),OWN_SERVICE_FORMAT).first();
     return row.count;
   }
+  async setServiceRemoved({id, removed}) {
+    if (typeof removed!=='boolean') throw new Error('Choose whether to remove or restore the service.');
+    return this.db().transaction(async()=>{
+      const card=await this.get(id);
+      if (!isServiceSource(card.source_format)||card.archived) throw new Error('Choose a current card in Known services.');
+      if (card.removed_from_directory===removed) return {id,removed};
+      await this.db().prepare('UPDATE personal_cards SET removed_from_directory=?, updated_at=?, version=version+1 WHERE id=? AND owner_id=?')
+        .bind(Number(removed),now(),id,this.owner()).run();
+      return this.changed({id,removed});
+    });
+  }
   async serviceCategories() {
     const {results} = await this.db().prepare(`SELECT DISTINCT json_extract(c.fields_json,'$.Category') AS category
       FROM personal_cards c JOIN personal_documents d ON d.id=c.document_id AND d.owner_id=c.owner_id
@@ -117,10 +128,10 @@ export class DocumentStore {
   async serviceIdentities() {
     const {results}=await this.db().prepare(`SELECT c.id,c.title,c.fields_json,d.format AS source_format
       FROM personal_cards c JOIN personal_documents d ON d.id=c.document_id AND d.owner_id=c.owner_id
-      WHERE c.owner_id=? AND c.archived=0 AND d.format IN ${serviceFormats}`).bind(this.owner()).all();
+      WHERE c.owner_id=? AND c.archived=0 AND c.removed_from_directory=0 AND d.format IN ${serviceFormats}`).bind(this.owner()).all();
     return results.map(({fields_json,...card})=>({...card,fields:JSON.parse(fields_json)}));
   }
-  async list({ query = '', document_id = null, collection = 'all', category = '', case_id = null, include_archived = false, limit = 60, offset = 0, ranking = false, directory = false, topic = null } = {}) {
+  async list({ query = '', document_id = null, collection = 'all', category = '', case_id = null, include_archived = false, removed_services = false, limit = 60, offset = 0, ranking = false, directory = false, topic = null } = {}) {
     if (!['all', 'services', 'personal'].includes(collection)) throw new Error('Choose a supported card collection.');
     const rows = (await this.db().prepare(`SELECT c.*,d.filename,d.format AS source_format, (SELECT COUNT(*) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_count,
       (SELECT group_concat(body,' ') FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_text,
@@ -130,10 +141,10 @@ export class DocumentStore {
       (SELECT COUNT(rating) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id AND outcome IS NOT NULL) AS rating_count,
       (SELECT AVG(rating) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id AND outcome IS NOT NULL) AS rating_average
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
-      WHERE c.owner_id=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
+      WHERE c.owner_id=? AND c.removed_from_directory=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
       ${case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=c.owner_id AND cm.retention='automatic' AND cm.entry_type='card' AND cm.entry_id=c.id AND cm.case_id<>?)":''}
       ${collection === 'services' ? `AND d.format IN ${serviceFormats}` : collection === 'personal' ? `AND (d.format IS NULL OR d.format NOT IN ${serviceFormats})` : ''}
-      ORDER BY c.updated_at DESC,c.id`).bind(this.owner(), ...(document_id ? [document_id] : []),...(case_id?[case_id]:[])).all()).results;
+      ORDER BY c.updated_at DESC,c.id`).bind(this.owner(),Number(collection==='services'&&removed_services===true), ...(document_id ? [document_id] : []),...(case_id?[case_id]:[])).all()).results;
     const terms = tokens(query);
     const matches = rows.map(row => {
       const title = norm(row.title), haystack = norm(row.title + ' ' + row.body + ' ' + (row.comment_text || '') + ' ' + (row.worked?'worked ':'') + (row.not_worked?"didn't work not worked ":'') + (row.filename || ''));
@@ -349,16 +360,22 @@ export class DocumentStore {
       for (const card of data.cards) {
         if (typeof card.id !== 'string' || card.document_id && !docs.has(card.document_id)) throw new Error('The backup has a card without its document.');
         const doc = docs.get(card.document_id);
+        const removed=Number(isServiceSource(doc?.format)&&(card.removed_from_directory===1||card.removed_from_directory===true));
         const existing = doc?.duplicate
           ? await this.db().prepare('SELECT id FROM personal_cards WHERE owner_id=? AND document_id=? AND source_key=?').bind(owner,doc.id,card.source_key).first()
           : !doc ? await this.db().prepare('SELECT id FROM personal_cards WHERE owner_id=? AND document_id IS NULL AND title=? AND body=? AND created_at=?').bind(owner,clean(card.title,180),clean(card.body,30000),clean(card.created_at,40)).first() : null;
-        if (existing) { cards.set(card.id,existing.id); continue; }
+        if (existing) {
+          cards.set(card.id,existing.id);
+          if (removed) await this.db().prepare('UPDATE personal_cards SET removed_from_directory=1, version=version+1 WHERE id=? AND owner_id=? AND removed_from_directory=0')
+            .bind(existing.id,owner).run();
+          continue;
+        }
         const id = randomUUID(); cards.set(card.id,id);
         const fields = JSON.parse(card.fields_json || '{}');
         const fieldLimit = doc?.format === OWN_SERVICE_FORMAT ? 100 + serviceFields.length : 100;
         if (!fields || Array.isArray(fields) || typeof fields !== 'object' || Object.keys(fields).length > fieldLimit) throw new Error('The backup has invalid column values.');
         const body = clean(card.body,30000);
-        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,contacts_json,links_json,archived,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,owner,doc?.id||null,card.source_key ? clean(card.source_key,500):null,doc?'document':card.kind==='conversation'?'conversation':card.kind==='message'?'message':'note',clean(card.title,180),body,clean(card.locator,220),JSON.stringify(fields),JSON.stringify(cardContacts(doc?.format,body,fields)),JSON.stringify(linksIn(body,fields)),card.archived?1:0,clean(card.created_at,40),clean(card.updated_at,40),Number(card.version)||1).run(); added++;
+        await this.db().prepare('INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,contacts_json,links_json,archived,removed_from_directory,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,owner,doc?.id||null,card.source_key ? clean(card.source_key,500):null,doc?'document':card.kind==='conversation'?'conversation':card.kind==='message'?'message':'note',clean(card.title,180),body,clean(card.locator,220),JSON.stringify(fields),JSON.stringify(cardContacts(doc?.format,body,fields)),JSON.stringify(linksIn(body,fields)),card.archived?1:0,removed,clean(card.created_at,40),clean(card.updated_at,40),Number(card.version)||1).run(); added++;
       }
       for (const note of data.comments) if (cards.has(note.card_id)) {
         const cardId=cards.get(note.card_id), body=clean(note.body), created=clean(note.created_at,40);

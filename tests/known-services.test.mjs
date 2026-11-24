@@ -212,6 +212,52 @@ test('chat opens a service form, saves a partial card once, and restores the lin
   } finally { await f.close(); }
 });
 
+test('removed services are private to a workspace, stay out of new recommendations, and retain history on restore', async () => {
+  const f=await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const publicCard=(await f.store.list({collection:'services',query:'North York Seniors'})).items[0];
+    const {card_id:ownId}=await f.store.addOwnService({
+      name:'Example Neighbourhood Rides',category:'Transportation',area:'North York',phone:'905-555-0182'
+    });
+    await f.store.serviceResult({card_id:ownId,outcome:'worked',rating:4,body:'Fictional practice result'});
+    const cases=new DocumentCases({store:f.store});
+    const assistant=new DocumentAssistant({store:f.store,cases,connection:{session:async()=>({sharing:false})}});
+    const prompt='Find transportation services in North York. Show ranked service cards.';
+    const before=await assistant.chat({text:prompt,remember:false});
+    assert(before.cards.some(card=>card.id===ownId));
+
+    await f.store.setServiceRemoved({id:ownId,removed:true});
+    await f.store.setServiceRemoved({id:publicCard.id,removed:true});
+    assert.equal((await f.store.list({collection:'services',query:'Example Neighbourhood'})).total,0);
+    assert.equal((await f.store.list({query:'Example Neighbourhood'})).total,0);
+    assert.equal((await f.store.list({collection:'services',removed_services:true})).total,2);
+    const fresh=await cases.create();
+    const after=await assistant.chat({text:prompt,case_id:fresh.id,remember:false});
+    assert(after.cards.length>0&&after.cards.every(card=>![ownId,publicCard.id].includes(card.id)));
+    assert.equal((await f.store.get(ownId)).experience.rating_average,4);
+    await f.reopen();
+    await ensureKnownServices(f.store);
+    assert.equal((await f.store.list({collection:'services',removed_services:true})).total,2);
+
+    const backup=await f.store.export();
+    f.switch('other-workspace');
+    await ensureKnownServices(f.store);
+    assert.equal((await f.store.list({collection:'services',removed_services:true})).total,0);
+    await f.store.restore(backup);
+    const removed=await f.store.list({collection:'services',removed_services:true});
+    assert.equal(removed.total,2);
+    const restored=removed.items.find(card=>card.title==='Example Neighbourhood Rides');
+    assert(restored&&restored.id!==ownId);
+    await f.store.setServiceRemoved({id:restored.id,removed:false});
+    const visible=(await f.store.list({collection:'services',query:'Example Neighbourhood'})).items[0];
+    assert.equal(visible.id,restored.id);
+    assert.equal(visible.experience.worked,1);
+    assert.equal(visible.experience.rating_average,4);
+    assert.equal((await f.store.get(visible.id)).comments[0].body,'Fictional practice result');
+  } finally { await f.close(); }
+});
+
 test('own service contacts, changes and results stay attached to the same private directory card', async () => {
   const f=await fixture();
   try {

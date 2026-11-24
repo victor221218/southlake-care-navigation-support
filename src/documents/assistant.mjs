@@ -62,11 +62,12 @@ export class DocumentAssistant {
     if(this.busy)throw new Error('Wait for the answer or choose Stop.');
     this.busy=true;this.abort=new AbortController();const signal=AbortSignal.any([this.abort.signal,AbortSignal.timeout(75000)]);
     const owner=this.store.owner(),seen=new Map(),calculations=[];let saved=null,turn=null,presented=null;
+    const visibleCards=()=>[...seen.values()].filter(card=>card.id!==saved?.id&&!card.removed_from_directory);
     try{
       if(this.cases){case_id=case_id||(await this.cases.current()).id;turn=await this.cases.begin({id:case_id,text,card_id,retry_turn_id});this.history=await this.cases.promptHistory(turn);}
       const selected=card_id?await this.store.get(card_id,{case_id}):null;
       const note = capture_note ? requestedNote(text) : '';
-      const finish=async(answer,source,extra={})=>{const cards=presented||rankResponseCards([...seen.values()].filter(c=>c.id!==saved?.id),text).slice(0,6);const result={text:answer,source,saved:Boolean(saved||turn?.saved),saved_card_id:selected?.id||saved?.id||null,cards:cards.map(c=>({...c,card_confirm:c.card_confirm||(isServiceSource(c.source_format)?c.fields?.['Before referring']:undefined),body:c.body.slice(0,650),fields:undefined,comments:undefined})),...(presented?{presentation:'service-options'}:source==='chatgpt'?{presentation:'answer'}:{}),calculations,case_id,turn_id:turn?.assistant_id,...extra};if(turn)await this.cases.finish(turn,result);return result;};
+      const finish=async(answer,source,extra={})=>{const cards=presented||rankResponseCards(visibleCards(),text).slice(0,6);const result={text:answer,source,saved:Boolean(saved||turn?.saved),saved_card_id:selected?.id||saved?.id||null,cards:cards.map(c=>({...c,card_confirm:c.card_confirm||(isServiceSource(c.source_format)?c.fields?.['Before referring']:undefined),body:c.body.slice(0,650),fields:undefined,comments:undefined})),...(presented?{presentation:'service-options'}:source==='chatgpt'?{presentation:'answer'}:{}),calculations,case_id,turn_id:turn?.assistant_id,...extra};if(turn)await this.cases.finish(turn,result);return result;};
       const openForm = values => finish('Fill in what you know about the service.','local',{
         presentation:'service-form',service_form:values,cards:[],calculations:[]
       });
@@ -231,7 +232,7 @@ export class DocumentAssistant {
                 if(typeof option.id!=='string'||!seen.has(option.id)||ids.has(option.id))throw new Error('Use unique source card IDs that you have already read.');
                 if(typeof option.reason!=='string'||!option.reason.trim()||option.reason.length>220||typeof option.confirm!=='string'||!option.confirm.trim()||option.confirm.length>260)throw new Error('Give each card a short reason (up to 220 characters) and a confirmation check (up to 260 characters).');
                 const card=await this.store.get(option.id,{case_id});
-                if(!card.document_id||card.archived)throw new Error('Choose current source cards, not personal messages or saved chats.');
+                if(!card.document_id||card.archived||card.removed_from_directory)throw new Error('Choose current source cards, not personal messages or saved chats.');
                 ids.add(card.id);options.push({...card,card_reason:option.reason.trim(),card_confirm:option.confirm.trim()});
               }
               if(owner!==this.store.owner())throw new Error('The active account changed. Start again in the correct workspace.');
@@ -245,7 +246,7 @@ export class DocumentAssistant {
       }
       throw new Error('The analysis did not finish. Ask about one document or topic at a time.');
     }catch(error){
-      if(saved||turn){const kept=Boolean(saved||turn?.saved);const result={text:(signal.aborted?'The answer stopped.':error.message)+(kept?' Your message was saved '+(card_id?'on the selected card.':'in Manage memory.'):' Your question is kept in this case.')+' Retry the question to continue.',source:'error',saved:kept,saved_card_id:card_id||saved?.id,cards:rankResponseCards([...seen.values()].filter(c=>c.id!==saved?.id),text).slice(0,6),calculations,case_id,turn_id:turn?.assistant_id};if(turn)await this.cases.finish(turn,result);return result;}
+      if(saved||turn){const kept=Boolean(saved||turn?.saved);const result={text:(signal.aborted?'The answer stopped.':error.message)+(kept?' Your message was saved '+(card_id?'on the selected card.':'in Manage memory.'):' Your question is kept in this case.')+' Retry the question to continue.',source:'error',saved:kept,saved_card_id:card_id||saved?.id,cards:rankResponseCards(visibleCards(),text).slice(0,6),calculations,case_id,turn_id:turn?.assistant_id};if(turn)await this.cases.finish(turn,result);return result;}
       if(signal.aborted)throw connectionError('cancelled');throw error;
     }finally{this.busy=false;this.abort=null;}
   }

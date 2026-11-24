@@ -1,3 +1,9 @@
+# Care Navigation Support 2.17.4
+
+- The four-field service form opens in the chat reply. **More details** expands the optional contact and referral fields.
+- Choose a service area from the dropdown, enter a custom area, or leave it blank.
+- Choose **Remove** in Known services to hide a card from the directory and future recommendations. Use **Removed services → Restore** to bring it back with its notes and ratings.
+
 # Care Navigation Support 2.17.3
 
 - Choose **Add a service** above chat to open the form immediately.

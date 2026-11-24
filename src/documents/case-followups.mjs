@@ -114,7 +114,7 @@ export class CaseFollowups {
       const payload = JSON.parse(reply?.payload_json || '{}');
       if (reply_id && !payload.cards?.some(card => card.id === card_id)) throw new Error('Choose a service card from this topic.');
       const card = await this.store.get(card_id, {case_id});
-      if (!card.document_id || card.archived ||
+      if (!card.document_id || card.archived || card.removed_from_directory ||
           (!isServiceSource(card.source_format) && payload.presentation !== 'service-options')) {
         throw new Error('Choose a current service recommendation.');
       }
