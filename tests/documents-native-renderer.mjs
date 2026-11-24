@@ -23,8 +23,8 @@ async function revealMemoryEntry(id) {
 const assert=(condition,message='The current interface does not match the expected layout.')=>{if(!condition)throw new Error(message);};
 const contentWidth=element=>element.clientWidth-parseFloat(getComputedStyle(element).paddingLeft)-parseFloat(getComputedStyle(element).paddingRight);
 async function run(){try{
-  await wait(()=>document.getElementById('version-label')?.textContent.includes('2.16.0'));
   const phase=await window.hiveSmoke.phase();
+  await wait(()=>document.getElementById('version-label')?.textContent.endsWith('version '+phase.version));
   const title='Care Navigation Support';
   assert(phase.windowTitle===title&&document.title===title&&document.querySelector('.brand strong')?.textContent===title,'The current name must appear in the Windows title and sidebar.');
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
@@ -252,8 +252,10 @@ async function run(){try{
   assert(document.querySelector('.memory-record-main').dataset.id===card.id);
   type('search','');filter('memory-kind-filter','documents');await wait(()=>document.querySelectorAll('.memory-record').length===4);
   const caseChecks=await runCaseChecks({request,click,type,filter,wait,assert,serviceCard,revealMemoryEntry});
+  const publicGroup='[aria-label="Public services without recorded outcomes"]';
+  const ownGroup='[aria-label="Your services without recorded outcomes"]';
   click('[data-action="known-services"]');
-  await wait(()=>document.querySelector('.service-source-group[aria-label="Public services without recorded outcomes"] .source-tag')?.textContent==='(Public source)');
+  await wait(()=>document.querySelector(publicGroup+' .source-tag')?.textContent==='(Public source)');
   click('#add-service');await wait(()=>document.getElementById('service-field-name'));
   assert(document.getElementById('service-questions').textContent.includes('phone number or email')&&
     document.getElementById('service-questions').textContent.includes('communities'));
@@ -263,10 +265,11 @@ async function run(){try{
   type('service-field-person','Jordan Example');
   type('service-field-phone','905-555-0176');
   click('[data-action="save-own-service"]');
-  await wait(()=>!document.getElementById('modal').open&&document.querySelector('.service-source-group[aria-label="Your services without recorded outcomes"] .service-row'));
-  const ownRow=document.querySelector('.service-source-group[aria-label="Your services without recorded outcomes"] .service-row');
+  await wait(()=>!document.getElementById('modal').open&&document.querySelector(ownGroup+' .service-row'));
+  const ownRow=document.querySelector(ownGroup+' .service-row');
   const ownId=ownRow.dataset.serviceId;
-  assert(document.querySelector('.service-source-group').getAttribute('aria-label')==='Your services'&&
+  assert(document.querySelector(ownGroup).compareDocumentPosition(document.querySelector(publicGroup))&Node.DOCUMENT_POSITION_FOLLOWING);
+  assert(
     ownRow.querySelector('.service-row-contact').textContent.includes('Jordan Example (Own source)')&&
     ownRow.querySelector('.service-contact-value').textContent==='905-555-0176');
   ownRow.querySelector('.service-row-actions [data-action="open-card"]').click();
@@ -290,7 +293,7 @@ async function run(){try{
   filter('service-review-row','0');
   assert(document.getElementById('service-field-person').value==='Alex Example');
   click('[data-action="save-own-service"]');
-  await wait(()=>!document.getElementById('modal').open&&document.querySelectorAll('[aria-label="Your services"] .service-row').length===3);
+  await wait(()=>!document.getElementById('modal').open&&document.querySelectorAll(ownGroup+' .service-row').length===3);
   const [meal]=(await request('list-cards',{collection:'services',query:'meals@example.org'})).items;
   assert(meal.source_format==='own-services'&&(await request('get-card',{id:meal.id})).fields['Eligibility notes']==='Weekday delivery');
   serviceCapture=await window.hiveSmoke.capture('known-services');

@@ -10,7 +10,7 @@ Workspace opens as a full-width chat, with Add a document beside Speak. **Chat h
 
 ## Known services are ready to browse
 
-For 2.17.0, [use the inventory and outcome guide](README.md#maintain-the-service-inventory-and-outcomes) to import an updated program list, confirm tracked outcomes and try the live ranking demo. **Needs details** identifies missing information on each card.
+For 2.17.1, [use the inventory and outcome guide](README.md#maintain-the-service-inventory-and-outcomes) to import an updated program list, confirm tracked outcomes and try the live ranking demo. **Needs details** identifies missing information on each card.
 
 Open **Known services** on the left for 27 researched services in full-width horizontal rows. Category and search controls are at the top; the directory fills the page. The assistant opens only when requested, as a floating panel on the right. Open View details or choose Ask assistant on a row. Your saved average rating appears beside the program contact. A named person appears only when the source lists one. Otherwise use the listed phone/email. Confirm current eligibility, service area, fees and capacity with the provider. No past outcomes or success rates are preloaded.
 

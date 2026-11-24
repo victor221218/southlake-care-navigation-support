@@ -2,13 +2,13 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.0.** This version supports the service inventory and navigation tracker and uses recorded service outcomes to explain recommendation order. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
+**Prototype source version 2.17.1.** This version supports the service inventory and navigation tracker and uses recorded service outcomes to explain recommendation order. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
 ## Downloads and guides
 
-See [releases](https://github.com/victor221218/southlake-care-navigation-support/releases) for published installers by version. Start with the [inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) to use the 2.17.0 workflow.
+See [releases](https://github.com/victor221218/southlake-care-navigation-support/releases) for published installers by version. Start with the [inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) to use the 2.17.1 workflow.
 
 ### [Download the original 2.16.0 handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip)
 
@@ -151,10 +151,12 @@ To add more outcomes, append rows to the same tracker and reimport. Keep earlier
 
 ### Live demo with a fictional service
 
+Use **Add a service** to create two practice cards for caregiver support in Aurora, such as Example Community Respite and Example Caregiver Desk.
+
 1. Ask **Find caregiver support in Aurora. Show ranked service cards.**
 2. Name one of your fictional practice services and say **We tried Example Community Respite and it did not work. Rating 1 out of 5.** Use its exact name or choose the card first and say **It didn’t work. 1/5.** The app logs a clear report and asks you to choose if the provider name is unclear.
 3. Start a **New chat** and repeat the first request. When options are equally relevant, low ratings rank below unrated or better-rated services. Without a rating, a recorded unsuccessful result moves that service below equally relevant untried choices.
-4. Ask **How did you rank the options?** You can also read **Why this rank** on each card. The explanation uses matches to the request, your rating sample and your recorded outcomes. The demo works with locally saved cards.
+4. Ask **How did you rank the options?** To see one card's explanation, open **View details**, then **Why this rank**. The explanation uses matches to the request, your rating sample and your recorded outcomes. The demo works with locally saved cards.
 
 ## How memory works
 

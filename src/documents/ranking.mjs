@@ -3,7 +3,7 @@ import {isServiceSource, OWN_SERVICE_FORMAT} from './service-sources.mjs';
 
 const searchNoise = new Set(['please','about','service','services','would','could','need','have','that','this',
   'with','what','show','find','recommend','recommended','rank','ranked','rankings','ranking','options','cards','for',
-  'can','you','our','using','based','experience','history','your','the']);
+  'can','you','our','using','based','experience','history','your','the','who','use','uses','needs']);
 
 export const rankingPolicy = 'I check that a service matches the category and area you asked for. Specific request details can move a closer match up. Among equally relevant cards, I compare your average ratings, then weigh recorded Worked and Didn’t work results. An unrated service starts at 3/5 for sorting only. Pending follow-ups and ordinary notes do not count as outcomes.';
 
@@ -43,8 +43,8 @@ export function rankResponseCards(cards, query='', topic=null) {
   const terms=[...new Set(headerKey(query).split(' '))]
     .filter(word=>word.length>=3&&!searchNoise.has(word)&&!scopedTerms.has(word));
   const matched=card=>{
-    const searchable=headerKey([card.title,card.category,card.fields?.Category,card.area,card.fields?.['Service area'],card.body].join(' '));
-    return terms.filter(word=>searchable.includes(word));
+    const searchable=new Set(headerKey([card.title,card.category,card.fields?.Category,card.area,card.fields?.['Service area'],card.body].join(' ')).split(' '));
+    return terms.filter(word=>searchable.has(word)||searchable.has(word+'s'));
   };
   return cards.map(card=>({card,words:matched(card)}))
     .sort((a,b)=>b.words.length-a.words.length||compareHistory(a.card,b.card))

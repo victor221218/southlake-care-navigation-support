@@ -45,6 +45,10 @@ export async function runCaseChecks({request,click,type,filter,wait,assert,servi
   click(`.answer-card[data-id="${chosenId}"] [data-action="open-card"]`);
   await wait(()=>document.querySelector('#modal [data-action="use-service-from-details"]'));
   assert(!document.querySelector('#modal #service-contacts,#modal [data-outcome]'),'Comparing a recommendation should not show early result controls.');
+  const rankDetails=document.querySelector('#modal .card-ranking');
+  assert(rankDetails&&!rankDetails.open&&rankDetails.querySelector('p')?.textContent,
+    'Ranking details should be available on demand without adding length to every choice.');
+  click('#modal .card-ranking summary');await wait(()=>rankDetails.open);
   click('#modal [data-action="use-service-from-details"]');
   await wait(()=>document.querySelector('.chat-followup .followup-contact')&&document.body.dataset.caseChanging==='false');
   assert(!document.getElementById('modal').open,'Choosing a card must start follow-up inside chat.');

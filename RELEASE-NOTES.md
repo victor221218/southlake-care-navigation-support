@@ -1,3 +1,8 @@
+# Care Navigation Support 2.17.1
+
+- Recommendation cards stay compact. Open **View details** and expand **Why this rank** for the card's explanation, or ask about the full order in chat.
+- The inventory, tracking and chat outcome workflow from 2.17.0 is included.
+
 # Care Navigation Support 2.17.0
 
 - The inventory importer recognizes the **Service Inventory** column headings and lets you update matching cards while keeping their feedback.

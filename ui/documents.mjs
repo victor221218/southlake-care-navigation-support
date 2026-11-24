@@ -62,17 +62,17 @@ function answerCardHTML(card, reply) {
   const pickable = reply.id && !reply.error && activeCase?.status === 'active' &&
     !card.archived && card.document_id && (service || reply.presentation === 'service-options');
   const details = `data-id="${e(card.id)}"`;
+  const ranking = card.card_rank_reason ? ` data-rank-reason="${e(card.card_rank_reason)}"` : '';
   const content = `<span class="card-kicker">${e(card.category || card.filename || (card.kind === 'conversation' ? 'Saved case' : 'Saved information'))} ${sourceTag(card.source_format)}</span>
     <strong>${e(card.title)}</strong>
     ${card.card_reason ? `<span class="card-reason"><b>Why consider</b>${e(card.card_reason)}</span>` :
       `<span class="card-excerpt">${e(card.body?.split('\n')[0]?.slice(0,120) || 'Open to see details')}</span>`}
     ${card.card_confirm || service ? `<span class="card-confirm"><b>Confirm</b>${e(card.card_confirm || 'Eligibility, service area, accessibility, fees and current capacity with intake.')}</span>` : ''}
-    ${card.card_rank_reason ? `<span class="card-reason"><b>Why this rank</b>${e(card.card_rank_reason)}</span>` : ''}
     <span class="answer-card-bottom">${contact && !service && !pickable ? `<span>${e(contact.value)}</span>` : ''}
       ${summary?.rating_count ? averageRatingBadge(summary,{showCount:true}) :
         card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count === 1 ? '' : 's'}</small>` : ''}</span>`;
   if (!pickable) {
-    return `<button class="memory-card answer-card" data-action="open-card" ${details}>${content}<span class="answer-card-open">View details →</span></button>`;
+    return `<button class="memory-card answer-card" data-action="open-card" ${details}${ranking}>${content}<span class="answer-card-open">View details →</span></button>`;
   }
   const tracked = messages.find(message => message.followup?.reply_sequence === reply.sequence &&
     message.followup.card_id === card.id)?.followup;
@@ -80,7 +80,7 @@ function answerCardHTML(card, reply) {
   return `<article class="memory-card answer-card pickable-answer" ${details}>${content}
     <div class="answer-card-actions">
       ${button('chat-followup-start',pickLabel,'answer-card-pick',`${details} data-reply-id="${e(reply.id)}" aria-label="${e(pickLabel)} for ${e(card.title)}"`)}
-      ${button('open-card','View details','answer-card-details',`${details} data-reply-id="${e(reply.id)}" aria-label="View details for ${e(card.title)}"`)}
+      ${button('open-card','View details','answer-card-details',`${details}${ranking} data-reply-id="${e(reply.id)}" aria-label="View details for ${e(card.title)}"`)}
     </div></article>`;
 }
 function completionMessage(completion) {
@@ -681,7 +681,7 @@ async function closeModal(){
   serviceEditor=null;noteEditor=null;feedbackEditor=null;cardHistory=null;
   modal.close();modal.replaceChildren();return true;
 }
-async function openCard(id, {replyId=null,fromFollowup=false}={}) {
+async function openCard(id, {replyId=null,fromFollowup=false,rankReason=''}={}) {
   await flushNote();
   const card=await api('get-card',{id});
   if (card.case_info) {
@@ -733,6 +733,7 @@ async function openCard(id, {replyId=null,fromFollowup=false}={}) {
       button('edit-note','Edit note','secondary',idAttr))+button('delete-card','Delete card','danger quiet',idAttr);
   const missing=card.missing_details||[];
   const gaps=missing.length?`<p class="callout">Needs details · ${e(missing.join(', '))}</p>`:'';
+  const ranking=rankReason?`<details class="card-ranking"><summary>Why this rank</summary><p>${e(rankReason)}</p></details>`:'';
   const ownDetails=own?`<section class="detail-section">
     <div class="section-title"><h3>Service details</h3>
       ${button('edit-own-service','Edit details','secondary',idAttr)}</div>
@@ -741,7 +742,7 @@ async function openCard(id, {replyId=null,fromFollowup=false}={}) {
     </section>`:'';
   await openModal(modalHead(card.title,fileLabel(card))+`<div class="detail-body">
     ${card.archived?'<p class="callout">This row was removed in a newer import. Its notes have been kept.</p>':''}
-    ${gaps}${own?notes+contacts+ownDetails:servicePreview?notes+cardFields:cardFields+contacts+notes}${links}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
+    ${gaps}${ranking}${own?notes+contacts+ownDetails:servicePreview?notes+cardFields:cardFields+contacts+notes}${links}</div><div class="modal-footer">${footer}</div>`,'card-dialog');
   noteEditor={cardId:id,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};
   $('card-note').addEventListener('input',()=>{noteEditor.body=$('card-note').value;$('note-status').textContent='Saving…';clearTimeout(noteTimer);noteTimer=setTimeout(()=>flushNote().catch(fail),800);});
   await refreshCardHistoryControls(id);
@@ -1108,7 +1109,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
       if(libraryMode==='services'&&!serviceChatOpen)openServiceChat($('service-chat-launcher'));
       await actOnFollowup('chat-followup-start',target);
     }
-    else if(action==='open-card')await openCard(target.dataset.id,{replyId:target.dataset.replyId,fromFollowup:target.dataset.fromFollowup==='true'});
+    else if(action==='open-card')await openCard(target.dataset.id,{replyId:target.dataset.replyId,fromFollowup:target.dataset.fromFollowup==='true',rankReason:target.dataset.rankReason});
     else if(action==='choose-service-result'){if(feedbackSaving)return;feedbackEditor.outcome=target.dataset.outcome;document.querySelectorAll('.result-outcomes [data-outcome]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.outcome===feedbackEditor.outcome)));}
     else if(action==='save-service-result')await saveServiceResult();
     else if(action==='cancel-service-result'){if(feedbackSaving)return;if(!discardResult())return;feedbackEditor=null;$('service-result-editor').hidden=true;}
