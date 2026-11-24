@@ -3,9 +3,18 @@ import {isServiceSource, OWN_SERVICE_FORMAT} from './service-sources.mjs';
 
 const searchNoise = new Set(['please','about','service','services','would','could','need','have','that','this',
   'with','what','show','find','recommend','recommended','rank','ranked','rankings','ranking','options','cards','for',
-  'can','you','our','using','based','experience','history','your','the','who','use','uses','needs']);
+  'can','you','our','using','based','experience','history','your','the','who','use','uses','needs',
+  'previous','previously','tried','rating','ratings','scores','last']);
 
-export const rankingPolicy = 'I check that a service matches the category and area you asked for. Specific request details can move a closer match up. Among equally relevant cards, I compare your average ratings, then weigh recorded Worked and Didn’t work results. An unrated service starts at 3/5 for sorting only. Pending follow-ups and ordinary notes do not count as outcomes.';
+export const rankingPolicy = 'I check that a service matches the category and area you asked for. Specific request details can move a closer match up. Among equally relevant cards, I compare your average ratings, then weigh recorded Worked and Didn’t work results. An unrated service starts at 3/5 for sorting only. A shortlist can include a matching service you tried so you can see its history. Pending follow-ups and ordinary notes do not count as outcomes.';
+
+export const hasServiceResult = card => Boolean(card.experience?.worked || card.experience?.not_worked);
+
+export function keepServiceExperience(ranked, choices=ranked.slice(0,6)) {
+  if (choices.some(hasServiceResult)) return choices;
+  const tried = ranked.find(hasServiceResult);
+  return tried ? [...choices.slice(0,5), tried] : choices;
+}
 
 export function historyScore(card) {
   const stats = card.experience || card;

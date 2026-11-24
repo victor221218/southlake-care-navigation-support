@@ -458,6 +458,52 @@ const showOptions=options=>({type:'function_call',name:'present_service_options'
 const option=id=>({id,reason:'A possible match for this request.',confirm:'Confirm the pickup address and boarding help with intake.'});
 function online(f,fetcher){const assistant=new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:true}),accessToken:async()=> 'test-only'},fetcher});assistant.model='fixture';return assistant;}
 
+test('connected home-service requests surface relevant service cards and their feedback even after a prose reply',async()=>{
+  const f=await fixture();
+  try {
+    const add=(name,area='North York',category='Home supports')=>f.store.addOwnService({
+      name,category,area,details:'Housekeeping visits for local residents.'
+    });
+    const tried=await add('Example Brook Home Help');
+    await f.store.serviceResult({card_id:tried.card_id,outcome:'not_worked',rating:2,body:'No visit available.'});
+    const other=[];
+    for (const location of ['Birch','Cedar','Elm','Pine','Spruce','Willow','Yew']) {
+      other.push((await add('Example '+location+' Home Desk')).card_id);
+    }
+    const outside=await add('Example Aurora Home Desk','Aurora');
+    const unrelated=await add('Example Pantry Route','North York','Food and nutrition');
+    const earlier=await f.cases.create('Add in a new service for me');
+    const old=await f.cases.begin({id:earlier.id,text:'can you recommend home service for me'});
+    await f.cases.finish(old,{text:'Previous practice response',source:'local'});
+    const saved=await f.cases.archive({id:earlier.id,expected_version:(await f.cases.row(earlier.id)).version});
+    for (const modelChooses of [false,true]) {
+      const assistant=online(f,async(url,request)=>{
+        const body=JSON.parse(request.body);
+        assert(body.instructions.includes(tried.card_id),'Include the matching service with feedback in the model context.');
+        assert(!body.instructions.includes(saved.card_id),'A saved case is never a provider candidate.');
+        return streamed(modelChooses ? [showOptions([option(other[0])])] :
+          [{type:'message',content:[{type:'output_text',text:'Which town are you asking about?'}]}]);
+      });
+      const fresh=await f.cases.create();
+      const result=await assistant.chat({case_id:fresh.id,text:'can you recommend home service for me',remember:false});
+      assert.equal(result.presentation,'service-options');
+      assert(result.cards.every(card=>card.source_format==='own-services'&&card.id!==unrelated.card_id));
+      assert(result.cards.length>1);
+      const rated=result.cards.at(-1);
+      assert.equal(rated.id,tried.card_id);
+      assert.equal(rated.experience.rating_average,2);
+      assert.match(rated.card_rank_reason,/2\.0\/5/);
+      const reply=(await f.cases.hydrate(await f.cases.read(fresh.id))).messages.at(-1);
+      assert.equal(reply.payload.cards.at(-1).experience.not_worked,1);
+    }
+    const scoped=await local(f).chat({text:'Find home services in North York. Show ranked cards.',remember:false});
+    assert(scoped.cards.every(card=>card.id!==outside.card_id));
+    const absent=await local(f).chat({text:'Find home services in Georgina.',remember:false});
+    assert.deepEqual(absent.cards,[]);
+    assert.match(absent.text,/couldn’t find an active service card/);
+  } finally { await f.close(); }
+});
+
 test('a connected service-form response takes priority over recommendations and prefills supplied details only', async()=>{
   const f=await fixture();
   try {

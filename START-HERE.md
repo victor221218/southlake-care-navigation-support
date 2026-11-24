@@ -32,7 +32,7 @@ Ordinary messages stay together in the conversation. To keep a note, type **Reme
 
 ## Which model is answering?
 
-The app uses OpenAI’s hosted models through your ChatGPT connection. After the first AI answer or choosing a model, its name appears under **Ask your assistant**. Use **Connection & backup → Choose an available AI model** to see the options your account permits. The app initially prefers an available mini/instant model. It does not copy the model selected in a separate ChatGPT chat. The English speech model only transcribes your voice.
+The app uses OpenAI’s hosted models through your ChatGPT connection. It prefers **GPT-6.2 Astra** when available, followed by **GPT-6.2 Sol** or the first model returned for your account. Look under the chat title for the active model. Use **Connection & backup → Choose an available AI model** to select another model for the session.
 
 ## Files and updates
 
@@ -124,6 +124,8 @@ Look beneath the service follow-up for **Undo note**, **Undo result**, or **Undo
 3. After trying the service, choose **Worked** or **Didn’t work**. Use **Not yet** to return later.
 4. Add an optional note or rating and choose **Save result**. A blank note and rating are fine. **Finish later** keeps a draft with the topic. Saved feedback is also available on the service card.
 5. If it didn’t work, choose **See other options** to return to the choices. Choose **New chat** when the subject changes. Reopen earlier chats from the sidebar.
+
+You can type **I didn’t enjoy using the service** after choosing it or after saving one service in the current chat. The app saves **Didn’t work** on that card. Add a score with **Save rating**, or reply with a score such as **2/5** in the same chat. In a new chat, ask for matching services to see the updated ratings, or ask **What rating did I save for [service name]?**
 
 ## Record a result from Known services
 

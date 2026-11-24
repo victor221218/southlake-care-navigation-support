@@ -1,3 +1,10 @@
+# Care Navigation Support 2.17.6
+
+- Home-service recommendations show matching directory cards, with saved ratings and results visible on each card.
+- Report how a chosen or newly entered service went in everyday language. Add a 1–5 rating later to the same result.
+- GPT-6.2 Astra is the default when available to the connected account.
+- The README includes installation, import, feedback, ranking, memory, backup and troubleshooting walkthroughs.
+
 # Care Navigation Support 2.17.5
 
 - The latest handoff link downloads the current installer, test bundles, editable source, guides and verification results together.

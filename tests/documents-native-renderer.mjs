@@ -39,6 +39,9 @@ async function run(){try{
     const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==31)throw new Error('Documents or service cards changed after reopening.');
     const removed=await request('list-cards',{collection:'services',removed_services:true});
     assert(removed.items.some(card=>card.id===phase.cold.removed_service_id&&card.area==='Aurora'),'The removed service and its chosen area must survive restart.');
+    const rated=await request('get-card',{id:phase.cold.removed_service_id});
+    assert(rated.experience.rating_average===2&&rated.experience.not_worked===1,
+      'The result and later rating on the chat-created service must survive restart.');
     const partial=await request('get-card',{id:phase.cold.chat_service_id});
     assert(partial.contacts.some(contact=>contact.value==='905-555-0191')&&partial.missing_details.includes('service name'),
       'The partial service saved from chat must survive restart.');
@@ -55,7 +58,7 @@ async function run(){try{
     document.getElementById('card-notes').scrollIntoView({block:'center'});
     const sourceCapture=await window.hiveSmoke.capture('card-notes');
     click('[data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
-    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture});return;
+    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture});return;
   }
   const initial=await request('snapshot');assert(initial.services.total===27&&initial.cards.total===0&&initial.documents.length===0);
   const grid=document.getElementById('workspace-grid').getBoundingClientRect(),chat=document.getElementById('chat-panel').getBoundingClientRect();assert(chat.width>=contentWidth(document.getElementById('workspace-grid'))-4,'Workspace chat must fill the content width.');
@@ -332,6 +335,31 @@ async function run(){try{
   assert(document.body.dataset.view==='workspace'&&document.getElementById('message').value==='Draft question for later.'&&
     !document.getElementById('modal').open,'Saving the form in chat keeps the unsent draft and avoids a modal.');
 
+  assert(document.querySelector('.service-form-reply [data-action="chat-followup-start"][data-id="'+deskId+'"]'),
+    'A newly saved service has a direct follow-up action.');
+  type('message','I did not enjoy using the service.');
+  click('#send-button');
+  await wait(()=>document.querySelector('.followup-add-rating select')&&document.getElementById('send-button').textContent==='Send ↑');
+  assert(document.querySelector('.followup-saved').textContent.includes("Didn't work"));
+  const ratingSelect=document.querySelector('.followup-add-rating select');
+  ratingSelect.value='2';
+  ratingSelect.dispatchEvent(new Event('change',{bubbles:true}));
+  click('.followup-add-rating [data-step="rate"]');
+  await wait(()=>document.querySelector('.followup-saved .result-badge')?.textContent.includes('2/5'));
+  assert((await request('get-card',{id:deskId})).experience.rating_average===2);
+  click('.chat-header-actions [data-action="new-chat"]');
+  await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+  type('message','can you recommend home service for me');
+  click('#send-button');
+  const ratedAnswer='#messages .answer-card[data-id="'+deskId+'"]';
+  await wait(()=>document.querySelector(ratedAnswer+' .rating-badge.rating-low'));
+  const recommendationCards=[...document.querySelectorAll('#messages .answer-cards .answer-card')];
+  assert(recommendationCards.length>1&&recommendationCards.at(-1).dataset.id===deskId&&
+    recommendationCards.at(-1).textContent.includes("1 didn't work")&&
+    !document.querySelector('#messages .message.assistant .answer-summary'),
+    'A fresh home service request shows service cards, with the tried low-rated service last.');
+  assert((await window.hiveSmoke.capture('home-service-rating')).ok,'Capture the ranked service cards and rating.');
+
   type('message','can you help me add in a service');click('[data-action="send"]');
   await wait(()=>latestServiceForm()&&latestServiceForm().dataset.serviceForm!==firstFormId);
   const emptyForm=latestServiceForm();
@@ -378,7 +406,8 @@ async function run(){try{
   await wait(()=>document.querySelector(deskRow+' [data-action="remove-known-service"]'));
   click(deskRow+' [data-action="remove-known-service"]');
   await wait(()=>!document.querySelector(deskRow));
-  const serviceChecks={chat_service_id:chatServiceId, removed_service_id:deskId, chat_service_form_verified:true, known_service_removal_verified:true};
+  const serviceChecks={chat_service_id:chatServiceId, removed_service_id:deskId, chat_service_form_verified:true,
+    known_service_removal_verified:true, conversational_home_service_feedback:true, live_chat_rating:true, ranked_home_cards:true};
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);

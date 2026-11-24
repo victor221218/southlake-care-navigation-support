@@ -147,6 +147,60 @@ test('a spoken-style result is saved to the right card, ranks lower in a new cas
   } finally { await f.close(); }
 });
 
+test('plain-language feedback and a later rating attach to the one service added in the chat', async () => {
+  const f=await fixture();
+  try {
+    const cases=new DocumentCases({store:f.store});
+    const followups=new CaseFollowups({cases,store:f.store,inputHistory:new InputHistory({store:f.store})});
+    const assistant=new DocumentAssistant({store:f.store,cases,followups,connection:{session:async()=>({sharing:false})}});
+    const report=(caseId,text)=>assistant.chat({case_id:caseId,text,remember:false});
+    const original=await cases.create();
+    const form=await report(original.id,'Can you add a service for me?');
+    const {card_id}=await cases.saveServiceForm({case_id:original.id,message_id:form.turn_id,values:{
+      name:'Example Kinross Home Desk',category:'Home supports',area:'North York',phone:'416-555-0181'
+    }});
+    const outcome=await report(original.id,'I did not enjoy using the service.');
+    assert.match(outcome.text,/Saved Didn’t work for Example Kinross/);
+    assert.equal(outcome.cards[0].id,card_id);
+    assert.equal(outcome.cards[0].experience.rating_average,null);
+    const initial=(await f.store.get(card_id)).comments.find(comment=>comment.outcome);
+
+    const bad=await report(original.id,'Rating -1/5.');
+    assert.match(bad.text,/whole-number rating from 1 to 5/);
+    assert.equal((await f.store.get(card_id)).experience.rating_count,0);
+    const updated=await report(original.id,'Two out of five.');
+    assert.match(updated.text,/Saved your 2\/5 rating for Example Kinross/);
+    assert.equal(updated.cards[0].experience.rating_average,2);
+    const repeat=await report(original.id,'I’d rate it 2/5.');
+    assert.match(repeat.text,/already has a result/);
+    const saved=(await f.store.get(card_id)).comments;
+    assert.equal(saved.length,1);
+    assert.equal(saved[0].id,initial.id);
+    assert.equal(saved[0].body,initial.body);
+
+    await f.reopen();
+    const next=await cases.create();
+    const rating=await report(next.id,'What rating did I save for Example Kinross Home Desk?');
+    assert.equal(rating.presentation,'service-experience');
+    assert.deepEqual(rating.cards.map(card=>card.id),[card_id]);
+    assert.equal(rating.cards[0].experience.rating_average,2);
+    const noGuess=await report(next.id,'I did not enjoy using the service.');
+    assert.match(noGuess.text,/Which service/);
+    assert.equal((await f.store.get(card_id)).experience.not_worked,1);
+    await report(next.id,'Did I say Example Kinross Home Desk worked?');
+    assert.equal((await f.store.get(card_id)).experience.worked,0);
+
+    const historic=await followups.latestSelection(original.id,card_id);
+    const beforeUndo=await followups.view(historic);
+    const undone=await followups.update({case_id:original.id,message_id:historic.id,step:'undo',
+      change_id:beforeUndo.payload.followup.history.undo.id});
+    assert.equal(undone.payload.followup.result.rating,null);
+    const redone=await followups.update({case_id:original.id,message_id:historic.id,step:'redo',
+      change_id:undone.payload.followup.history.redo.id});
+    assert.equal(redone.payload.followup.result.rating,2);
+  } finally { await f.close(); }
+});
+
 test('chat opens a service form, saves a partial card once, and restores the link', async () => {
   const f = await fixture();
   try {
@@ -433,14 +487,25 @@ test('renaming the Windows app retains the previous data location and supports i
   const isolated = path.resolve('.runtime/test-profile'); assert.equal(windowsDataDirectory(appData, isolated), isolated);
 });
 
-test('model selection reflects the actual eligible account list and resets between accounts', async () => {
-  const assistant = new DocumentAssistant({ store: {}, connection: { accessToken: async () => 'test-only' }, fetcher: async () => Response.json({ models: [
-    { slug: 'eligible-standard', display_name: 'Account standard' }, { slug: 'eligible-instant', display_name: 'Account instant' }, { slug: 'hidden-model', visibility: 'hidden' }
-  ] }) });
+test('model selection prefers eligible Astra then Sol, respects manual choice and resets between accounts', async () => {
+  let models=[
+    {slug:'eligible-instant',display_name:'Account instant'},
+    {slug:'gpt-6.2-sol',display_name:'GPT-6.2 Sol'},
+    {slug:'gpt-6.2-astra',display_name:'GPT-6.2 Astra'}
+  ];
+  const assistant = new DocumentAssistant({store:{},connection:{accessToken:async()=>'test-only'},
+    fetcher:async()=>Response.json({models})});
   const result = await assistant.models();
-  assert.equal(result.selected, 'eligible-instant'); assert.equal(assistant.modelItems.length, 2);
-  assistant.model = 'eligible-standard'; assert.equal((await assistant.models()).selected, 'eligible-standard');
-  assistant.reset(); assert.equal(assistant.model, null); assert.equal(assistant.modelItems.length, 0);
+  assert.equal(result.selected,'gpt-6.2-astra');
+  assistant.model='eligible-instant';
+  assert.equal((await assistant.models()).selected,'eligible-instant');
+  assistant.reset();
+  assert.equal(assistant.model,null); assert.equal(assistant.modelItems.length,0);
+  models[2]={...models[2],visibility:'hidden'};
+  assert.equal((await assistant.models()).selected,'gpt-6.2-sol');
+  assert.equal(assistant.modelItems.length,2);
+  models=models.slice(0,1);
+  assert.equal((await assistant.models()).selected,'eligible-instant');
 });
 
 test('memory manager excludes public starting cards and includes personal messages and attached service feedback', async () => {

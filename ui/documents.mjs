@@ -3,7 +3,7 @@ import { escapeHTML as e } from './render-text.mjs';
 import { enums } from '../src/core/catalog.mjs';
 import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceSource, serviceFields,
   cleanServiceFields, serviceDraft, missingServiceDetails} from '../src/documents/service-sources.mjs';
-import {directoryGroup} from '../src/documents/ranking.mjs';
+import {directoryGroup,hasServiceResult} from '../src/documents/ranking.mjs';
 const api=(method,args={})=>window.hive.request(method,args),$=id=>document.getElementById(id);
 let state,query='',documentFilter='',libraryMode='workspace',navigationSequence=0,serviceChatOpen=false,assistantReturnFocus=null,memoryKind='all',category='',includeArchived=false,offset=0,messages=[],busy=false,importing=false,selected=null,preview=null,noteEditor=null,noteTimer,feedbackEditor=null,feedbackSaving=false,voicePrefix='',connectionBusy=false,cardLoadSequence=0,activeCase=null,activeOwner=null,caseChanging=false,caseSequence=0,caseHasMore=false,caseFilter='',caseDraftTimer,caseDraftQueue=Promise.resolve();
 const modal=$('modal');
@@ -65,18 +65,23 @@ function answerCardHTML(card, reply) {
   const contact = card.contacts?.[0];
   const summary = card.experience;
   const service = isService(card);
+  const experienceOnly = reply.presentation === 'service-experience';
   const pickable = reply.id && !reply.error && activeCase?.status === 'active' &&
-    !card.archived && !card.removed_from_directory && card.document_id && (service || reply.presentation === 'service-options');
+    !experienceOnly && !card.archived && !card.removed_from_directory && card.document_id && (service || reply.presentation === 'service-options');
   const details = `data-id="${e(card.id)}"`;
   const ranking = card.card_rank_reason ? ` data-rank-reason="${e(card.card_rank_reason)}"` : '';
+  const outcomes = hasServiceResult(card) ? [summary.worked && `${summary.worked} worked`,
+    summary.not_worked && `${summary.not_worked} didn't work`].filter(Boolean).join(' · ') : '';
   const content = `<span class="card-kicker">${e(card.category || card.filename || (card.kind === 'conversation' ? 'Saved case' : 'Saved information'))} ${sourceTag(card.source_format)}</span>
     <strong>${e(card.title)}</strong>
+    ${outcomes ? `<span class="answer-card-experience">
+      ${averageRatingBadge(summary,{label:'Your avg. ',showCount:true}) || '<small>No rating yet</small>'}
+      <small>${e(outcomes)}</small></span>` : ''}
     ${card.card_reason ? `<span class="card-reason"><b>Why consider</b>${e(card.card_reason)}</span>` :
       `<span class="card-excerpt">${e(card.body?.split('\n')[0]?.slice(0,120) || 'Open to see details')}</span>`}
-    ${card.card_confirm || service ? `<span class="card-confirm"><b>Confirm</b>${e(card.card_confirm || 'Eligibility, service area, accessibility, fees and current capacity with intake.')}</span>` : ''}
+    ${(card.card_confirm || service) && !experienceOnly ? `<span class="card-confirm"><b>Confirm</b>${e(card.card_confirm || 'Eligibility, service area, accessibility, fees and current capacity with intake.')}</span>` : ''}
     <span class="answer-card-bottom">${contact && !service && !pickable ? `<span>${e(contact.value)}</span>` : ''}
-      ${summary?.rating_count ? averageRatingBadge(summary,{showCount:true}) :
-        card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count === 1 ? '' : 's'}</small>` : ''}</span>`;
+      ${!outcomes && card.comment_count ? `<small>${card.comment_count} saved note${card.comment_count === 1 ? '' : 's'}</small>` : ''}</span>`;
   if (!pickable) {
     return `<button class="memory-card answer-card" data-action="open-card" ${details}${ranking}>${content}<span class="answer-card-open">View details →</span></button>`;
   }
@@ -153,8 +158,11 @@ function renderChatFollowup(message) {
   } else if (followup.result) {
     const result = followup.result;
     const note = result.body !== resultLabel(result.outcome) + '.' ? `<p class="followup-note">${textHTML(result.body)}</p>` : '';
+    const addRating = result.rating==null && !archived ? `<div class="followup-actions followup-add-rating">
+      <label>Rating <select class="rating-select" data-followup-field="rating">${ratingOptions(followup.rating)}</select></label>
+      ${stepButton('rate','Save rating','secondary')}</div>` : '';
     content = `<div class="followup-saved" role="status"><span>✓ Result saved</span>${resultBadge(result)}</div>${note}
-      <div class="followup-actions">${result.outcome === 'not_worked' ? otherOptions : ''}${viewDetails}</div>`;
+      ${addRating}<div class="followup-actions">${result.outcome === 'not_worked' ? otherOptions : ''}${viewDetails}</div>`;
   } else if (archived) {
     content = `<p>Result pending. Reopen this topic to finish it.</p><div class="followup-actions">${viewDetails}</div>`;
   } else if (followup.deferred) {
@@ -190,7 +198,7 @@ function serviceRowHTML(card) {
   const own=card.source_format===OWN_SERVICE_FORMAT;
   const contacts=['phone','email'].map(kind=>card.contacts.find(contact=>contact.kind===kind)).filter(Boolean);
   const person=card.contact_name || card.contacts.find(contact=>contact.name)?.name;
-  const score=averageRatingBadge(card.experience);
+  const score=averageRatingBadge(card.experience) || (hasServiceResult(card)?'<small>No rating yet</small>':'');
   const attrs=`data-id="${e(card.id)}"`;
   const manage=card.removed_from_directory
     ? button('restore-known-service','Restore','secondary',`${attrs} aria-label="Restore ${e(card.title)} to Known services"`)
@@ -412,7 +420,8 @@ const fromCaseMessage = message => ({
 function updateFollowupControls() {
   $('chat-add-service').disabled = busy || caseChanging;
   $('messages').querySelectorAll('[data-action="chat-followup-start"],[data-action="chat-followup-step"],[data-followup-field]').forEach(control => {
-    control.disabled = busy || caseChanging;
+    control.disabled = busy || caseChanging ||
+      (control.dataset.step==='rate' && !control.closest('.followup-add-rating').querySelector('select').value);
   });
   for (const form of $('messages').querySelectorAll('[data-service-form]')) {
     form.querySelector('fieldset').disabled = busy || caseChanging || Boolean(serviceFormDrafts.get(form.dataset.serviceForm)?.saving);
@@ -424,6 +433,11 @@ function rememberFeedbackDraft(target) {
   const feedback = messages.find(message => message.id === messageId)?.followup;
   const field = target.dataset.followupField;
   if (!feedback) return;
+  if (field==='rating' && feedback.result && feedback.result.rating==null) {
+    feedback.rating=Number(target.value)||null;
+    updateFollowupControls();
+    return;
+  }
   if (field === 'note_draft') {
     if (!feedback.note_open) return;
   } else if (!feedback.outcome || feedback.result || feedback.deferred) return;
@@ -433,6 +447,26 @@ function rememberFeedbackDraft(target) {
     body: feedback.body, rating: feedback.rating, note_draft: feedback.note_draft
   });
   scheduleCaseDraft();
+}
+function updateChatServiceExperience(id, card) {
+  let changed=false;
+  for (const message of messages) {
+    for (const reference of message.cards||[]) {
+      if (reference.id!==id) continue;
+      reference.experience=card.experience;
+      reference.comment_count=card.comment_count;
+      changed=true;
+    }
+    if (message.followup?.card_id===id && message.followup.card && card.comments) {
+      message.followup.card.experience=card.experience;
+      if (message.followup.result_id) {
+        message.followup.result=card.comments.find(note=>note.outcome&&note.id===message.followup.result_id)||null;
+        if (!message.followup.result) message.followup.outcome=null;
+      }
+      changed=true;
+    }
+  }
+  return changed;
 }
 async function actOnFollowup(action, target) {
   if (busy || caseChanging || activeCase?.status !== 'active') return;
@@ -469,7 +503,9 @@ async function actOnFollowup(action, target) {
     const existing = messages.findIndex(message => message.id === result.id);
     if (existing >= 0) messages[existing] = fromCaseMessage(result);
     else messages.push(fromCaseMessage(result));
-    if (['save','save-note'].includes(args.step)) {
+    const updated=result.payload.followup;
+    if (updated?.card) updateChatServiceExperience(updated.card_id,updated.card);
+    if (['save','save-note','rate'].includes(args.step)) {
       for (const message of messages) {
         if (message.id !== result.id && message.followup?.history) message.followup.history.redo = null;
       }
@@ -739,6 +775,8 @@ function renderChatServiceForm(message) {
     ? `<div class="answer-summary service-form-reply">
         <p>${saved?'Service saved in Known services.':'Reopen this conversation to finish the service form.'}</p>
         ${saved?button('open-card','View saved service','secondary',`data-id="${e(saved.id)}" data-service-form-saved="${e(message.id)}"`):''}
+        ${saved && activeCase?.status==='active' && !saved.archived && !saved.removed_from_directory
+          ? button('chat-followup-start','Use this service','quiet',`data-id="${e(saved.id)}" data-reply-id="${e(message.id)}"`) : ''}
       </div>`
     : `<form class="answer-summary service-form-reply inline-service-form" aria-labelledby="${formTitle}" data-service-form="${e(message.id)}">
         <h3 id="${formTitle}">Add a service</h3>
@@ -939,7 +977,11 @@ async function openCard(id, {replyId=null,fromFollowup=false,rankReason=''}={}) 
   await refreshCardHistoryControls(id);
 }
 function notesHTML(comments){return comments?.length?[...comments].sort((a,b)=>b.updated_at.localeCompare(a.updated_at)||b.id.localeCompare(a.id)).map(n=>`<div class="saved-note" data-note-id="${e(n.id)}">${resultBadge(n)}<p>${textHTML(n.body)}</p><div class="note-actions"><small>${e(date(n.updated_at))}</small>${button('edit-card-comment','Edit','quiet',`data-id="${e(n.id)}"`)}${button('delete-card-comment','Delete','quiet danger',`data-id="${e(n.id)}"`)}</div></div>`).join(''):'<p class="subtle no-notes">No notes yet.</p>';}
-function updateCardHistory(card){$('card-notes').innerHTML=notesHTML(card.comments);if($('service-experience'))$('service-experience').innerHTML=experienceHTML(card.experience);}
+function updateCardHistory(card){
+  $('card-notes').innerHTML=notesHTML(card.comments);
+  if ($('service-experience')) $('service-experience').innerHTML=experienceHTML(card.experience);
+  if (updateChatServiceExperience(card.id,card)&&!busy&&!caseChanging) renderMessages();
+}
 async function startServiceResult(id,editId) {
   if(busy)throw new Error('Wait for this answer or choose Stop before recording a result.');
   if(feedbackSaving)throw new Error('Wait for the current result to save.');
@@ -1200,6 +1242,10 @@ async function deleteMemory(target){
   const group=target.closest('.memory-group')?.dataset.groupId;
   await flushNote();
   await api(comment?'forget-comment':'forget-card',comment?{id:target.dataset.id,card_id:target.dataset.cardId}:{id:target.dataset.id});
+  if (target.dataset.serviceResult==='true') {
+    const card=await api('get-card',{id:target.dataset.cardId});
+    if (updateChatServiceExperience(card.id,card)) renderMessages();
+  }
   if(!comment&&selected?.id===target.dataset.cardId){selected=null;context();}
   await refresh();
   const remaining=group && $('cards').querySelector(`.memory-group[data-group-id="${CSS.escape(group)}"] [data-action="toggle-memory-group"]`);

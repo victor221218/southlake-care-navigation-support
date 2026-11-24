@@ -3,7 +3,7 @@ import { enums } from '../core/catalog.mjs';
 const categories = [
   ['Transportation', /\b(?:transport(?:ation)?|rides?|shuttles?|wheel[- ]?trans|paratransit)\b/],
   ['Meal support', /\b(?:meals?|food|pantr(?:y|ies)|grocer(?:y|ies))\b/, 'Food and nutrition'],
-  ['Home support', /\b(?:home (?:care|help|supports?)|personal support|housekeeping)\b/, 'Home supports'],
+  ['Home support', /\b(?:home (?:care|help|supports?|services?)|personal support|housekeeping)\b/, 'Home supports'],
   ['Language support', /\b(?:interpreters?|interpretation|translation|language access)\b/, 'Language access'],
   ['Mental health support', /\b(?:mental health|counselling|counseling|addiction)\b/, 'Mental health'],
   ['Caregiver support', /\b(?:caregivers?|respite|dementia|alzheimer)\b/],
@@ -39,8 +39,9 @@ export function matchesServiceTopic(card, topic) {
   if (/^(?:closed|inactive|discontinued|retired)$/i.test(String(fields['Service status']||'').trim())) return false;
   const pattern=categories.find(([label,,category])=>(category||label)===topic.category)?.[1];
   const category=fields.Category||card.category||'';
-  if (fold(category)!==fold(topic.category) &&
-      !pattern?.test(fold([category,fields['Service Subcategory'],card.title,fields['Service details']].join(' ')))) return false;
+  const classified=serviceTopic(category)?.category;
+  if (fold(category)!==fold(topic.category) && classified!==topic.category &&
+      (classified || !pattern?.test(fold([category,fields['Service Subcategory'],card.title,fields['Service details']].join(' '))))) return false;
   if (!topic.region) return true;
   const coverage=' '+fold([fields['Service area'],fields['Geographic Coverage / Catchment']].join(' '))+' ';
   if (coverage.includes(' '+fold(topic.region)+' ')) return true;

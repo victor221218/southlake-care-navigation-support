@@ -2,7 +2,7 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.5.** Add a service directly from chat and save it with the information you have.
+**Prototype source version 2.17.6.** Add a service, record how it went, and see your saved feedback on its card in a new chat.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
@@ -14,8 +14,8 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.5/Care-Navigation-Support-Setup-2.17.5.exe) |
-| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.5/Care-Navigation-Support-Mac-Apple-Silicon-2.17.5-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.5/Care-Navigation-Support-Mac-Intel-2.17.5-Test.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.6/Care-Navigation-Support-Setup-2.17.6.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.6/Care-Navigation-Support-Mac-Apple-Silicon-2.17.6-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.6/Care-Navigation-Support-Mac-Intel-2.17.6-Test.zip) |
 | **Quick-start guide** | [Read the quick-start guide](START-HERE.md) or open **START-HERE.html** inside the handoff ZIP |
 | **Maintain the inventory and outcomes** | [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) |
 | **Download all deliverables** | Use **Download the latest handoff package** above |
@@ -34,6 +34,15 @@ You can download the public release while signed out of GitHub. Use the installe
 The current deliverable is a Windows app. To connect it to ChatGPT, open the app and choose **Continue with ChatGPT**. There is no separate plugin to install inside ChatGPT for this version, and no coding is needed to use the finished installer.
 
 ![Default full-width Workspace chat](docs/workspace.png)
+
+## Install and connect
+
+1. Download the Windows installer from the table. For the complete package, extract the ZIP and open **START-HERE.html** first. To upgrade, close the running app before opening the newer installer.
+2. Open the installer and choose **Install**, then **Finish**. Start **Care Navigation Support** from the desktop or Start menu. Open **Workspace** to type a question, import a file, or add a service.
+3. For AI answers, open **Connection & backup → Continue with ChatGPT**. Sign in on OpenAI’s page, review the plan permission, and return to the app. Send a short test question to verify the connection. Look under the chat title for the active model.
+4. Use **Saved connections** to return to a previously connected account, or **Use a different account** to add another. To bring practice cards into your signed-in workspace, choose **Copy starter cards into this account**.
+
+The service directory, basic service recommendations, file import, notes and backups are available in the starter workspace.
 
 ## Known services are ready on first launch
 
@@ -85,7 +94,9 @@ A service preview offers **Use this service**, **Ask more about this card**, and
 
 Your saved notes, reported results and optional ratings appear above Category and the provider facts. Known services also shows your latest note and a compact result summary above the category. These observations stay separate from the public provider information.
 
-After following up, choose **Worked** or **Didn’t work** in the chat, add an optional rating and note, then choose **Save result**. Use **Not yet** to come back later.
+1. After following up, choose **Worked** or **Didn’t work**, enter an optional rating and note, then choose **Save result**. Use **Not yet** if the result is pending.
+2. You can also type what happened. Select the service, use its full name, or report the result in the chat where you added a single service. For example, type **I didn’t enjoy using the service.** The saved follow-up shows **Didn’t work** and lets you choose **Save rating**. You can include an explicit score in your message or reply **2/5** later in the same chat.
+3. Start a new chat and ask for the same kind of service. The options show your saved outcome counts and average rating when available. Ask **What rating did I save for [service name]?** to open that provider’s record directly. The app asks you to identify the service when it cannot match the feedback safely.
 
 ![Service card with personal history above provider details](docs/service-card.png)
 
@@ -108,6 +119,14 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
 | **5. Keep useful information** | Use **Add to memory library** to keep a whole conversation. Use **Remember that …** to save one note, or record a result from a service card. Search the organization in **Manage memory** and expand its history. |
 | **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. |
+
+### Ask, dictate and manage documents
+
+- In **Workspace**, type and choose **Send**, or choose **Speak → Stop listening**, review the English transcription, and choose **Send**. Use **Stop** during an answer to interrupt it.
+- Choose **Add a document** for source cards you can summarize, compare or calculate from. Choose **Known services → Import services** to create directory cards with contact, follow-up and rating controls.
+- After reviewing the import preview and warnings, choose **Save cards**. In **Manage memory → Manage files**, use **Show cards**, **Include previous rows**, **Open file**, or **Delete**. Deleting a document removes its extracted cards and attached notes after confirmation.
+- Use **View details** to check the source fields and row or page reference. Use **Add correction** to annotate a source card. To update a spreadsheet and keep matching card history, keep the same file name and stable row IDs, reimport, and choose **Update existing document**.
+- For a calculation, name the sheet, numeric column and filters in the question. Review the count of matched rows and excluded nonnumeric values before using the answer.
 
 ### Example
 
@@ -159,16 +178,17 @@ Use **Add a service** to create two practice cards for caregiver support in Auro
 3. Start a **New chat** and repeat the first request. When options are equally relevant, low ratings rank below unrated or better-rated services. Without a rating, a recorded unsuccessful result moves that service below equally relevant untried choices.
 4. Ask **How did you rank the options?** To see one card's explanation, open **View details**, then **Why this rank**. The explanation uses matches to the request, your rating sample and your recorded outcomes. The demo works with locally saved cards.
 
+For the home-service example, add two fictional programs under **Home supports**. Rate one **2/5** after reporting that it didn’t work. Start a new chat and ask **Can you recommend home service for me?** The previously tried card should show the outcome and score below equally relevant unrated choices. Add your town to narrow the search.
+
 ## How memory works
 
 - Imported information is stored as cards separately from the chat.
 - **New chat** starts another chat with its own selected card and draft. Earlier cases stay in the sidebar.
 - Ordinary chat turns stay together in Chat history. Type **Remember that …** to save a single note. When a card is selected, the note goes on that card.
-- With a selected card, messages become notes on that card. Otherwise, they become personal message cards.
 - Card notes save automatically when you pause. They can be edited or deleted using the controls on that card.
 - Revised spreadsheets can update matching cards using unique IDs or names, keeping attached notes when rows move. Ambiguous matches require a separate version. Previous rows remain accessible through Manage files.
 - Different ChatGPT connections use separate local records. Starter cards saved before sign-in can be explicitly copied into the active account using Connection & backup.
-- Save a private backup to move extracted cards and notes to another computer. Original files and credentials are not included in those backups.
+- In **Connection & backup**, choose **Save a backup** to export extracted cards, notes, ratings and conversations. Choose **Restore a backup** on the destination computer in the intended workspace. Review the restored records and keep any original files separately.
 
 The assistant draws on more information as you save it. This is persistent retrieval from your records, not training a new AI model. The app cannot read your existing ChatGPT conversations or ChatGPT Memory.
 
@@ -186,15 +206,26 @@ The assistant draws on more information as you save it. This is persistent retri
 
 ## Which AI model does the app use?
 
-The app calls OpenAI’s hosted models through its Sign in with ChatGPT connection. It requests the models allowed for the connected account, initially prefers a model whose identifier includes `mini` or `instant`, and otherwise uses the first available model. **The active model is shown under Ask your assistant** after selection or the first AI request. Use **Connection & backup → Choose an available AI model** to inspect or change it. The model choice is retained for the current account session and resets on reconnect/account switching. It does not automatically match a model selected in a separate ChatGPT chat. No separate local LLM is bundled. The bundled English speech model converts voice to text only.
+The app uses OpenAI’s hosted models through Sign in with ChatGPT. It selects **GPT-6.2 Astra** when the connected account offers it, then **GPT-6.2 Sol**, then the first model returned for that account. Choose **Connection & backup → Choose an available AI model** to see the choices and override the default for the current session. The selected model appears under the chat title. Service results, ratings and the order of comparable cards come from the local records. [OpenAI’s model guide](https://developers.openai.com/api/docs/guides/latest-model)
 
 ## ChatGPT account requirements
 
-The prototype implements OpenAI's published **Sign in with ChatGPT** connection. Current documentation describes eligible **ChatGPT Plus and Pro** accounts for this kind of plan-powered AI access; Pro is not specifically required. A Free account is not documented as supporting this AI connection. A subscription alone does not establish that the app/workspace is admitted: verify the real connection before purchasing a plan for the pilot.
+AI answers use the selected ChatGPT account’s eligible plan and workspace, with permission granted during **Sign in with ChatGPT**. A completed AI answer verifies usage on that connection. The available model list comes from OpenAI for the active account. [OpenAI’s plan usage documentation](https://developers.openai.com/siwc/token-sharing-open-source)
 
 Document import, cards, search, notes and backups work without a paid ChatGPT connection. AI answers require internet and a permitted account/app connection. There is no silent switch to separately billed API usage, and no shared sponsor token or API key is included.
 
 Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/quickstart) and [integration overview](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt).
+
+## Troubleshooting
+
+| What you see | What to check |
+| --- | --- |
+| **A service is missing from suggestions** | Search for its name in **Known services**. Confirm the category and service area, check **Needs details**, and check the **Removed services** filter. For a question about a particular provider, use its exact name. |
+| **A service has no rating** | Open **View details → Your notes & results**. If you saved a result, choose **Edit** to add a rating. If the feedback was kept only as an older chat message, record it once on the intended service card using **Worked** or **Didn’t work**. |
+| **A spreadsheet shows in Manage memory** | Use **Known services → Import services** when you want its rows in the directory. Review the column mapping and included rows before saving. |
+| **Cards are missing after signing in** | Check the active connection. Choose the original saved connection, or copy starter cards into the account if they were imported before sign-in. |
+| **ChatGPT sign-in or answers stop** | Use **Connection & backup → Reconnect ChatGPT**, then send a short test question. Check the active model and any usage or permissions message. Local cards and feedback are still available. |
+| **Windows setup says a file is in use** | Close the running app and retry the installer. |
 
 ## Files in the complete handoff ZIP
 
@@ -256,8 +287,8 @@ The finished installer does not require these developer tools.
 
 ## What has been checked
 
-- **127 automated checks passed**, including document parsing, account separation, spreadsheet updates, backups, service feedback, rating summaries and older-database upgrades.
-- **Native Windows checks passed** for the chat header, conversation completion from the sidebar, the inline service form, service removal and restoration, and reopening the app.
+- **129 automated checks passed**, including document parsing, account separation, spreadsheet updates, backups, service feedback, rating summaries and older-database upgrades.
+- **Native Windows checks passed** for the inline service form, natural-language feedback, a later rating, ranked cards in a new chat, and reopening the app with those records.
 - **78 extracted installer files matched** the prepared Windows application.
 - **Verification.json** and **SHA256.txt** in the handoff ZIP record the test results and file checksums. **Mac/Mac-Verification.json** records the Mac bundle checks.
 

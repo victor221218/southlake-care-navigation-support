@@ -373,6 +373,10 @@
   font-variant-numeric: tabular-nums;
 }
 .answer-card-bottom .rating-badge { align-self: flex-start; }
+.answer-card-experience { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.answer-card-experience small { font-size: 10px; color: #526a77; }
+.followup-add-rating label { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 11px; }
+.followup-add-rating select { min-width: 100px; }
 :is(.rating-badge,.result-badge).rating-low, .rating-select:has(option.rating-low:checked) {
   color: #942f36;
   background: #fff0ef;

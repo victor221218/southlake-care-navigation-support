@@ -61,7 +61,8 @@ export async function hydrateFollowup(value, store, caseId) {
   return {
     ...followup,
     ...(followup.result_id && !result ? {outcome: null, deferred: false} : {}),
-    card: {title: card.title, contacts},
+    card: {title: card.title, contacts, source_format:card.source_format,
+      experience:card.experience, comment_count:card.comment_count},
     latest_note: latestNote || null,
     result: result || null,
     history: card.archived ? null : await new InputHistory({store}).state(historyScope(followup)),
@@ -100,10 +101,22 @@ export class CaseFollowups {
   async recordFromChat({case_id,card_id,outcome,body,rating}) {
     return this.db().transaction(async()=>{
       const previous=await this.latestSelection(case_id,card_id);
+      if (previous) {
+        const followup=JSON.parse(previous.payload_json||'{}').followup;
+        const card=await this.store.get(card_id,{case_id});
+        const result=card.comments.find(comment=>comment.id===followup?.result_id&&comment.outcome);
+        if (result) {
+          const canRate=rating!=null && rating!==result.rating &&
+            (!outcome || (result.rating==null && outcome===result.outcome));
+          const saved=canRate
+            ? await this.update({case_id,message_id:previous.id,step:'rate',rating})
+            : await this.view(previous);
+          return {...saved,ratingUpdated:canRate,alreadyRecorded:!canRate};
+        }
+      }
+      if (!outcome) return {needsOutcome:true};
       const messageId=previous?.id || (await this.start({case_id,card_id})).id;
-      const already=previous && JSON.parse(previous.payload_json||'{}').followup?.result_id;
-      const saved=await this.update({case_id,message_id:messageId,step:'record',outcome,body,rating});
-      return {...saved,alreadyRecorded:Boolean(already&&already===saved.payload.followup?.result?.id)};
+      return this.update({case_id,message_id:messageId,step:'record',outcome,body,rating});
     });
   }
 
@@ -162,8 +175,9 @@ export class CaseFollowups {
         return message;
       }
       const editingNote = ['open-note', 'cancel-note', 'save-note'].includes(step);
-      if (followup.result_id && !editingNote) {
-        if (card.comments.some(note => note.id === followup.result_id && note.outcome)) return message;
+      const result = card.comments.find(note => note.id === followup.result_id && note.outcome);
+      if (followup.result_id && !editingNote && step !== 'rate') {
+        if (result) return message;
         followup.result_id = null;
         followup.outcome = null;
       }
@@ -201,6 +215,16 @@ export class CaseFollowups {
           break;
         case 'change':
           followup.outcome = null;
+          break;
+        case 'rate':
+          if (!result) throw new Error('Record whether the service worked first.');
+          if (!validRating(rating)) throw new Error('Choose a whole-number rating from 1 to 5.');
+          if (result.rating===rating) return message;
+          await this.inputHistory.record(
+            {type:'comment',id:result.id,card_id:card.id,label:'Change service result or rating'},
+            () => this.store.serviceResult({card_id:card.id,id:result.id,expected_version:result.version,
+              outcome:result.outcome,body:result.body,rating})
+          );
           break;
         case 'record':
         case 'save': {

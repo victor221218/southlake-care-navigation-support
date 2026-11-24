@@ -7,7 +7,7 @@ const clean=(value,max=80)=>String(value??'').replace(/\u0000/g,'').trim().slice
 const cardRef=card=>({id:card.id,...(card.card_reason?{card_reason:clean(card.card_reason,220)}:{}),
   ...(card.card_confirm?{card_confirm:clean(card.card_confirm,260)}:{}),
   ...(card.card_rank_reason?{card_rank_reason:clean(card.card_rank_reason,440)}:{})});
-const presentation=value=>['service-options','answer','service-form'].includes(value)?value:undefined;
+const presentation=value=>['service-options','answer','service-form','service-experience'].includes(value)?value:undefined;
 const unpack=row=>({...row,payload:JSON.parse(row.payload_json||'{}')});
 const followupJoins = `
   LEFT JOIN personal_cards provider ON provider.owner_id=c.owner_id AND provider.archived=0
@@ -102,6 +102,16 @@ export class DocumentCases {
         AND json_extract(payload_json,'$.presentation')='service-options'
       ORDER BY sequence DESC LIMIT 1`).bind(caseId,this.owner()).first();
     return JSON.parse(reply?.payload_json||'{}').cards||[];
+  }
+  async addedServiceInCase(caseId) {
+    const {results}=await this.db().prepare(`
+      SELECT DISTINCT json_extract(payload_json,'$.cards[0].id') AS id
+      FROM personal_case_messages
+      WHERE case_id=? AND owner_id=? AND role='assistant' AND state='complete'
+      AND json_extract(payload_json,'$.presentation')='service-form'
+      AND json_type(payload_json,'$.cards[0].id')='text' LIMIT 2`
+    ).bind(caseId,this.owner()).all();
+    return results.length===1 ? results[0].id : null;
   }
   async search(id,{query='',limit=8}={}){await this.row(id);const terms=clean(query,200).split(/\s+/).filter(Boolean).slice(0,8);if(!terms.length)throw new Error('Use a short keyword to find an earlier part of this case.');const rows=(await this.db().prepare("SELECT role,body,created_at,sequence FROM personal_case_messages WHERE case_id=? AND owner_id=? AND state<>'pending' AND "+terms.map(()=>"body LIKE ? ESCAPE '\\'").join(' AND ')+' ORDER BY sequence DESC LIMIT ?').bind(id,this.owner(),...terms.map(t=>'%'+t.replace(/[\\%_]/g,'\\$&')+'%'),Math.max(1,Math.min(12,Number(limit)||8))).all()).results;return rows.map(m=>({...m,body:m.body.slice(0,6000)}));}
   async markSaved(turn,saved=true) {
