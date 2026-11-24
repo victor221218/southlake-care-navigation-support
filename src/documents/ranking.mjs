@@ -1,12 +1,12 @@
 import {headerKey} from './navigation-templates.mjs';
-import {isServiceSource, OWN_SERVICE_FORMAT} from './service-sources.mjs';
+import {isServiceSource, OWN_SERVICE_FORMAT, PUBLIC_SERVICE_FORMAT} from './service-sources.mjs';
 
 const searchNoise = new Set(['please','about','service','services','would','could','need','have','that','this',
   'with','what','show','find','recommend','recommended','rank','ranked','rankings','ranking','options','cards','for',
   'can','you','our','using','based','experience','history','your','the','who','use','uses','needs',
   'previous','previously','tried','rating','ratings','scores','last']);
 
-export const rankingPolicy = 'I check that a service matches the category and area you asked for. Specific request details can move a closer match up. Among equally relevant cards, I compare your average ratings, then weigh recorded Worked and Didn’t work results. An unrated service starts at 3/5 for sorting only. A shortlist can include a matching service you tried so you can see its history. Pending follow-ups and ordinary notes do not count as outcomes.';
+export const rankingPolicy = 'I check the service category and area first. Matching own-source leads appear first, even without a rating. Public options follow. Own-source leads with an average of 2/5 or lower, or more Didn’t work than Worked results, appear after public options. Within each group, I consider the details of the request, your average ratings and recorded outcomes. Unrated services use 3/5 for sorting only. Pending follow-ups and ordinary notes do not count as outcomes.';
 
 export const hasServiceResult = card => Boolean(card.experience?.worked || card.experience?.not_worked);
 
@@ -29,6 +29,43 @@ function outcomeBalance(card) {
 
 export function compareHistory(a,b) {
   return historyScore(b)-historyScore(a) || outcomeBalance(b)-outcomeBalance(a);
+}
+
+export const recommendationGroups = {
+  'own': 'Own-source leads',
+  'public': 'Public options',
+  'own-review': 'Own-source leads to review'
+};
+
+export function groupServiceOptions(ranked, choices = keepServiceExperience(ranked)) {
+  const chosen = new Map(choices.map(card => [card.id, card]));
+  const publicCards = ranked.filter(card => card.source_format === PUBLIC_SERVICE_FORMAT);
+  const own = [], review = [];
+  for (const candidate of ranked) {
+    if (candidate.source_format !== OWN_SERVICE_FORMAT) continue;
+    const card = chosen.get(candidate.id) || candidate;
+    const history = card.experience || card;
+    const poor = historyScore(card) <= 2 || Number(history.not_worked || 0) > Number(history.worked || 0);
+    const reason = poor ? (publicCards.length ? 'Your saved ratings or outcomes put this lead after public options.'
+      : 'Review your saved ratings or outcomes before using this lead again.')
+      : 'Your matching own-source lead is shown first, even without a rating.';
+    (poor ? review : own).push({...card, card_source_group:poor?'own-review':'own',
+      card_rank_reason:[reason, card.card_rank_reason].filter(Boolean).join(' ')});
+  }
+  const publicCard = card => ({...card, card_source_group:'public'});
+  if (!own.length && !review.length) return choices.map(card =>
+    card.source_format === PUBLIC_SERVICE_FORMAT ? publicCard(card) : card);
+  const publicOptions = choices.filter(card => card.source_format === PUBLIC_SERVICE_FORMAT);
+  const alternatives = (publicOptions.length ? publicOptions : publicCards).map(publicCard);
+  // Leave room for a relevant public alternative and an own lead with poor history when available.
+  const reserveReview = Number(review.length > 0);
+  const first = own.slice(0, 6 - Number(alternatives.length > 0) - reserveReview);
+  const next = alternatives.slice(0, 6 - first.length - reserveReview);
+  if (!reserveReview && !first.some(hasServiceResult) && !next.some(hasServiceResult)) {
+    const tried = alternatives.find(hasServiceResult);
+    if (tried) next[next.length - 1] = tried;
+  }
+  return [...first, ...next, ...review.slice(0, 6 - first.length - next.length)];
 }
 
 export function directoryGroup(card) {

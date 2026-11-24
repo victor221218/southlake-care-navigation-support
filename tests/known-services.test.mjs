@@ -251,9 +251,16 @@ test('chat opens a service form, saves a partial card once, and restores the lin
     assert.equal(entry.source_format,OWN_SERVICE_FORMAT);
     assert.equal(entry.fields['Service or program'],undefined);
     assert.ok(['service name','category','phone or email'].every(gap=>entry.missing_details.includes(gap)));
+    assert.deepEqual(saved.completion,{message_id:reply.turn_id,title:entry.title,kind:'service-added'});
     await f.reopen();
     const savedChat = await cases.hydrate(await cases.read(record.id));
-    assert.equal(savedChat.messages.find(message=>message.id===reply.turn_id).payload.cards[0].id,entry.id);
+    const completedForm=savedChat.messages.find(message=>message.id===reply.turn_id);
+    assert.equal(completedForm.payload.cards[0].id,entry.id);
+    assert.equal(completedForm.body,'Added Example Intake Desk to Known services.');
+    assert.equal(savedChat.completion.message_id,reply.turn_id);
+    assert.equal((await cases.keepServiceFormChat({case_id:record.id,message_id:reply.turn_id})).completion,null);
+    await f.reopen();
+    assert.equal((await cases.read(record.id)).completion,null);
 
     const backup = await f.store.export();
     f.switch('restored-service-form');
@@ -263,6 +270,7 @@ test('chat opens a service form, saves a partial card once, and restores the lin
     assert.equal(form.service_form.organization,'Example Intake Desk');
     assert.equal(form.cards[0].title,entry.title);
     assert.notEqual(form.cards[0].id,entry.id);
+    assert.equal((await cases.read(copy.id)).completion,null);
   } finally { await f.close(); }
 });
 
@@ -309,6 +317,50 @@ test('removed services are private to a workspace, stay out of new recommendatio
     assert.equal(visible.experience.worked,1);
     assert.equal(visible.experience.rating_average,4);
     assert.equal((await f.store.get(visible.id)).comments[0].body,'Fictional practice result');
+  } finally { await f.close(); }
+});
+
+test('permanent deletion clears removed service data and prevents automatic public reseeding for that workspace',async()=>{
+  const f=await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const publicCard=(await f.store.list({collection:'services',query:'North York Seniors'})).items[0];
+    const cases=new DocumentCases({store:f.store});
+    const assistant=new DocumentAssistant({store:f.store,cases,connection:{session:async()=>({sharing:false})}});
+    const form=await assistant.chat({text:'Add a service',remember:false});
+    const {card_id:ownId}=await cases.saveServiceForm({case_id:form.case_id,message_id:form.turn_id,
+      values:{name:'Example Shuttles',phone:'905-555-0133'}});
+    const inputs=new InputHistory({store:f.store});
+    await inputs.record({type:'comment',card_id:ownId,label:'Record service result'},()=>f.store.serviceResult({
+      card_id:ownId,outcome:'worked',rating:4,body:'Practice result'
+    }));
+    await assert.rejects(f.store.deleteRemovedService({id:ownId}),/Removed services/);
+    await f.store.setServiceRemoved({id:publicCard.id,removed:true});
+    await f.store.setServiceRemoved({id:ownId,removed:true});
+    await f.store.deleteRemovedService({id:ownId});
+    await f.store.deleteRemovedService({id:publicCard.id});
+    assert.equal((await inputs.state({card_id:ownId})).undo,null);
+    const chat=await cases.hydrate(await cases.read(form.case_id));
+    assert.equal(chat.completion,null);
+    const receipt=chat.messages.at(-1);
+    assert.equal(receipt.payload.service_form_saved,true);
+    assert.deepEqual(receipt.payload.cards,[]);
+    assert.equal(receipt.payload.service_form,undefined);
+    await assert.rejects(cases.saveServiceForm({case_id:form.case_id,message_id:form.turn_id,
+      values:{name:'Duplicate service'}}),/already saved/);
+
+    await f.reopen();
+    await ensureKnownServices(f.store);
+    const revised=knownServices.map(service=>service.id===publicCard.source_key ?
+      {...service,summary:'Updated summary for the test catalogue.'} : service);
+    await ensureKnownServices(f.store,serviceDirectoryDocument(revised));
+    assert.equal((await f.store.list({collection:'services',query:'North York Seniors'})).total,0);
+    assert.equal((await f.store.list({collection:'services',removed_services:true})).total,0);
+    assert.equal((await f.store.export()).comments.length,0);
+    for (const id of [ownId,publicCard.id]) await assert.rejects(f.store.get(id),/active workspace/);
+    f.switch('different-profile');
+    await ensureKnownServices(f.store);
+    assert.equal((await f.store.list({collection:'services',query:'North York Seniors'})).total,1);
   } finally { await f.close(); }
 });
 
@@ -626,12 +678,27 @@ test('upgrading an existing version 2.4 database preserves source cards and note
   const journal=JSON.parse(await readFile('drizzle/meta/_journal.json','utf8'));journal.entries=journal.entries.filter(n=>n.idx<=3);
   await writeFile(path.join(folder,'meta/_journal.json'),JSON.stringify(journal));for(const entry of journal.entries)await copyFile('drizzle/'+entry.tag+'.sql',path.join(folder,entry.tag+'.sql'));
   const f=await fixture(folder);try{
-    await ensureKnownServices(f.store);const card=(await f.store.db().prepare('SELECT * FROM personal_cards WHERE owner_id=? LIMIT 1').bind('user-a').first());
-    // Write a previous-schema comment before the additive result columns exist.
-    await f.store.db().prepare('INSERT INTO personal_comments (id,owner_id,card_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)').bind('legacy-note','user-a',card.id,'Retain this existing contact note.','2026-11-18T12:00:00Z','2026-11-18T12:00:00Z').run();
-    await f.reopen(path.resolve('drizzle'));const upgraded=await f.store.get(card.id);assert.equal(upgraded.comments[0].body,'Retain this existing contact note.');assert.equal(upgraded.comments[0].outcome,null);
-    await f.store.serviceResult({card_id:card.id,outcome:'worked',rating:4});assert.equal((await f.store.get(card.id)).experience.worked,1);
-    await f.reopen();assert.equal((await f.store.get(card.id)).comments.length,2);assert.equal((await f.store.list({collection:'services'})).total,27);
+    const legacy=serviceDirectoryDocument(knownServices.slice(0,1));
+    const [section]=legacy.sections;
+    const time='2026-11-18T12:00:00Z',cardId='legacy-card',docId='legacy-directory',owner='user-a';
+    const db=f.store.db();
+    await db.prepare(`INSERT INTO personal_documents (id,owner_id,filename,digest,format,imported_at,updated_at,warnings)
+      VALUES (?,?,?,?,?,?,?,?)`).bind(docId,owner,legacy.filename,legacy.digest,legacy.format,time,time,'[]').run();
+    await db.prepare(`INSERT INTO personal_cards (id,owner_id,document_id,source_key,kind,title,body,locator,fields_json,created_at,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(cardId,owner,docId,section.key,'document',section.title,section.body,
+        section.locator,JSON.stringify(section.fields),time,time).run();
+    await db.prepare('INSERT INTO personal_comments (id,owner_id,card_id,body,created_at,updated_at) VALUES (?,?,?,?,?,?)')
+      .bind('legacy-note',owner,cardId,'Retain this existing contact note.',time,time).run();
+    await f.reopen(path.resolve('drizzle'));
+    await ensureKnownServices(f.store);
+    const upgraded=await f.store.get(cardId);
+    assert.equal(upgraded.comments[0].body,'Retain this existing contact note.');
+    assert.equal(upgraded.comments[0].outcome,null);
+    await f.store.serviceResult({card_id:cardId,outcome:'worked',rating:4});
+    assert.equal((await f.store.get(cardId)).experience.worked,1);
+    await f.reopen();
+    assert.equal((await f.store.get(cardId)).comments.length,2);
+    assert.equal((await f.store.list({collection:'services'})).total,27);
   }finally{await f.close();}
 });
 

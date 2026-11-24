@@ -76,13 +76,13 @@ Close the current app and open the new installer. After installation, open **Car
 
 ## Add a service or spreadsheet
 
-Choose **Add a service** at the top of chat, or ask “Could you help me add a service?” The form appears in the conversation. Pick a **Service area** from the dropdown, leave it blank, or choose **Other or multiple areas** to type your own. Use **More details** for fields such as organization, email and referral details. Enter any one detail and choose **Save service**.
+Choose **Add a service** at the top of chat, or ask “Could you help me add a service?” The form appears in the conversation. Pick a **Service area** from the dropdown, leave it blank, or choose **Other or multiple areas** to type your own. Use **More details** for fields such as organization, email and referral details. Enter any one detail and choose **Save service**. The confirmation is followed by **Close chat** to archive in Manage memory, **Continue chat** to stay in the conversation, and **Delete chat** to discard the conversation and its feedback. Your new card is saved in Known services.
 
-In **Known services**, choose **Remove** on a row to hide it from the directory and future recommendations. Switch the **Active services** filter to **Removed services** and choose **Restore** to bring it back with its notes and ratings.
+In **Known services**, choose **Remove** on a row to hide it from the directory and future recommendations. Switch **Active services** to **Removed services**. Choose **Restore** to bring the card back with its history, or confirm **Delete permanently** to erase it and its saved notes, ratings and results from this workspace.
 
 To load a spreadsheet, choose **Known services → Import services**. In the review, pick a row to check the program, coverage and contact details. Include the rows you want to save.
 
-Your entries appear at the top under **Your services** with **(Own source)** beside the contact. The preloaded entries are under **Public services** with **(Public source)**. Your saved notes and results appear in **View details** with their own source label.
+Known services lists **Services with recorded outcomes** first, followed by own and public services without outcomes. A blue **(Own source)** label identifies entries you added. Preloaded entries show **(Public source)**. See saved notes and results in **View details**.
 
 ## Keep a case conversation
 
@@ -91,7 +91,7 @@ Your entries appear at the top under **Your services** with **(Own source)** bes
 3. Open **⋯ → Record feedback** to jump to a pending result. Open **⋯ → Rename conversation** to type a new title or choose **Suggest a title**.
 4. Click a conversation title to return to its messages and draft. Use **Earlier messages** to read older parts of the chat.
 
-Service recommendations appear as cards only, with every returned choice visible in the grid. Read each card’s short reason and Confirm check, then click it for the full details. There are no separate recommendation paragraphs or extra choices to expand. Lower-rated matching services appear later; unrated options remain available. Document answers, clarification questions, calculations and connection errors still have readable answer cards.
+Service recommendations show matching **Own-source leads** first, even before you rate them, then **Public options**. Own leads with low ratings or mostly unsuccessful outcomes appear last with their saved history. Read each card’s short reason and **Confirm** check. Choose **View details → Why this rank**, or ask “How did you rank the options?” for the comparison.
 
 ### Keep or discard a conversation
 

@@ -9,7 +9,7 @@ import {CaseFollowups} from '../src/documents/case-followups.mjs';
 import {InputHistory} from '../src/documents/input-history.mjs';
 import {DocumentAssistant} from '../src/documents/assistant.mjs';
 import {ensureKnownServices} from '../src/documents/services.mjs';
-import {rankResponseCards} from '../src/documents/ranking.mjs';
+import {groupServiceOptions,rankResponseCards} from '../src/documents/ranking.mjs';
 import {parseDocument} from '../src/documents/parse.mjs';
 async function fixture(){await mkdir('.runtime/tests',{recursive:true});const dir=await mkdtemp(path.resolve('.runtime/tests/cases-')),options={filename:path.join(dir,'memory.sqlite'),wasm:path.resolve('node_modules/sql.js/dist/sql-wasm.wasm'),migrations:path.resolve('drizzle'),catalog:[]};let db=await openDatabase(options),owner='one';const store=new DocumentStore({database:()=>db,owner:()=>owner}),cases=new DocumentCases({store}),inputs=new InputHistory({store});return{store,cases,inputs,switch:value=>owner=value,reopen:async()=>{await db.close();db=await openDatabase(options);},close:()=>db.close()};}
 async function service(f){await ensureKnownServices(f.store);return(await f.store.list({collection:'services',query:'North York Seniors'})).items[0];}
@@ -26,6 +26,51 @@ async function recommendedRide(fixture) {
   const args = {case_id:topic.id,reply_id:reply.turn_id,card_id:service.id};
   return {topic,reply,service,args,followups:followupsFor(fixture)};
 }
+
+test('unrated matching own sources lead the same public recommendations locally and with ChatGPT',async()=>{
+  const f=await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const ask=async assistant=>assistant.chat({case_id:(await f.cases.create()).id,
+      text:'Can you recommend home services in North York?',remember:false});
+    const localAssistant=local(f);
+    const baseline=await ask(localAssistant);
+    assert(baseline.cards.length>=2 && baseline.cards.every(card=>card.card_source_group==='public'));
+    const publicOptions=baseline.cards.map(card=>option(card.id));
+    const connected=online(f,async()=>streamed([showOptions(publicOptions)]));
+    const connectedBaseline=await ask(connected);
+    const fields={category:'Home supports',area:'North York'};
+    const {card_id:ownId}=await f.store.addOwnService({...fields,name:'Example Neighbourhood Home Help'});
+    const {card_id:wrongArea}=await f.store.addOwnService({...fields,area:'Aurora',name:'Example Aurora Housekeeping'});
+    const {card_id:poorId}=await f.store.addOwnService({...fields,name:'Example Housekeeping'});
+    await f.store.serviceResult({card_id:poorId,outcome:'not_worked',rating:2});
+    for (const [assistant,original] of [[localAssistant,baseline],[connected,connectedBaseline]]) {
+      const reply=await ask(assistant);
+      assert.equal(reply.cards[0].id,ownId);
+      assert.equal(reply.cards[0].card_source_group,'own');
+      assert.equal(reply.cards[0].experience.rating_count,0);
+      assert.equal(reply.cards[0].experience.rating_average,null);
+      assert(!reply.cards.some(card=>card.id===wrongArea));
+      assert.equal(reply.cards.at(-1).id,poorId);
+      assert.equal(reply.cards.at(-1).card_source_group,'own-review');
+      assert.equal(reply.cards.at(-1).experience.rating_average,2);
+      const publicIds=reply.cards.filter(card=>card.card_source_group==='public').map(card=>card.id);
+      assert.deepEqual(publicIds,original.cards.map(card=>card.id).slice(0,publicIds.length));
+      assert(publicIds.length>0);
+      const hydrated=await f.cases.hydrate(await f.cases.read(reply.case_id));
+      assert.equal(hydrated.messages.at(-1).payload.cards[0].card_source_group,'own');
+    }
+  } finally { await f.close(); }
+});
+
+test('promoting an own source keeps a tried public service in a full shortlist',()=>{
+  const publicCards=Array.from({length:6},(_,i)=>({id:'public-'+i,source_format:'service-directory'}));
+  publicCards[5].experience={not_worked:1,rating_count:1,rating_average:2};
+  const own={id:'own',source_format:'own-services'};
+  const groups=groupServiceOptions([...publicCards,own],publicCards);
+  assert.deepEqual(groups.map(card=>card.id),['own','public-0','public-1','public-2','public-3','public-5']);
+  assert.equal(groups.at(-1).experience.rating_average,2);
+});
 
 test('a detailed service request has a short topic title and local category and area matches',async()=>{
   const f=await fixture();

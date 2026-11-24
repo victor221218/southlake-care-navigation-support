@@ -2,11 +2,13 @@ import {randomUUID} from 'node:crypto';
 import {hydrateFollowup, restoreFollowup} from './case-followups.mjs';
 import {summarizeTopic} from './topic.mjs';
 import {cleanServiceFields} from './service-sources.mjs';
+import {recommendationGroups} from './ranking.mjs';
 const stamp=()=>new Date().toISOString();
 const clean=(value,max=80)=>String(value??'').replace(/\u0000/g,'').trim().slice(0,max);
 const cardRef=card=>({id:card.id,...(card.card_reason?{card_reason:clean(card.card_reason,220)}:{}),
   ...(card.card_confirm?{card_confirm:clean(card.card_confirm,260)}:{}),
-  ...(card.card_rank_reason?{card_rank_reason:clean(card.card_rank_reason,440)}:{})});
+  ...(card.card_rank_reason?{card_rank_reason:clean(card.card_rank_reason,440)}:{}),
+  ...(Object.hasOwn(recommendationGroups,card.card_source_group)?{card_source_group:card.card_source_group}:{})});
 const presentation=value=>['service-options','answer','service-form','service-experience'].includes(value)?value:undefined;
 const unpack=row=>({...row,payload:JSON.parse(row.payload_json||'{}')});
 const followupJoins = `
@@ -43,6 +45,22 @@ export class DocumentCases {
   }
   async completion(row) {
     if (row.status !== 'active') return null;
+    const added = await this.db().prepare(`
+      SELECT form.id AS message_id, provider.title
+      FROM personal_case_messages form
+      JOIN personal_cards provider ON provider.id=json_extract(form.payload_json,'$.cards[0].id')
+        AND provider.owner_id=form.owner_id AND provider.archived=0 AND provider.removed_from_directory=0
+      WHERE form.case_id=? AND form.owner_id=? AND form.role='assistant' AND form.state='complete'
+        AND json_extract(form.payload_json,'$.presentation')='service-form'
+        AND json_extract(form.payload_json,'$.service_form_wrap_up')=1
+        AND NOT EXISTS (
+          SELECT 1 FROM personal_case_messages newer
+          WHERE newer.case_id=form.case_id AND newer.owner_id=form.owner_id
+            AND (newer.created_at>form.updated_at OR (newer.created_at=form.updated_at AND newer.sequence>form.sequence))
+        )
+      ORDER BY form.updated_at DESC, form.sequence DESC LIMIT 1
+    `).bind(row.id,row.owner_id).first();
+    if (added) return {...added,kind:'service-added'};
     const {results} = await this.db().prepare(`
       SELECT m.id AS message_id, provider.title, result.id AS result_id, result.outcome, result.rating,
         json_extract(m.payload_json,'$.followup.keep_chat') AS kept,
@@ -145,23 +163,42 @@ export class DocumentCases {
       if (payload.presentation!=='service-form') throw new Error('Open the service form in this conversation before saving.');
       const priorId = payload.cards?.[0]?.id;
       if (priorId) {
-        const existing = await this.db().prepare('SELECT id FROM personal_cards WHERE id=? AND owner_id=? AND archived=0')
+        const existing = await this.db().prepare('SELECT id,title FROM personal_cards WHERE id=? AND owner_id=?')
           .bind(priorId,record.owner_id).first();
-        if (existing) return {card_id:existing.id};
+        if (existing) return {card_id:existing.id,title:existing.title,completion:await this.completion(record)};
       }
+      if (priorId || payload.service_form_saved) throw new Error('This form was already saved. Add a new service to create another card.');
       const service = await this.store.addOwnService(values,{fromChat:true});
+      const card = await this.store.get(service.card_id);
       payload.cards = [{id:service.card_id}];
       payload.service_form = cleanServiceFields(values);
+      payload.service_form_saved = true;
+      payload.service_form_wrap_up = true;
       const time = stamp();
-      await this.db().prepare('UPDATE personal_case_messages SET payload_json=?,updated_at=? WHERE id=? AND owner_id=?')
-        .bind(JSON.stringify(payload),time,message_id,record.owner_id).run();
+      await this.db().prepare(`UPDATE personal_case_messages SET payload_json=json_remove(payload_json,'$.service_form_wrap_up')
+        WHERE case_id=? AND owner_id=? AND json_extract(payload_json,'$.service_form_wrap_up')=1`)
+        .bind(case_id,record.owner_id).run();
+      await this.db().prepare('UPDATE personal_case_messages SET body=?,payload_json=?,updated_at=? WHERE id=? AND owner_id=?')
+        .bind('Added '+card.title+' to Known services.',JSON.stringify(payload),time,message_id,record.owner_id).run();
       await this.db().prepare('UPDATE personal_cases SET updated_at=? WHERE id=? AND owner_id=?')
         .bind(time,case_id,record.owner_id).run();
       this.changed({case_id});
-      return {card_id:service.card_id};
+      return {card_id:card.id,title:card.title,completion:await this.completion(record)};
     });
   }
-  async hydrate(record){for(const message of record.messages){const cards=[];for(const ref of message.payload.cards||[]){try{const card=await this.store.get(ref.id,{case_id:record.id});cards.push({...card,...cardRef(ref),body:card.body.slice(0,650),fields:undefined,comments:undefined});}catch{}}message.payload.cards=cards;
+  async keepServiceFormChat({case_id,message_id}) {
+    return this.db().transaction(async () => {
+      const row = await this.row(case_id);
+      if (row.status!=='active') throw new Error('Reopen this saved case to continue.');
+      await this.db().prepare(`UPDATE personal_case_messages SET payload_json=json_remove(payload_json,'$.service_form_wrap_up')
+        WHERE id=? AND case_id=? AND owner_id=? AND json_extract(payload_json,'$.presentation')='service-form'`)
+        .bind(message_id,row.id,row.owner_id).run();
+      return this.changed({case_id,completion:await this.completion(row)});
+    });
+  }
+  async hydrate(record){for(const message of record.messages){const cards=[];
+      if(message.payload.presentation==='service-form' && message.payload.cards?.[0]?.id) message.payload.service_form_saved=true;
+      for(const ref of message.payload.cards||[]){try{const card=await this.store.get(ref.id,{case_id:record.id});cards.push({...card,...cardRef(ref),body:card.body.slice(0,650),fields:undefined,comments:undefined});}catch{}}message.payload.cards=cards;
       if(message.payload.followup)message.payload.followup=await hydrateFollowup(message.payload.followup,this.store,record.id);
       if(message.state==='pending'){message.body=message.body||'This answer was interrupted. Retry the question to continue.';message.payload.error=true;message.payload.source='error';await this.db().prepare("UPDATE personal_case_messages SET state='error',body=? WHERE id=? AND owner_id=?").bind(message.body,message.id,this.owner()).run();message.state='error';}}return record;}
   async legacyFeedback(row) {
@@ -267,7 +304,11 @@ export class DocumentCases {
         cards:(raw.cards||[]).slice(0,6).map(c=>({...cardRef(c),id:cards.get(c.id)})).filter(c=>c.id),
         calculations:Array.isArray(raw.calculations)?raw.calculations.slice(0,10):[]
       };
-      if (m.role==='assistant' && payload.presentation==='service-form') payload.service_form=cleanServiceFields(raw.service_form);
+      if (m.role==='assistant' && payload.presentation==='service-form') {
+        payload.service_form=cleanServiceFields(raw.service_form);
+        if (raw.service_form_saved===true || raw.cards?.[0]?.id) payload.service_form_saved=true;
+        if (raw.service_form_wrap_up===true && payload.cards.length) payload.service_form_wrap_up=true;
+      }
       await this.db().prepare('INSERT INTO personal_case_messages(id,owner_id,case_id,origin_id,sequence,role,body,payload_json,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
         .bind(randomUUID(),this.owner(),caseId,origin,m.sequence,m.role,clean(m.body,60000),JSON.stringify(payload),
           ['complete','error','pending'].includes(m.state)?m.state:'complete',clean(m.created_at,40),clean(m.updated_at,40)).run();

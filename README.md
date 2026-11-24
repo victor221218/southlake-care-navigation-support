@@ -2,7 +2,7 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.6.** Add a service, record how it went, and see your saved feedback on its card in a new chat.
+**Prototype source version 2.17.7.** Matching own-source leads appear first in chat, including leads you have yet to rate.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
@@ -14,8 +14,8 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.6/Care-Navigation-Support-Setup-2.17.6.exe) |
-| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.6/Care-Navigation-Support-Mac-Apple-Silicon-2.17.6-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.6/Care-Navigation-Support-Mac-Intel-2.17.6-Test.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.7/Care-Navigation-Support-Setup-2.17.7.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.7/Care-Navigation-Support-Mac-Apple-Silicon-2.17.7-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.7/Care-Navigation-Support-Mac-Intel-2.17.7-Test.zip) |
 | **Quick-start guide** | [Read the quick-start guide](START-HERE.md) or open **START-HERE.html** inside the handoff ZIP |
 | **Maintain the inventory and outcomes** | [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) |
 | **Download all deliverables** | Use **Download the latest handoff package** above |
@@ -86,7 +86,7 @@ After the last pending result and any open note are saved, a separate assistant 
 
 Use **Undo note** or **Undo result** directly beneath the follow-up card. The matching **Redo** control appears there after Undo. A rating change is labeled **Undo rating change**. Corrections affect the saved feedback linked to that card. The provider detail view also has its own correction controls. Text fields keep their normal typing shortcuts.
 
-Services that match the search/category are ordered using the current user's saved experience. Lower average ratings appear later among matching options. Unrated services use a neutral position for ordering, without displaying a made-up rating; reported outcomes break ties. The actual average, sample count and notes remain visible. Eligibility and suitability still need confirmation. This is personal experience, not a provider-wide success measure.
+Chat recommendations check service category and area first. **Own-source leads** appear first, including unrated entries, with a blue **(Own source)** label. **Public options** follow in their usual order. Own-source leads with an average of 2/5 or lower, or more unsuccessful than successful results, appear under **Own-source leads to review** with their saved history. Within each group, request match and saved experience determine order. Cards display recorded ratings and counts. Confirm eligibility and suitability with the provider.
 
 ### Use a service and record what happened
 
@@ -159,7 +159,9 @@ Use one row per program and location. The following column labels define the imp
 3. When you receive changes, edit the full inventory workbook and keep its filename. Keep existing Service IDs or the same organization, program, service type, subcategory and location so the app can match rows. Import the revised workbook and select **Update saved inventory**. The app updates matching cards in place and keeps attached ratings and notes. Review included rows before saving. Rows omitted from an update are kept as previous rows.
 4. For new providers, add a row to the workbook, choose **Add a service** in Known services, or ask “Can you add a service for me?” in chat. Enter any detail you have and choose **Save service**. An incomplete card appears under **Known services** with a **Needs details** label. Open **View details → Edit details** to fill in the rest. Keep working spreadsheets and case results in the local workspace.
 
-The chat form shows **Category**, **Service or program**, **Service area** and **Phone**. Use **More details** for other fields. In Known services, choose **Remove** to hide a card from the directory and future recommendations. Use the **Removed services** filter to restore the card with its saved notes and ratings.
+The chat form shows **Category**, **Service or program**, **Service area** and **Phone**. Use **More details** for other fields. After saving, chat confirms the addition. Choose **Close chat** to archive the conversation in Manage memory, **Continue chat** to keep working, or **Delete chat** to discard the conversation and its saved feedback. The added service is stored in Known services.
+
+In Known services, choose **Remove** to hide a card from the directory and future recommendations. Under **Removed services**, choose **Restore** to bring it back or **Delete permanently** to erase the card and its saved notes, ratings and results from the current workspace. Confirm the deletion when prompted. A deleted built-in public card stays excluded from future catalogue updates in that workspace.
 
 Known services shows **Services with recorded outcomes**, then your services and public services without recorded outcomes. A note alone leaves the result open. Cards retain their **Own source** or **Public source** label.
 

@@ -3,7 +3,7 @@ import { escapeHTML as e } from './render-text.mjs';
 import { enums } from '../src/core/catalog.mjs';
 import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceSource, serviceFields,
   cleanServiceFields, serviceDraft, missingServiceDetails} from '../src/documents/service-sources.mjs';
-import {directoryGroup,hasServiceResult} from '../src/documents/ranking.mjs';
+import {directoryGroup,hasServiceResult,recommendationGroups} from '../src/documents/ranking.mjs';
 const api=(method,args={})=>window.hive.request(method,args),$=id=>document.getElementById(id);
 let state,query='',documentFilter='',libraryMode='workspace',navigationSequence=0,serviceChatOpen=false,assistantReturnFocus=null,memoryKind='all',category='',includeArchived=false,offset=0,messages=[],busy=false,importing=false,selected=null,preview=null,noteEditor=null,noteTimer,feedbackEditor=null,feedbackSaving=false,voicePrefix='',connectionBusy=false,cardLoadSequence=0,activeCase=null,activeOwner=null,caseChanging=false,caseSequence=0,caseHasMore=false,caseFilter='',caseDraftTimer,caseDraftQueue=Promise.resolve();
 const modal=$('modal');
@@ -32,7 +32,7 @@ function textHTML(text){return e(text).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</s
 function button(action,label,classes='',extra=''){return`<button class="${classes}" data-action="${action}" ${extra}>${label}</button>`;}
 const isService=card=>isServiceSource(card.source_format);
 const sourceName=format=>format===PUBLIC_SERVICE_FORMAT?'Public source':'Own source';
-const sourceTag=format=>`<span class="source-tag">(${sourceName(format)})</span>`;
+const sourceTag=format=>`<span class="source-tag${format===OWN_SERVICE_FORMAT?' own-source-tag':''}">(${sourceName(format)})</span>`;
 const resultLabel=outcome=>outcome==='worked'?'Worked':"Didn't work";
 function ratingTone(score) {
   return score <= 2 ? 'rating-low' : score >= 4 ? 'rating-high' : 'rating-mid';
@@ -96,18 +96,24 @@ function answerCardHTML(card, reply) {
 }
 function completionMessage(completion) {
   const attrs = `data-id="${e(activeCase.id)}" data-version="${activeCase.version}"`;
+  const added = completion?.kind==='service-added';
+  const keepAttrs = `${attrs} data-message-id-for-completion="${e(completion?.message_id || '')}"`;
+  const deleteAttrs = `${attrs} data-include-notes="true"`;
+  const actions = added ? [
+    button('archive-case','Close chat<small>Save this conversation in Manage memory.</small>','primary',attrs),
+    button('keep-case-open','Continue chat<small>Keep working in this conversation.</small>','secondary',keepAttrs+' data-service-added="true"'),
+    button('delete-case','Delete chat<small>Discard this conversation and its saved feedback.</small>','secondary danger',deleteAttrs)
+  ] : [
+    button('keep-case-open','Keep in chat history<small>Leave this chat in the sidebar.</small>','secondary',keepAttrs),
+    button('archive-case','Add to memory library<small>File this chat in Manage memory.</small>','primary',attrs),
+    button('delete-case','Delete chat and notes<small>Remove this chat and the feedback saved from it.</small>','secondary danger',deleteAttrs)
+  ];
   return `<article class="message assistant completion-message" aria-labelledby="completion-title">
     <div class="message-label">ASSISTANT</div>
     <div class="case-next-steps">
       <h3 id="completion-title" tabindex="-1">What would you like to do next?</h3>
-      ${completion ? `<div class="completion-summary"><strong>${e(completion.title)}</strong>${resultBadge(completion)}</div>` : ''}
-      <div class="case-next-actions">
-        ${button('keep-case-open','Keep in chat history<small>Leave this chat in the sidebar.</small>','secondary',
-          `${attrs} data-message-id-for-completion="${e(completion?.message_id || '')}"`)}
-        ${button('archive-case','Add to memory library<small>File this chat in Manage memory.</small>','primary',attrs)}
-        ${button('delete-case','Delete chat and notes<small>Remove this chat and the feedback saved from it.</small>','secondary danger',
-          `${attrs} data-include-notes="true"`)}
-      </div>
+      ${completion && !added ? `<div class="completion-summary"><strong>${e(completion.title)}</strong>${resultBadge(completion)}</div>` : ''}
+      <div class="case-next-actions">${actions.join('')}</div>
     </div>
   </article>`;
 }
@@ -201,7 +207,8 @@ function serviceRowHTML(card) {
   const score=averageRatingBadge(card.experience) || (hasServiceResult(card)?'<small>No rating yet</small>':'');
   const attrs=`data-id="${e(card.id)}"`;
   const manage=card.removed_from_directory
-    ? button('restore-known-service','Restore','secondary',`${attrs} aria-label="Restore ${e(card.title)} to Known services"`)
+    ? button('restore-known-service','Restore','secondary',`${attrs} aria-label="Restore ${e(card.title)} to Known services"`)+
+      button('delete-removed-service','Delete permanently','quiet danger',`${attrs} data-title="${e(card.title)}" aria-label="Permanently delete ${e(card.title)}"`)
     : button('remove-known-service','Remove','quiet danger',`${attrs} aria-label="Remove ${e(card.title)} from Known services"`);
   return `<article class="service-row" data-service-id="${e(card.id)}">
     <div class="service-row-info">
@@ -570,7 +577,10 @@ async function keepCaseOpen(target) {
   try {
     const messageId=target.dataset.messageIdForCompletion;
     if (messageId) {
-      const reply=await api('update-service-followup',{case_id:id,message_id:messageId,step:'keep-chat'});
+      const args={case_id:id,message_id:messageId};
+      const reply=target.dataset.serviceAdded==='true'
+        ? await api('keep-service-form-chat',args)
+        : await api('update-service-followup',{...args,step:'keep-chat'});
       activeCase.completion=reply.completion;
     }
     manualWrapUp=false;
@@ -662,6 +672,23 @@ async function setKnownServiceRemoved(target, removed) {
     renderMessages();
     await refresh();
     notice(removed?'Moved to Removed services.':'Restored to Known services.');
+  } finally {
+    target.disabled=false;
+  }
+}
+async function deleteRemovedService(target) {
+  const {id,title}=target.dataset;
+  if (!confirm(`Permanently delete ${title} and its saved service notes, ratings and results? This cannot be undone.`)) return;
+  target.disabled=true;
+  try {
+    await api('delete-removed-service',{id});
+    if (selected?.id===id) {
+      selected=null;
+      context();
+    }
+    if (activeCase) await loadCase(activeCase.id,{activate:false});
+    await refresh();
+    notice('Service permanently deleted.');
   } finally {
     target.disabled=false;
   }
@@ -765,20 +792,28 @@ function renderInlineServiceField([name,label,limit], draft, categoryList) {
 }
 function renderChatServiceForm(message) {
   const saved=message.cards?.[0];
+  if (saved || message.service_form_saved || activeCase?.status!=='active') {
+    const receipt=saved ? 'Added '+saved.title+' to Known services.' : message.service_form_saved
+      ? 'The service was added to Known services. The saved card is no longer available.'
+      : 'Reopen this conversation to finish the service form.';
+    const wrappingUp=activeCase?.completion?.kind==='service-added' && activeCase.completion.message_id===message.id;
+    const use=saved && !wrappingUp && activeCase?.status==='active' && !saved.archived && !saved.removed_from_directory;
+    return `<article class="message assistant" data-message-sequence="${message.sequence||''}">
+      <div class="message-label">ASSISTANT</div>
+      <div class="answer-summary service-form-reply">
+        <p>${e(receipt)}</p>
+        ${saved?button('open-card','View saved service','quiet',`data-id="${e(saved.id)}" data-service-form-saved="${e(message.id)}"`):''}
+        ${use?button('chat-followup-start','Use this service','quiet',`data-id="${e(saved.id)}" data-reply-id="${e(message.id)}"`):''}
+      </div>
+    </article>`;
+  }
   const draft=inlineServiceDraft(message.id,message.service_form);
   const formTitle=`service-form-title-${e(message.id)}`;
   const categoryList=`service-categories-${e(message.id)}`;
   const fields=basic=>serviceFields.filter(([name])=>basicServiceFields.has(name)===basic)
     .map(field=>renderInlineServiceField(field,draft,categoryList)).join('');
   const categories=(state?.serviceCategories||[]).map(category=>`<option value="${e(category)}"></option>`).join('');
-  const content=saved||activeCase?.status!=='active'
-    ? `<div class="answer-summary service-form-reply">
-        <p>${saved?'Service saved in Known services.':'Reopen this conversation to finish the service form.'}</p>
-        ${saved?button('open-card','View saved service','secondary',`data-id="${e(saved.id)}" data-service-form-saved="${e(message.id)}"`):''}
-        ${saved && activeCase?.status==='active' && !saved.archived && !saved.removed_from_directory
-          ? button('chat-followup-start','Use this service','quiet',`data-id="${e(saved.id)}" data-reply-id="${e(message.id)}"`) : ''}
-      </div>`
-    : `<form class="answer-summary service-form-reply inline-service-form" aria-labelledby="${formTitle}" data-service-form="${e(message.id)}">
+  const content=`<form class="answer-summary service-form-reply inline-service-form" aria-labelledby="${formTitle}" data-service-form="${e(message.id)}">
         <h3 id="${formTitle}">Add a service</h3>
         <p>Fill in any one detail to save.</p>
         <fieldset>
@@ -823,13 +858,18 @@ async function saveInlineServiceForm(form) {
   updateFollowupControls();
   form.querySelector('button[type="submit"]').textContent='Saving…';
   try {
-    const {card_id}=await api('save-service-form',{case_id:caseId,message_id:messageId,values:draft.values});
+    const {card_id,title,completion}=await api('save-service-form',{case_id:caseId,message_id:messageId,values:draft.values});
     serviceFormDrafts.delete(messageId);
     const reply=activeCase?.id===caseId&&messages.find(message=>message.id===messageId);
     if (reply) {
-      reply.cards=[{id:card_id}];
+      reply.cards=[{id:card_id,title}];
+      reply.service_form_saved=true;
+      activeCase.completion=completion;
+      manualWrapUp=false;
       renderMessages();
-      document.querySelector(`[data-service-form-saved="${CSS.escape(messageId)}"]`)?.focus({preventScroll:true});
+      if (!focusCompletionMessage()) {
+        document.querySelector(`[data-service-form-saved="${CSS.escape(messageId)}"]`)?.focus({preventScroll:true});
+      }
     }
   } catch(error) {
     draft.error=error.message;
@@ -846,6 +886,23 @@ async function saveInlineServiceForm(form) {
     updateFollowupControls();
   }
 }
+function answerCardsHTML(reply) {
+  const cards = reply.cards;
+  const grid = items => `<div class="answer-cards">${items.map(card=>answerCardHTML(card,reply)).join('')}</div>`;
+  if (reply.presentation!=='service-options' || !cards.every(card=>Object.hasOwn(recommendationGroups,card.card_source_group))) {
+    return grid(cards);
+  }
+  const groups = new Map();
+  for (const card of cards) {
+    const key = card.card_source_group;
+    if (!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(card);
+  }
+  return `<div class="answer-groups">${[...groups].map(([group,items])=>
+    `<section class="answer-group" data-source-group="${group}" aria-label="${recommendationGroups[group]}">
+      <h3>${recommendationGroups[group]}</h3>${grid(items)}
+    </section>`).join('')}</div>`;
+}
 function renderMessages(forceScroll=false, {scrollToReply=false}={}){
   const viewport=$('messages'),follow=forceScroll||viewport.scrollHeight-viewport.scrollTop-viewport.clientHeight<80,previous=viewport.scrollTop;
   viewport.innerHTML=(caseHasMore?button('earlier-messages','↑ Earlier messages','quiet earlier-messages'):'')+(messages.length?messages.map((m,index)=>{
@@ -854,7 +911,7 @@ function renderMessages(forceScroll=false, {scrollToReply=false}={}){
     const pending=m.role==='assistant'&&busy&&index===messages.length-1&&!m.source;
     const cardsOnly=Boolean(m.cards?.length)&&m.role==='assistant'&&!m.error&&(m.presentation==='service-options'||!m.presentation&&!m.calculations?.length&&m.cards?.some(isService));
     const answer=pending?'<div class="answer-summary answer-pending" role="status">Finding the useful details…</div>':cardsOnly?'':`<div class="${m.role==='assistant'?'answer-summary'+(m.error?' answer-error':''):'message-text'}">${textHTML(m.text||'No answer is available. Please retry.')}</div>`;
-    return `<article class="message ${m.role}" data-message-sequence="${m.sequence||''}"><div class="message-label">${m.role==='user'?'YOU':'ASSISTANT'}${m.source?`<span>${e(m.source==='chatgpt'?'ChatGPT':m.source==='local'?'Saved information':m.source==='error'?'Connection interrupted':m.source)}</span>`:''}${m.saved?'<span class="saved-marker">Saved to memory</span>':''}</div>${answer}${!pending&&m.cards?.length?`<div class="answer-cards">${m.cards.map(c=>answerCardHTML(c,m)).join('')}</div>`:''}${!pending&&m.calculations?.length?`<div class="calculation-proof">${m.calculations.map(c=>`<div>Calculated from ${e(c.matched_rows)} matching row(s) · ${e(c.operation)}${c.column?' of '+e(c.column):''}${c.value!==undefined?' = '+e(c.value??'No numeric values'):''}</div>`).join('')}</div>`:''}${m.role==='assistant'&&m.error?button('retry','Retry question','quiet',`data-index="${index}"`):''}</article>`;
+    return `<article class="message ${m.role}" data-message-sequence="${m.sequence||''}"><div class="message-label">${m.role==='user'?'YOU':'ASSISTANT'}${m.source?`<span>${e(m.source==='chatgpt'?'ChatGPT':m.source==='local'?'Saved information':m.source==='error'?'Connection interrupted':m.source)}</span>`:''}${m.saved?'<span class="saved-marker">Saved to memory</span>':''}</div>${answer}${!pending&&m.cards?.length?answerCardsHTML(m):''}${!pending&&m.calculations?.length?`<div class="calculation-proof">${m.calculations.map(c=>`<div>Calculated from ${e(c.matched_rows)} matching row(s) · ${e(c.operation)}${c.column?' of '+e(c.column):''}${c.value!==undefined?' = '+e(c.value??'No numeric values'):''}</div>`).join('')}</div>`:''}${m.role==='assistant'&&m.error?button('retry','Retry question','quiet',`data-index="${index}"`):''}</article>`;
   }).join(''):`<div class="chat-welcome"><img class="welcome-icon" src="care-navigation-logo.png" alt=""><h2>A clearer way to work<br>with your information.</h2><p>Ask a question, add a document, or keep a case conversation for later.</p><div class="prompt-chips">${button('prompt','Find a local service','prompt',`data-prompt="Find transportation services in North York. Show the service cards and contact details."`)}${button('prompt','Summarize a document','prompt',`data-prompt="Summarize my latest imported document. Highlight anything I should follow up on."`)}${button('prompt','Recall my notes','prompt',`data-prompt="What have I saved in my personal notes? Show the matching cards."`)}</div><small>Use a case title without patient names or identifiers.</small></div>`)
     +(caseHasNewer ? button('latest-messages','↓ Latest messages','quiet latest-messages') : '')
     +(!busy && activeCase?.status === 'active' && (manualWrapUp || activeCase.completion)
@@ -1336,6 +1393,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='review-import-services'&&preview)await reviewServiceFile(await api('review-service-import',{id:preview.id}));
     else if(action==='add-own-service')await openServiceEditor();
     else if(action==='remove-known-service'||action==='restore-known-service')await setKnownServiceRemoved(target,action==='remove-known-service');
+    else if(action==='delete-removed-service')await deleteRemovedService(target);
     else if(action==='add-chat-service'){await pauseVoice();await sendMessage('Add a service',null,{keepDraft:true});}
     else if(action==='edit-own-service')await openServiceEditor({card:await api('get-card',{id:target.dataset.id})});
     else if(action==='save-own-service')await saveOwnService();

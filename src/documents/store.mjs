@@ -41,6 +41,11 @@ export class DocumentStore {
   changed(value) { this.db().afterCommit(() => this.emit({ type: 'memory-changed', value })); return value; }
   async documents() { return (await this.db().prepare('SELECT d.*, (SELECT COUNT(*) FROM personal_cards c WHERE c.document_id=d.id AND c.archived=0) AS card_count FROM personal_documents d WHERE owner_id=? ORDER BY updated_at DESC').bind(this.owner()).all()).results.map(({ original_path, ...row }) => ({ ...row, warnings: JSON.parse(row.warnings) })); }
   async duplicate(digest) { return this.db().prepare('SELECT id, filename FROM personal_documents WHERE owner_id=? AND digest=?').bind(this.owner(), digest).first(); }
+  async deletedPublicServiceKeys(owner) {
+    const {results} = await this.db().prepare('SELECT source_key FROM personal_deleted_public_services WHERE owner_id=?')
+      .bind(owner).all();
+    return new Set(results.map(row => row.source_key));
+  }
   async sameName(filename, {services=false}={}) {
     const format=services ? "format='own-services'" : 'format NOT IN ' + serviceFormats;
     return this.db().prepare('SELECT id, filename, version FROM personal_documents WHERE owner_id=? AND filename=? AND '+format+' ORDER BY updated_at DESC LIMIT 1')
@@ -60,8 +65,10 @@ export class DocumentStore {
         await this.db().prepare('UPDATE personal_documents SET digest=?,original_path=?,updated_at=?,version=version+1,warnings=? WHERE id=? AND owner_id=?').bind(parsed.digest, originalPath, stamp, JSON.stringify(parsed.warnings), id, owner).run();
         await this.db().prepare('UPDATE personal_cards SET archived=1 WHERE document_id=? AND owner_id=?').bind(id, owner).run();
       } else await this.db().prepare('INSERT INTO personal_documents (id,owner_id,filename,digest,format,original_path,imported_at,updated_at,warnings) VALUES (?,?,?,?,?,?,?,?,?)').bind(id, owner, parsed.filename, parsed.digest, parsed.format, originalPath, stamp, stamp, JSON.stringify(parsed.warnings)).run();
+      const excluded = parsed.format === PUBLIC_SERVICE_FORMAT ? await this.deletedPublicServiceKeys(owner) : new Set();
       let added = 0, updated = 0;
       for (const section of parsed.sections) {
+        if (excluded.has(section.key)) continue;
         const title = clean(section.title, 180), body = clean(section.body, 30000), fields = section.fields || {};
         const values = [title, body, clean(section.locator, 220), JSON.stringify(fields), JSON.stringify(cardContacts(parsed.format, body, fields)), JSON.stringify(linksIn(body, fields))];
         const previous = old ? await this.db().prepare('SELECT id,body,fields_json FROM personal_cards WHERE document_id=? AND source_key=? AND owner_id=?').bind(id, section.key, owner).first() : null;
@@ -73,7 +80,7 @@ export class DocumentStore {
           added++;
         }
       }
-      return this.changed({ document_id: id, count: parsed.sections.length, added, updated, duplicate: false });
+      return this.changed({ document_id: id, count: added + updated, added, updated, duplicate: false });
     });
   }
   async addOwnService(values, {fromChat = false} = {}) {
@@ -117,6 +124,30 @@ export class DocumentStore {
       await this.db().prepare('UPDATE personal_cards SET removed_from_directory=?, updated_at=?, version=version+1 WHERE id=? AND owner_id=?')
         .bind(Number(removed),now(),id,this.owner()).run();
       return this.changed({id,removed});
+    });
+  }
+  async deleteRemovedService({id}) {
+    return this.db().transaction(async () => {
+      const card = await this.get(id);
+      if (!isServiceSource(card.source_format) || card.archived || !card.removed_from_directory) {
+        throw new Error('Choose a card in Removed services to delete it permanently.');
+      }
+      const owner = this.owner();
+      if (card.source_format === PUBLIC_SERVICE_FORMAT && card.source_key) {
+        await this.db().prepare('INSERT OR IGNORE INTO personal_deleted_public_services (owner_id,source_key) VALUES (?,?)')
+          .bind(owner,card.source_key).run();
+      }
+      await this.db().prepare(`DELETE FROM personal_case_memory WHERE owner_id=? AND entry_type='comment' AND
+        entry_id IN (SELECT id FROM personal_comments WHERE owner_id=? AND card_id=?
+          UNION SELECT entry_id FROM personal_input_history WHERE owner_id=? AND entry_type='comment' AND card_id=?)`)
+        .bind(owner,owner,id,owner,id).run();
+      await this.db().prepare("DELETE FROM personal_input_history WHERE owner_id=? AND (card_id=? OR (entry_type='card' AND entry_id=?))")
+        .bind(owner,id,id).run();
+      await this.db().prepare(`UPDATE personal_case_messages
+        SET payload_json=json_set(json_remove(payload_json,'$.cards','$.service_form','$.service_form_wrap_up'),'$.service_form_saved',json('true'))
+        WHERE owner_id=? AND json_extract(payload_json,'$.presentation')='service-form'
+          AND json_extract(payload_json,'$.cards[0].id')=?`).bind(owner,id).run();
+      return this.forgetCard(id);
     });
   }
   async serviceCategories() {
@@ -220,7 +251,8 @@ export class DocumentStore {
       FROM personal_cases chat
       LEFT JOIN personal_case_messages m ON m.case_id=chat.id AND m.owner_id=chat.owner_id
       JOIN personal_cards c ON c.owner_id=chat.owner_id AND c.id IN (
-        chat.selected_card_id, json_extract(m.payload_json,'$.followup.card_id'), json_extract(m.payload_json,'$.context_card_id')
+        chat.selected_card_id, json_extract(m.payload_json,'$.followup.card_id'), json_extract(m.payload_json,'$.context_card_id'),
+        CASE WHEN json_extract(m.payload_json,'$.presentation')='service-form' THEN json_extract(m.payload_json,'$.cards[0].id') END
       )
       LEFT JOIN personal_documents d ON d.id=c.document_id AND d.owner_id=c.owner_id
       WHERE chat.owner_id=? AND chat.status='archived' AND chat.archive_card_id IS NOT NULL
@@ -357,9 +389,11 @@ export class DocumentStore {
         docs.set(doc.id, {id, format, duplicate:Boolean(duplicate)});
         if (!duplicate) await this.db().prepare('INSERT INTO personal_documents (id,owner_id,filename,digest,format,imported_at,updated_at,version,warnings) VALUES (?,?,?,?,?,?,?,?,?)').bind(id,owner,clean(doc.filename,220),doc.digest,clean(doc.format,20),clean(doc.imported_at,40),clean(doc.updated_at,40),Number(doc.version)||1,'["Restored from backup; the original file is not included."]').run();
       }
+      const deletedPublic = await this.deletedPublicServiceKeys(owner);
       for (const card of data.cards) {
         if (typeof card.id !== 'string' || card.document_id && !docs.has(card.document_id)) throw new Error('The backup has a card without its document.');
         const doc = docs.get(card.document_id);
+        if (doc?.format === PUBLIC_SERVICE_FORMAT && deletedPublic.has(card.source_key)) continue;
         const removed=Number(isServiceSource(doc?.format)&&(card.removed_from_directory===1||card.removed_from_directory===true));
         const existing = doc?.duplicate
           ? await this.db().prepare('SELECT id FROM personal_cards WHERE owner_id=? AND document_id=? AND source_key=?').bind(owner,doc.id,card.source_key).first()

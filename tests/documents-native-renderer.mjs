@@ -36,7 +36,7 @@ async function run(){try{
   assert(document.body.dataset.view==='workspace'&&document.getElementById('library-panel').hidden&&!document.getElementById('chat-panel').hidden);
   assert(!document.getElementById('remember')&&!document.querySelector('.remember')&&document.querySelector('.composer-actions #add-document'));
   if(phase.reopen){
-    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==5||snapshot.services.total!==31)throw new Error('Documents or service cards changed after reopening.');
+    const snapshot=await request('snapshot');if(snapshot.documents.length!==1||snapshot.cards.total!==6||snapshot.services.total!==31)throw new Error('Documents or service cards changed after reopening.');
     const removed=await request('list-cards',{collection:'services',removed_services:true});
     assert(removed.items.some(card=>card.id===phase.cold.removed_service_id&&card.area==='Aurora'),'The removed service and its chosen area must survive restart.');
     const rated=await request('get-card',{id:phase.cold.removed_service_id});
@@ -45,6 +45,12 @@ async function run(){try{
     const partial=await request('get-card',{id:phase.cold.chat_service_id});
     assert(partial.contacts.some(contact=>contact.value==='905-555-0191')&&partial.missing_details.includes('service name'),
       'The partial service saved from chat must survive restart.');
+    const permanentlyDeleted=await request('get-card',{id:phase.cold.deleted_public_service_id}).then(()=>false,()=>true);
+    assert(permanentlyDeleted&&!removed.items.some(card=>card.id===phase.cold.deleted_public_service_id),
+      'A permanently deleted public service must stay out of the app after reopening.');
+    const closedAfterSave=await request('get-case',{id:phase.cold.closed_service_case_id});
+    assert(closedAfterSave.status==='archived'&&closedAfterSave.messages.at(-1).body.includes('Added Example Mobility Dispatch'),
+      'Closing after Save service must archive the confirmation.');
     const own=await request('get-card',{id:phase.cold.own_service_id});
     assert(own.source_format==='own-services'&&own.contacts.some(contact=>contact.value==='intake@example.org')&&
       own.comments.some(note=>note.body==='Practice note: call intake before referring.'),'The own service, edited contact and note must survive restart.');
@@ -335,8 +341,30 @@ async function run(){try{
   assert(document.body.dataset.view==='workspace'&&document.getElementById('message').value==='Draft question for later.'&&
     !document.getElementById('modal').open,'Saving the form in chat keeps the unsent draft and avoids a modal.');
 
+  const deskCaseId=(await request('snapshot')).active_case.id;
+  const wrapUp=document.querySelector('.completion-message');
+  assert(wrapUp===document.getElementById('messages').lastElementChild&&
+    document.activeElement.id==='completion-title'&&
+    [...wrapUp.querySelectorAll('button')].map(button=>button.firstChild.textContent).join('|')==='Close chat|Continue chat|Delete chat'&&
+    document.querySelector('.service-form-reply p').textContent==='Added Example Service Form Desk to Known services.',
+    'Saving a service confirms the addition and focuses a separate message with all three choices.');
+  click('.completion-message [data-action="keep-case-open"]');
+  await wait(()=>!document.querySelector('.completion-message')&&document.body.dataset.caseChanging==='false');
   assert(document.querySelector('.service-form-reply [data-action="chat-followup-start"][data-id="'+deskId+'"]'),
-    'A newly saved service has a direct follow-up action.');
+    'Continue chat keeps the saved service and its follow-up action.');
+  click('.chat-header-actions [data-action="new-chat"]');
+  await wait(()=>document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+  type('message','Can you recommend home services in Aurora?');click('#send-button');
+  await wait(()=>document.querySelector('[data-source-group="own"] .answer-card')&&document.getElementById('send-button').textContent==='Send ↑');
+  const firstOwn=document.querySelector('#messages .answer-card');
+  const publicLabel=document.querySelector('[data-source-group="public"] .source-tag');
+  const ownLabel=firstOwn.querySelector('.own-source-tag');
+  assert(firstOwn.dataset.id===deskId&&!firstOwn.querySelector('.rating-badge')&&ownLabel&&publicLabel&&
+    getComputedStyle(ownLabel).color!==getComputedStyle(publicLabel).color,
+    'An unrated own-source match leads the public cards and has a distinct label.');
+  click(`[data-case-row="${deskCaseId}"] [data-action="open-case"]`);
+  await wait(()=>document.querySelector('[data-service-form-saved="'+firstFormId+'"]')&&document.body.dataset.caseChanging==='false');
+  assert(!document.querySelector('.completion-message')&&document.getElementById('message').value==='Draft question for later.');
   type('message','I did not enjoy using the service.');
   click('#send-button');
   await wait(()=>document.querySelector('.followup-add-rating select')&&document.getElementById('send-button').textContent==='Send ↑');
@@ -378,6 +406,20 @@ async function run(){try{
   assert(document.querySelector('#modal .callout').textContent.includes('service name'));
   click('#modal [data-action="close-modal"]');
   await wait(()=>!document.getElementById('modal').open);
+  const discardCaseId=(await request('snapshot')).active_case.id;
+  const deleteChat='.completion-message [data-action="delete-case"]';
+  assert(document.querySelector(deleteChat)?.firstChild.textContent==='Delete chat');
+  window.confirm=()=>false;
+  click(deleteChat);
+  assert(document.querySelector(deleteChat),'Cancel keeps the newly completed chat.');
+  window.confirm=()=>true;
+  click(deleteChat);
+  await wait(()=>document.getElementById('notice').textContent.includes('Conversation and saved feedback deleted')||
+    (!document.querySelector('[data-case-row="'+discardCaseId+'"]')&&document.body.dataset.caseChanging==='false'));
+  window.confirm=originalConfirm;
+  const gone=await request('get-case',{id:discardCaseId}).then(()=>false,()=>true);
+  assert(gone&&(await request('get-card',{id:chatServiceId})).id===chatServiceId,
+    'Delete chat removes the conversation and keeps the directory service.');
 
   click('[data-action="known-services"]');await wait(()=>document.body.dataset.view==='services');
   type('search','905-555-0191');
@@ -400,14 +442,44 @@ async function run(){try{
     !latestServiceForm().querySelector('[data-custom-service-area]').hidden&&
     document.body.dataset.view==='services'&&document.getElementById('search').value==='905-555-0191'&&!document.getElementById('modal').open,
     'The floating chat shows the same form with an editable multi-area value and preserves the directory filter.');
+  const closedServiceCaseId=(await request('snapshot')).active_case.id;
+  fillServiceField('name','Example Mobility Dispatch');
+  latestServiceForm().querySelector('button[type="submit"]').click();
+  await wait(()=>document.querySelector('.completion-message [data-action="archive-case"]')?.firstChild.textContent==='Close chat');
+  click('.completion-message [data-action="archive-case"]');
+  await wait(()=>document.getElementById('notice').textContent==='Conversation added to the memory library.');
+  const archivedService=await request('get-case',{id:closedServiceCaseId});
+  const archivedServiceCard=archivedService.messages.at(-1).payload.cards[0];
+  assert(archivedService.status==='archived'&&archivedServiceCard?.title==='Example Mobility Dispatch'&&
+    (await request('list-memory',{query:'Example Mobility Dispatch',kind:'chats'})).total>0,
+    'Close chat archives the saved conversation under the added service.');
   click('#minimize-assistant');
   type('search','Example Service Form Desk');
   const deskRow='[data-service-id="'+deskId+'"]';
   await wait(()=>document.querySelector(deskRow+' [data-action="remove-known-service"]'));
   click(deskRow+' [data-action="remove-known-service"]');
   await wait(()=>!document.querySelector(deskRow));
+  type('search','Access Alliance');
+  await wait(()=>document.querySelector('.service-row [data-action="remove-known-service"]'));
+  const publicId=document.querySelector('.service-row').dataset.serviceId;
+  const publicRow=`[data-service-id="${publicId}"]`;
+  click(publicRow+' [data-action="remove-known-service"]');
+  await wait(()=>!document.querySelector(publicRow));
+  filter('service-visibility','removed');
+  const hardDelete=publicRow+' [data-action="delete-removed-service"]';
+  await wait(()=>document.querySelector(hardDelete)&&document.querySelector(publicRow+' [data-action="restore-known-service"]'));
+  window.confirm=()=>false;
+  click(hardDelete);
+  assert(document.querySelector(hardDelete),'Cancel keeps the service in Removed services.');
+  window.confirm=()=>true;
+  click(hardDelete);
+  await wait(()=>!document.querySelector(publicRow));
+  window.confirm=originalConfirm;
+  assert(await request('get-card',{id:publicId}).then(()=>false,()=>true),'Permanent deletion makes the public service unavailable.');
   const serviceChecks={chat_service_id:chatServiceId, removed_service_id:deskId, chat_service_form_verified:true,
-    known_service_removal_verified:true, conversational_home_service_feedback:true, live_chat_rating:true, ranked_home_cards:true};
+    known_service_removal_verified:true, conversational_home_service_feedback:true, live_chat_rating:true, ranked_home_cards:true,
+    unrated_own_source_first:true, service_added_wrap_up_verified:true, permanent_service_removal_verified:true,
+    closed_service_case_id:closedServiceCaseId,deleted_public_service_id:publicId};
   click('[data-action="manage-memory"]');await wait(()=>document.body.dataset.view==='memory');
   filter('memory-kind-filter','documents');await revealMemoryEntry(card.id);
   click(memoryRow(card.id)+' [data-action="open-card"]');await wait(()=>document.getElementById('card-note'));type('card-note',closingNote);

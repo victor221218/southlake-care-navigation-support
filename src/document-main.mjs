@@ -49,6 +49,7 @@ async function invoke(method,args){
   if(method==='list-memory')return store.memories(args);
   if(method==='get-card')return store.get(args.id);
   if(method==='set-service-removed'){idle();const result=await store.setServiceRemoved(args);assistant.clear();return result;}
+  if(method==='delete-removed-service'){idle();const result=await store.deleteRemovedService(args);assistant.clear();return result;}
   if(method==='add-own-service'||method==='update-own-service'){
     idle();
     const result=await (method==='add-own-service'?store.addOwnService(args.values):store.updateOwnService(args));
@@ -63,6 +64,7 @@ async function invoke(method,args){
   if(method==='suggest-case-title'){idle();return cases.suggestedTitle(args.id);}
   if(method==='case-context')return cases.context(args);
   if(method==='save-service-form'){idle();const result=await cases.saveServiceForm(args);assistant.clear();return result;}
+  if(method==='keep-service-form-chat'){idle();return cases.keepServiceFormChat(args);}
   if(method==='start-service-followup'){idle();return followups.start(args);}
   if(method==='update-service-followup'){
     idle();
