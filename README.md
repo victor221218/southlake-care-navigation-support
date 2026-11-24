@@ -1,10 +1,29 @@
 # Care Navigation Support
 
+A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
+
+**Prototype source version 2.17.5.** Add a service directly from chat and save it with the information you have.
+
+The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
+
+## Downloads and guides
+
 **[Download the latest handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/latest/download/Care-Navigation-Support-Handoff.zip)**
 
-Extract the ZIP and open **START-HERE.html**. The package includes the current Windows installer, Mac test bundles, editable source, guides and verification results. You can download it while signed out of GitHub.
+The complete package includes the Windows installer, both Mac test packages, editable source files, guides and verification reports. Extract the ZIP and open **START-HERE.html**.
 
-Care Navigation Support is a desktop prototype that turns spreadsheets and documents into searchable **memory cards**. Ask questions in everyday language and keep useful notes for future conversations.
+| What you need | Open this |
+| --- | --- |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.5/Care-Navigation-Support-Setup-2.17.5.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.5/Care-Navigation-Support-Mac-Apple-Silicon-2.17.5-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.5/Care-Navigation-Support-Mac-Intel-2.17.5-Test.zip) |
+| **Quick-start guide** | [Read the quick-start guide](START-HERE.md) or open **START-HERE.html** inside the handoff ZIP |
+| **Maintain the inventory and outcomes** | [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) |
+| **Download all deliverables** | Use **Download the latest handoff package** above |
+| **Read or edit the code** | Browse the folders above or [start with the source map below](#source-code-map) |
+| **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
+| **Review test evidence and remaining checks** | [Latest release](https://github.com/victor221218/southlake-care-navigation-support/releases/latest) and **Verification.json** inside the handoff ZIP |
+
+You can download the public release while signed out of GitHub. Use the installer to run the app or the source files for development.
 
 ## What the app and ChatGPT each do
 
@@ -237,7 +256,10 @@ The finished installer does not require these developer tools.
 
 ## What has been checked
 
-See **Verification.json** in the handoff for current automated and Windows acceptance results and installer verification. **SHA256.txt** lists checksums for the files in the package. The Mac test bundles have separate checks for their architecture and included application files.
+- **127 automated checks passed**, including document parsing, account separation, spreadsheet updates, backups, service feedback, rating summaries and older-database upgrades.
+- **Native Windows checks passed** for the chat header, conversation completion from the sidebar, the inline service form, service removal and restoration, and reopening the app.
+- **78 extracted installer files matched** the prepared Windows application.
+- **Verification.json** and **SHA256.txt** in the handoff ZIP record the test results and file checksums. **Mac/Mac-Verification.json** records the Mac bundle checks.
 
 ### Remaining prototype checks
 
