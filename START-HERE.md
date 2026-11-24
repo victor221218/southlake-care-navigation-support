@@ -107,7 +107,7 @@ After the last pending result and any open note are saved, a separate assistant 
 - **Add to memory library** files the entire conversation as one item you can open later.
 - **Delete chat and notes** permanently removes the conversation and feedback linked to it after you confirm. This includes the notes, results and ratings saved from that chat. Use Manage memory for any older standalone notes.
 
-Use **Case options → Finish conversation** when you’re done with a chat that has no service result.
+In **Chat history**, open the conversation’s **⋯** menu and choose **Finish conversation** to see the same choices at the end of the chat.
 
 ### Find an organization’s history
 

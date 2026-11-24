@@ -1,3 +1,8 @@
+# Care Navigation Support 2.17.5
+
+- The latest handoff link downloads the current installer, test bundles, editable source, guides and verification results together.
+- Chat history’s **⋯** menu includes **Finish conversation**. The chat header shows **Add a service** and **New chat**.
+
 # Care Navigation Support 2.17.4
 
 - The four-field service form opens in the chat reply. **More details** expands the optional contact and referral fields.

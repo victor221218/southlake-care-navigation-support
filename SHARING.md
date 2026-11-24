@@ -1,10 +1,10 @@
 # Share the Windows app
 
-Share the [direct Windows installer download](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.4/Care-Navigation-Support-Setup-2.17.4.exe). The [2.17.4 release notes](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.4) explain what changed. The [original 2.16.0 handoff](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.16.0) includes the complete source package, guides, and Mac test downloads.
+Share the [latest handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/latest/download/Care-Navigation-Support-Handoff.zip). Extract it and open **START-HERE.html** for the current installers, guides, source and verification results.
 
 Suggested message:
 
-> [Download Care Navigation Support for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.4/Care-Navigation-Support-Setup-2.17.4.exe). Open the installer, choose Install, then Finish. Open the app from the desktop afterwards. Connect your own eligible ChatGPT account, then use the full Workspace chat or Add a document beside Speak. The quick-start guide shows the first steps. Your saved cards and notes are private to your installation/account.
+> Extract the handoff ZIP and open **START-HERE.html**. Open the Windows installer, choose **Install**, then **Finish**. Launch **Care Navigation Support** from your desktop or Start menu. Connect your own eligible ChatGPT account and use **Add a document** beside **Speak** in Workspace. Your saved cards and notes belong to your local account workspace.
 
 ## Administrator checks
 

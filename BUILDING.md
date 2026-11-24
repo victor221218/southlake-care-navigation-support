@@ -1,6 +1,6 @@
 # Build the desktop test app
 
-> **Current release: 2.16.0 personal document assistant.** Start with README.md and WINDOWS-DEVELOPMENT.md for the current Windows workflow and Mac test packages. The notes below describe earlier experiments.
+> Start with README.md and WINDOWS-DEVELOPMENT.md for the current handoff and Windows build. The notes below describe earlier experiments.
 
 Testers use the installer or an app bundle; they do not need these tools.
 

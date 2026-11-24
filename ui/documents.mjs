@@ -332,6 +332,7 @@ function showCaseMenu(trigger) {
     ? button('review-case-feedback','Record feedback','',`${attrs} data-sequence="${chat.feedback_sequence}"`)
     : button('open-case','Open conversation','',attrs))
     + button('case-options','Rename conversation','',attrs+' data-rename-only="true"')
+    + (chat.message_count ? button('finish-conversation','Finish conversation','',attrs) : '')
     + button('archive-case',`Add to memory library<small>${keepChatHelp}</small>`,'',attrs+(chat.message_count?'':' disabled'))
     + button('delete-case',`Delete chat history<small>${deleteChatHelp}</small>`,'case-menu-delete',attrs);
   const anchor = trigger.getBoundingClientRect();
@@ -369,7 +370,19 @@ async function refreshCardHistoryControls(id=noteEditor?.cardId) {
   cardHistory = history;
   renderUndo();
 }
-function renderCaseTitle(){if(!activeCase)return;$('assistant-title').textContent=activeCase.title;$('case-options-button').hidden=false;$('chat-add-service').hidden=activeCase.status==='archived';$('composer').hidden=activeCase.status==='archived';$('selected-context').hidden=activeCase.status==='archived';$('case-archived-banner').hidden=activeCase.status!=='archived';$('case-archived-banner').innerHTML=activeCase.status==='archived'?`<span>Saved in the memory library</span>${button('reopen-case','Reopen conversation','secondary',`data-id="${e(activeCase.id)}"`)}`:'';}
+function renderCaseTitle() {
+  if (!activeCase) return;
+  const archived = activeCase.status === 'archived';
+  $('assistant-title').textContent = activeCase.title;
+  $('chat-add-service').hidden = archived;
+  $('composer').hidden = archived;
+  $('selected-context').hidden = archived;
+  const banner = $('case-archived-banner');
+  banner.hidden = !archived;
+  banner.innerHTML = archived
+    ? `<span>Saved in the memory library</span>${button('reopen-case','Reopen conversation','secondary',`data-id="${e(activeCase.id)}"`)}`
+    : '';
+}
 function scheduleCaseDraft() {
   clearTimeout(caseDraftTimer);
   caseDraftTimer = setTimeout(() => flushCaseDraft().catch(fail), 500);
@@ -506,7 +519,10 @@ async function caseOptions(id=activeCase?.id,{renameOnly=false}={}) {
 }
 async function finishConversation(id) {
   if (modal.open&&!await closeModal()) return;
+  const navigation = navigationSequence;
   await loadCase(id);
+  if (navigation !== navigationSequence) return;
+  if (libraryMode !== 'workspace') await changeLibraryMode('workspace');
   manualWrapUp=true;
   renderMessages();
   focusCompletionMessage();
@@ -639,7 +655,7 @@ function shell(){
   <div class="main"><header class="topbar"><div class="crumb"><b id="view-label">WORKSPACE</b><span> / </span><span id="file-count">Chat</span></div>${button('settings','<i id="connection-dot" class="connection-dot"></i><span id="account-label">Connect ChatGPT</span><span class="chevron">⌄</span>','account-button')}</header>
   <div class="workspace-heading" id="workspace-heading" hidden><div><h1 id="page-title">Workspace</h1><p id="page-subtitle"></p></div><button id="service-chat-launcher" class="service-chat-launcher" data-action="open-service-chat" aria-label="Open assistant chat" aria-controls="chat-panel" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-4 3V11.5a9.5 9.5 0 1 1 19 0Z" transform="translate(1 -1) scale(.95)"/><path d="M7 9h9M7 13h6"/></svg><span id="service-chat-label">Ask assistant</span></button></div>
   <div class="workspace-grid workspace-view" id="workspace-grid"><section class="library-panel" id="library-panel" hidden><div class="panel-heading"><div><h2 id="library-title">Memory library</h2><span id="card-count" class="subtle"></span></div><div class="library-heading-actions">${button('add-own-service','Add a service','primary','id="add-service" hidden')}${button('import-services','Import services','secondary','id="import-services" hidden')}${button('new-note','Add memory','secondary','id="add-memory" hidden')}${button('documents','Manage files','quiet','id="manage-files" hidden')}</div></div><div class="library-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search saved memory" aria-label="Search saved cards"></label><select id="category-filter" aria-label="Filter services by category" hidden></select><select id="service-visibility" aria-label="Filter by service visibility" hidden><option value="active">Active services</option><option value="removed">Removed services</option></select><select id="document-filter" aria-label="Filter by source" hidden></select><select id="memory-kind-filter" aria-label="Filter memory type" hidden><option value="all">All memory</option><option value="notes">Personal notes</option><option value="feedback">Service results & notes</option><option value="chats">Saved conversations</option><option value="documents">Document cards</option></select><p class="library-source-note" id="library-source-note" hidden>Confirm current eligibility and capacity with the provider.</p></div><div id="cards" class="cards-scroll"></div><div id="paging" class="paging"></div></section>
-  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('add-chat-service','Add a service','secondary','id="chat-add-service" hidden')}${button('case-options','Case options','quiet','id="case-options-button" hidden')}${button('new-chat','New chat','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
+  <section class="chat-panel" id="chat-panel" aria-labelledby="assistant-title" tabindex="-1"><div class="panel-heading"><div><h2 id="assistant-title">Ask your assistant</h2><span class="subtle" id="workspace-label"></span><span class="model-status" id="model-status"></span></div><div class="chat-header-actions">${button('add-chat-service','Add a service','secondary','id="chat-add-service" hidden')}${button('new-chat','New chat','secondary')}${button('expand-assistant','Open Workspace ↗','quiet','id="expand-assistant" hidden')}${button('minimize-assistant','×','icon-button','id="minimize-assistant" aria-label="Minimize assistant" hidden')}</div></div><div id="messages" class="messages"></div><div id="selected-context"></div><div id="case-archived-banner" class="case-archived-banner" hidden></div><form id="composer" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" rows="3" placeholder="Ask about a service or document, or tell me what to remember…"></textarea><div class="composer-controls"><span class="automatic-memory">Type “Remember that …” to save a note.</span><div class="composer-actions">${button('import','＋ &nbsp; Add a document','secondary','id="add-document"')}${button('voice','◉ &nbsp; Speak','secondary','id="voice-button"')}${button('send','Send ↑','primary','id="send-button"')}</div></div><div class="composer-help" id="voice-status" role="status"></div></form><p class="privacy-line">AI questions send relevant text to OpenAI. Keep patient names and identifiers out.</p></section></div></div>`;
   $('case-search').addEventListener('input',()=>{
     caseFilter=$('case-search').value;
     $('case-list').scrollTop=0;

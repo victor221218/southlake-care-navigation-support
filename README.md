@@ -1,32 +1,10 @@
 # Care Navigation Support
 
-A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
+**[Download the latest handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/latest/download/Care-Navigation-Support-Handoff.zip)**
 
-**Prototype source version 2.17.4.** Add a service directly from chat and save it with the information you have. The original 2.16.0 handoff below includes the prior Windows and Mac test packages.
+Extract the ZIP and open **START-HERE.html**. The package includes the current Windows installer, Mac test bundles, editable source, guides and verification results. You can download it while signed out of GitHub.
 
-The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
-
-## Downloads and guides
-
-**[Download for Windows](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.4/Care-Navigation-Support-Setup-2.17.4.exe)**
-
-[What's new in 2.17.4](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.17.4) · [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) · [All releases](https://github.com/victor221218/southlake-care-navigation-support/releases)
-
-### [Download the original 2.16.0 handoff package](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip)
-
-The complete package includes the Windows installer, both Mac test packages, editable source files, guides and verification reports.
-
-| What you need | Open this |
-| --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.4/Care-Navigation-Support-Setup-2.17.4.exe) |
-| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Mac-Apple-Silicon-2.16.0-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Mac-Intel-2.16.0-Test.zip) |
-| **Quick-start guide** | [Download the quick-start guide](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Windows-Quick-Start.html) or [read the full guide here](START-HERE.md) |
-| **Download all deliverables** | [Complete handoff ZIP](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.16.0/Care-Navigation-Support-Handoff-2.16.0.zip) |
-| **Read or edit the code** | Browse the folders above; [start with the source map below](#source-code-map) |
-| **Build or maintain the app** | [Windows development instructions](WINDOWS-DEVELOPMENT.md) |
-| **Review test evidence and remaining checks** | [Release page and verification files](https://github.com/victor221218/southlake-care-navigation-support/releases/tag/v2.16.0) |
-
-The public release can be downloaded without a GitHub account. Opening the installer is different from downloading source code: Use the installer to run the app or the source files for development.
+Care Navigation Support is a desktop prototype that turns spreadsheets and documents into searchable **memory cards**. Ask questions in everyday language and keep useful notes for future conversations.
 
 ## What the app and ChatGPT each do
 
@@ -74,7 +52,7 @@ Choose **New chat** for a separate discussion. A detailed request gets a short t
 - **⋯ → Add to memory library** keeps a useful conversation as one item. Find it under the linked organization or use **Manage memory → Saved conversations**. Open it and choose **Reopen conversation** to continue.
 - **⋯ → Delete chat history** permanently discards a practice or inaccurate conversation and its older automatic entries.
 
-After the last pending result and any open note are saved, a separate assistant message comes into view at the end of the chat and asks **What would you like to do next?** Choose **Keep in chat history**, **Add to memory library**, or **Delete chat and notes**. The last option asks for confirmation and removes the conversation and its linked notes, ratings and results. Review older standalone notes in **Manage memory**. For other conversations, use **Case options → Finish conversation** to open the same choices.
+After the last pending result and any open note are saved, a separate assistant message comes into view at the end of the chat and asks **What would you like to do next?** Choose **Keep in chat history**, **Add to memory library**, or **Delete chat and notes**. The last option asks for confirmation and removes the conversation and its linked notes, ratings and results. Review older standalone notes in **Manage memory**. For other conversations, open the chat's **⋯ → Finish conversation** from **Chat history**.
 
 ![A saved conversation grouped under its organization](docs/case-library.png)
 
@@ -201,18 +179,17 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 
 ## Files in the complete handoff ZIP
 
-Extract the ZIP first, then open **START-HERE.html** inside the Care-Navigation-Support-Windows-2.16 folder.
+Extract the ZIP and open **START-HERE.html** from the extracted folder.
 
 | File or folder | What it is for |
 | --- | --- |
 | `START-HERE.html` | Links to the installer, guides and source overview within the extracted package |
-| `Care-Navigation-Support-Setup-2.16.0.exe` | The normal per-user Windows installer; includes the app runtime, document readers and English speech model |
+| `Care-Navigation-Support-Setup-<version>.exe` | The per-user Windows installer with the app runtime, document readers and English speech model |
+| `Mac/` | Apple Silicon and Intel test bundles with package verification results |
 | `source/` | The original editable source files, tests, dependency versions, build scripts and required source assets |
-| `documentation/Windows-Quick-Start.html` | Quick-start instructions |
-| `documentation/Full-Guide.md` | Detailed usage, file limits, memory and backup instructions |
-| `documentation/Administrator-Handoff.md` | Maintenance/distribution notes and remaining rollout checks |
+| `source/START-HERE.md` | Detailed usage, file limits, memory and backup instructions |
+| `source/SHARING.md` | Distribution notes and remaining rollout checks |
 | `Verification.json` | The test and installer-verification summary |
-| `HANDOFF-MANIFEST.json` | File inventory and integrity hashes |
 | `SHA256.txt` | SHA-256 checksums for the package's contents |
 
 ## Source code map
@@ -241,7 +218,7 @@ These files are for developers. End users do not need to open or run them.
 | `WINDOWS-DEVELOPMENT.md` | Developer prerequisites, runtime configuration, build steps and native test instructions |
 | `START-HERE.md`, `SHARING.md`, `RELEASE-NOTES.md` | User, administrator and release documentation |
 
-The active version 2.7 build uses the **document** entry points listed above. Earlier service-navigation modules remain as historical source. They are identified in BUILDING.md and are not the active Windows workflow.
+The current app uses the **document** entry points listed above. BUILDING.md describes earlier service-navigation modules retained in the source.
 
 ## Build and run from source
 
@@ -260,10 +237,7 @@ The finished installer does not require these developer tools.
 
 ## What has been checked
 
-- **105 automated checks passed**, including parsing, persistence, account separation, spreadsheet updates, backups, comment corrections, transaction rollback, simulated OAuth/AI behavior, service-result edits/deletions, rating summaries, older-database upgrades and backup compatibility.
-- **Native Windows checks passed** for clean service previews, contact and feedback after selection, all three completion choices, confirmed deletion of linked notes, saved conversation reopening, memory search, and the existing document workflow.
-- **77 extracted installer files matched** the prepared Windows application.
-- Installer and handoff SHA-256 checksums are published in the release’s `SHA256.txt` and `Verification.json`.
+See **Verification.json** in the handoff for current automated and Windows acceptance results and installer verification. **SHA256.txt** lists checksums for the files in the package. The Mac test bundles have separate checks for their architecture and included application files.
 
 ### Remaining prototype checks
 
