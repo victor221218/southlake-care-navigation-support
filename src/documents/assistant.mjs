@@ -31,7 +31,7 @@ function asksForServices(text,topic) {
   if (!topic) return /\b(?:recommend|suggest|find|looking for)\b[^.!?]{0,35}\b(?:services?|programs?|providers?)\b/i.test(text);
   const short=text.trim().replace(/[.!?]+$/,'').toLowerCase();
   return short===topic.title.toLowerCase() || short===topic.category.toLowerCase() ||
-    /\b(?:find|recommend|show|suggest|list|look (?:up|for)|choices|options|looking for|(?:i|we) (?:need|want|could use)|help (?:me|us) (?:with|finding|getting))\b/i.test(text);
+    /\b(?:find|recommend|show|suggest|list|look (?:up|for)|choices|options|looking for|(?:i|we)\s+(?:(?:(?:would|will|might|may)\s+)?(?:need|want)|could use|would like)|help (?:me|us) (?:with|finding|getting))\b/i.test(text);
 }
 const asksForExperience = text => /\b(?:ratings?|scores?|experience|recorded results?)\b/i.test(text) &&
   (/\?|\b(?:show|what|recall|look up|tell me)\b/i.test(text));
@@ -159,6 +159,7 @@ export class DocumentAssistant {
         }
       }
       directoryLookup = !note && asksForServices(text,topic);
+      const rideLookup=directoryLookup && topic?.category==='Transportation';
       let rankedServices=[];
       if (directoryLookup && topic) {
         const matches=await this.store.list({collection:'services',...scope,topic,ranking:true,limit:100});
@@ -168,7 +169,8 @@ export class DocumentAssistant {
         }
         directoryTopic=topic;
         rankedServices=rankResponseCards(matches.items,text,topic).map(card=>({...card,
-          card_confirm:topic.region ? 'Confirm eligibility, coverage and current availability with the provider.' :
+          card_confirm:rideLookup ? 'Confirm pickup and drop-off coverage, eligibility and availability for the trip with the provider.' :
+            topic.region ? 'Confirm eligibility, coverage and current availability with the provider.' :
             'Confirm the program serves your area and can meet the requested needs.'
         }));
         localOptions=()=>{
@@ -225,6 +227,7 @@ export class DocumentAssistant {
         'Never invent contacts, phone numbers, service eligibility, availability, patient history, success rates or saved facts. User notes are observations or questions, not independently verified facts. A question is not a reported outcome. Explain missing evidence plainly and propose one useful next step. '+
         'Known services include preloaded public provider research (service-directory) and services added by the current user (own-services). Read the cards and dated notes before comparing services. Distinguish public sources from the user’s own sources and observations. Ask for a missing contact or coverage detail when it is needed. '+
         (directoryLookup?'For this request use only current cards in Known services. Include matching own-source leads even without ratings. Offer relevant public options, especially if the user’s own leads have a poor outcome or low rating. Saved conversation records are not providers. ':'')+
+        (rideLookup?'Use neighbourhoods or municipalities for pickup and drop-off checks. Do not request exact addresses. Show matching service cards when a place is given, and have the user confirm availability for the requested date with the provider. ':'')+
         (canOpenForm?'If the current user wants to add a new entry in Known services, call open_service_form first. A partially filled form is valid. Leave missing details blank and let the user save from the form. Do not recommend other services in that response. ':'')+
         'Service experience summaries count only explicit Worked/Didn’t work results recorded by this user; optional 1–5 ratings describe their reported experience. These small personal samples are not provider-wide success rates, verified patient satisfaction or proof of future availability. Read the dated result notes and relevant circumstances before using this history. '+
         'Use calculate_table for arithmetic over spreadsheet records. Report the matched-row count, exact filters, source and any excluded nonnumeric values. Imported formulas have cached values only. Do not treat PDF text as a reliably structured spreadsheet. '+

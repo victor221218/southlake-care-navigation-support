@@ -1,3 +1,9 @@
+# Care Navigation Support 2.17.9
+
+- Recognized service inventories can be imported from **Workspace → Add a document** or **Known services → Import services**. Save once to find the cards in **Known services**, **Manage memory** and matching chat results.
+- Choose **Edit** at the right of a document preview card to correct the proposed details before saving. Earlier saved inventories with recognizable service rows also appear in Known services when the workspace reopens.
+- Conversational transportation requests that include a city and date show matching service cards. Relevant unrated own-source leads appear ahead of comparable public options. Confirm coverage and availability with the provider.
+
 # Care Navigation Support 2.17.8
 
 - Review closed conversations in **Manage memory → Saved conversations**. Chat recommendations draw on matching provider cards and their recorded feedback.

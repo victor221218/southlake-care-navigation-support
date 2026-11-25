@@ -27,4 +27,12 @@ export async function writeParserFixtures(directory){
   const start=Buffer.byteLength(pdf);pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
   await writeFile(path.join(directory,'fixture.pdf'),pdf);
   await writeServiceFixture(directory);
+  const inventory=new ExcelJS.Workbook(),services=inventory.addWorksheet('Service Inventory');
+  services.addRows([
+    ['Service ID','Partner / organization','Program / clinic','Service type','Service area','Main contact phone','Main contact email'],
+    ['FIX-1','Example North Transit','Fixture Appointment Shuttle','Transportation','North York','416-555-0171',''],
+    ['FIX-2','Example East Transit','Fixture Airport Shuttle','Transportation','Aurora','905-555-0172',''],
+    ['FIX-3','Example Community Meals','Fixture Meal Visits','Meals and food','Newmarket','','']
+  ]);
+  await inventory.xlsx.writeFile(path.join(directory,'workspace-inventory.xlsx'));
 }

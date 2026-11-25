@@ -11,6 +11,7 @@ import {DocumentAssistant} from '../src/documents/assistant.mjs';
 import {ensureKnownServices} from '../src/documents/services.mjs';
 import {groupServiceOptions,rankResponseCards} from '../src/documents/ranking.mjs';
 import {parseDocument} from '../src/documents/parse.mjs';
+import {OWN_SERVICE_FORMAT,serviceDraft,serviceSection} from '../src/documents/service-sources.mjs';
 async function fixture(){await mkdir('.runtime/tests',{recursive:true});const dir=await mkdtemp(path.resolve('.runtime/tests/cases-')),options={filename:path.join(dir,'memory.sqlite'),wasm:path.resolve('node_modules/sql.js/dist/sql-wasm.wasm'),migrations:path.resolve('drizzle'),catalog:[]};let db=await openDatabase(options),owner='one';const store=new DocumentStore({database:()=>db,owner:()=>owner}),cases=new DocumentCases({store}),inputs=new InputHistory({store});return{store,cases,inputs,switch:value=>owner=value,reopen:async()=>{await db.close();db=await openDatabase(options);},close:()=>db.close()};}
 async function service(f){await ensureKnownServices(f.store);return(await f.store.list({collection:'services',query:'North York Seniors'})).items[0];}
 const local=f=>new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:false})}});
@@ -502,6 +503,48 @@ const streamed=output=>new Response('data: '+JSON.stringify({type:'response.comp
 const showOptions=options=>({type:'function_call',name:'present_service_options',call_id:'present',arguments:JSON.stringify({options})});
 const option=id=>({id,reason:'A possible match for this request.',confirm:'Confirm the pickup address and boarding help with intake.'});
 function online(f,fetcher){const assistant=new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:true}),accessToken:async()=> 'test-only'},fetcher});assistant.model='fixture';return assistant;}
+
+test('a dated ride request shows matching imported own services ahead of public options',async()=>{
+  const f=await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const imported=await parseDocument(Buffer.from([
+      'Service ID,Organization,Program / clinic,Service type,Service area,Main contact phone',
+      'R1,Example Ride Network,Appointment Rides,Transportation,North York,416-555-0147',
+      'R2,Example Outside Network,Shuttle,Transportation,Aurora,905-555-0124'
+    ].join('\n')),'example-inventory.csv');
+    await f.store.import({...imported,format:OWN_SERVICE_FORMAT,
+      sections:imported.sections.map(section=>serviceSection(section,serviceDraft(section).values))});
+    const own=(await f.store.list({collection:'services',query:'Example Ride Network'})).items[0];
+    const outside=(await f.store.list({collection:'services',query:'Example Outside Network'})).items[0];
+    const publicRide=await service(f);
+    const prompt='I would need an older adult who needs transportation ride to North York on 11/30';
+    const requests=[];
+    const linked=output=>online(f,async(_,request)=>{
+      requests.push(JSON.parse(request.body));
+      return streamed(output);
+    });
+    const requestDateCheck=linked([{type:'message',content:[{type:'output_text',text:'What is the full pickup address?'}]}]);
+    const publicOnly=linked([showOptions([{
+      id:publicRide.id,reason:'Listed for North York.',confirm:'Confirm coverage and trip availability with intake.'
+    }])]);
+    const runs=[[local(f),'local'],[requestDateCheck,'local'],[publicOnly,'chatgpt']];
+    for (const [assistant,source] of runs) {
+      const answer=await assistant.chat({case_id:(await f.cases.create()).id,text:prompt,remember:false});
+      assert.equal(answer.source,source);
+      assert.equal(answer.presentation,'service-options');
+      assert.equal(answer.cards[0].id,own.id);
+      assert.equal(answer.cards[0].card_source_group,'own');
+      assert.match(answer.cards[0].card_confirm,/drop-off coverage.*availability/);
+      assert(answer.cards.some(card=>card.card_source_group==='public'));
+      assert(answer.cards.every(card=>card.id!==outside.id));
+      assert.doesNotMatch(answer.text,/full pickup address/);
+    }
+    assert.equal(requests.length,2);
+    assert(requests.every(({instructions})=>instructions.includes('Do not request exact addresses') &&
+      instructions.includes(own.id) && !instructions.includes(outside.id)));
+  } finally { await f.close(); }
+});
 
 test('a conversational transportation request shows the unrated cab first and the two rated public services next',async()=>{
   const f=await fixture();

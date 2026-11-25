@@ -2,13 +2,15 @@ import { Worker } from 'node:worker_threads';
 import { readFile, stat, mkdir, writeFile, rename, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import {OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, cleanServiceFields, serviceDraft, serviceSection} from './service-sources.mjs';
-import {headerKey, TRACKING_TEMPLATE} from './navigation-templates.mjs';
+import {OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, cleanServiceFields, isInventoryWorkbook, serviceDraft, serviceSection} from './service-sources.mjs';
+import {headerKey, INVENTORY_TEMPLATE, TRACKING_TEMPLATE} from './navigation-templates.mjs';
 import {matchingServices} from './service-matching.mjs';
+import {serviceFileDigest} from './store.mjs';
 
-const serviceFileDigest = digest => createHash('sha256').update(OWN_SERVICE_FORMAT + ':' + digest).digest('hex');
 const trackerKey = (filename,row) => createHash('sha256')
   .update(JSON.stringify([headerKey(filename),row.locator,headerKey(row.provider),row.date])).digest('hex');
+const cleanEdit = value => typeof value==='string' ? value.replace(/\u0000/g,'').trim() : '';
+const documentCard = ({title,body,fields,locator}) => ({title,body,fields,locator});
 
 export function parseInWorker({bytes,filename,worker,pdfWorker,timeoutMs=45000}) {
   return new Promise((resolve,reject)=>{
@@ -36,10 +38,15 @@ export class DocumentImporter {
         this.pending={id,owner,parsed};
         return await this.reviewTracking(id);
       }
-      const duplicate=services?null:await this.store.duplicate(parsed.digest),previous=services?null:await this.store.sameName(parsed.filename);
+      const inventory=SERVICE_FILE_TYPES.includes(parsed.format) &&
+        (parsed.template===INVENTORY_TEMPLATE || isInventoryWorkbook(parsed.sections));
+      if (inventory) await this.store.recoverServiceInventories();
+      const review=services || inventory;
+      const duplicate=review?null:await this.store.duplicate(parsed.digest),previous=review?null:await this.store.sameName(parsed.filename);
+      if(owner!==this.store.owner())throw new Error('The active account changed. Import this file again.');
       if(duplicate)return{duplicate:true,document_id:duplicate.id,filename:duplicate.filename};
       const id=randomUUID();this.pending={id,owner,parsed,bytes,previous};
-      if (services) return await this.reviewServices(id);
+      if (review) return {...await this.reviewServices(id),service_inventory:inventory};
       return{id,filename:parsed.filename,format:parsed.format,count:parsed.sections.length,warnings:parsed.warnings,preview:parsed.sections.slice(0,8),previous:previous&&{...previous,can_update:parsed.stableKeys}};
     }finally{this.busy=false;}
   }
@@ -47,6 +54,36 @@ export class DocumentImporter {
     const item=this.pending;
     if(!item||item.id!==id||item.owner!==this.store.owner())throw new Error('This import preview is no longer active. Choose the document again.');
     return item;
+  }
+  reviewDocumentCard(id,index) {
+    const item=this.preview(id), section=item.parsed.sections[index];
+    if (!Number.isInteger(index) || !section) throw new Error('Choose a document card from the preview.');
+    return documentCard(section);
+  }
+  setDocumentRow({id,index,title,body,fields}) {
+    if (this.busy) throw new Error('The import is already saving.');
+    this.reviewDocumentCard(id,index);
+    const item=this.preview(id), section=item.parsed.sections[index];
+    const titleEdit=cleanEdit(title);
+    if (!titleEdit || titleEdit.length>180) throw new Error('Give this card a title of up to 180 characters.');
+    let bodyEdit=cleanEdit(body), fieldsEdit=section.fields;
+    if (Object.keys(section.fields).length) {
+      fieldsEdit=Object.fromEntries(Object.entries(section.fields).map(([label,original])=>{
+        const value=fields?.[label];
+        if (value===undefined || String(value)===String(original)) return [label,original];
+        if (typeof value==='number' && Number.isFinite(value)) return [label,value];
+        const edit=cleanEdit(value);
+        return [label,typeof original==='number' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(edit)
+          && Number.isFinite(Number(edit)) ? Number(edit) : edit];
+      }));
+      bodyEdit=Object.entries(fieldsEdit).filter(([,value])=>value!=='')
+        .map(([label,value])=>label+': '+value).join('\n');
+    }
+    if (!bodyEdit || bodyEdit.length>30000) throw new Error('Keep between 1 and 30,000 characters of card content.');
+    const edited={...section,title:titleEdit,body:bodyEdit,fields:fieldsEdit};
+    item.parsed.sections[index]=edited;
+    item.serviceRows=null;
+    return documentCard(edited);
   }
   async reviewServices(id) {
     const item = this.preview(id), {parsed} = item;
@@ -137,11 +174,13 @@ export class DocumentImporter {
     try{
       if(!item.bytes)throw new Error('Use the navigation outcome review to save this worksheet.');
       await mkdir(folder,{recursive:true});await writeFile(destination+'.next',item.bytes,{flag:'wx',mode:0o600});await rename(destination+'.next',destination);
+      this.preview(id);
       const replaceId=serviceReplaceId||(update?item.previous?.id:null);
       const previous=replaceId?await this.store.document(replaceId):null;
+      this.preview(id);
       const result=await this.store.import(serviceDocument||item.parsed,{originalPath:destination,replaceId});this.pending=null;
       if(result.duplicate)await rm(destination,{force:true}).catch(()=>{});
-      if(previous?.original_path&&path.resolve(previous.original_path).startsWith(path.resolve(folder)+path.sep))await rm(previous.original_path,{force:true}).catch(()=>{});
+      if(!result.duplicate&&previous?.original_path&&path.resolve(previous.original_path).startsWith(path.resolve(folder)+path.sep))await rm(previous.original_path,{force:true}).catch(()=>{});
       return result;
     }catch(error){await rm(destination,{force:true}).catch(()=>{});await rm(destination+'.next',{force:true}).catch(()=>{});throw error;}
     finally{this.busy=false;}

@@ -2,7 +2,7 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.8.** Find matching service cards in chat and review closed conversations in Manage memory.
+**Prototype source version 2.17.9.** Review and edit imported service rows, then find the same services in Known services and chat.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
@@ -14,8 +14,8 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.8/Care-Navigation-Support-Setup-2.17.8.exe) |
-| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.8/Care-Navigation-Support-Mac-Apple-Silicon-2.17.8-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.8/Care-Navigation-Support-Mac-Intel-2.17.8-Test.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.9/Care-Navigation-Support-Setup-2.17.9.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.9/Care-Navigation-Support-Mac-Apple-Silicon-2.17.9-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.9/Care-Navigation-Support-Mac-Intel-2.17.9-Test.zip) |
 | **Quick-start guide** | [Read the quick-start guide](START-HERE.md) or open **START-HERE.html** inside the handoff ZIP |
 | **Maintain the inventory and outcomes** | [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) |
 | **Download all deliverables** | Use **Download the latest handoff package** above |
@@ -117,7 +117,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 | --- | --- |
 | **1. Install** | Open the Windows installer for your version, choose Install, then Finish. Later, open Care Navigation Support from the desktop or Start menu. |
 | **2. Connect** | Choose Continue with ChatGPT. Sign in on OpenAI's page using your own ChatGPT account and review the requested permissions. Return to the app. |
-| **3. Add a document** | Choose Add a document beside Speak at the bottom of the chat, select a file, review its preview and warnings, then Save cards. |
+| **3. Add a document** | Choose **Add a document** beside **Speak**, select a file, and review its preview and warnings. Use **Edit** beside a card to correct it before saving. |
 | **4. Ask a question** | Type a question, or Speak, Stop listening, review the transcript, and Send. Answers are text, with clickable source cards where relevant. |
 | **5. Keep useful information** | Use **Add to memory library** to keep a whole conversation. Use **Remember that …** to save one note, or record a result from a service card. Search the organization in **Manage memory** and expand its history. |
 | **6. Maintain and hand over** | Review the source and test report, verify the intended account/data flow, then continue development and approved deployment. |
@@ -125,8 +125,8 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 ### Ask, dictate and manage documents
 
 - In **Workspace**, type and choose **Send**, or choose **Speak → Stop listening**, review the English transcription, and choose **Send**. Use **Stop** during an answer to interrupt it.
-- Choose **Add a document** for source cards you can summarize, compare or calculate from. Choose **Known services → Import services** to create directory cards with contact, follow-up and rating controls.
-- After reviewing the import preview and warnings, choose **Save cards**. In **Manage memory → Manage files**, use **Show cards**, **Include previous rows**, **Open file**, or **Delete**. Deleting a document removes its extracted cards and attached notes after confirmation.
+- Choose **Add a document** for reference cards you can summarize, compare or calculate from. Recognized service inventories open for service review from either **Add a document** or **Known services → Import services**. If a spreadsheet opens as a reference preview, choose **Add to Known services** to review possible service rows.
+- Review the preview and warnings and use **Edit** beside a card to correct its fields. Save reference cards to Manage memory. Save service rows to Known services to also make them available in Manage memory and new chats. In **Manage memory → Manage files**, use **Show cards**, **Include previous rows**, **Open file**, or **Delete**. Deleting a document removes its extracted cards and attached notes after confirmation.
 - Use **View details** to check the source fields and row or page reference. Use **Add correction** to annotate a source card. To update a spreadsheet and keep matching card history, keep the same file name and stable row IDs, reimport, and choose **Update existing document**.
 - For a calculation, name the sheet, numeric column and filters in the question. Review the count of matched rows and excluded nonnumeric values before using the answer.
 
@@ -156,7 +156,7 @@ Use one row per program and location. The following column labels define the imp
 | Intake and referral | **Who can refer in?**, **How to refer in**, **Referral Requirements / Documents**, **Refers out to**, **Referral form / intake link** |
 | Contacts and verification | **Main contact name**, **Main contact phone**, **Main contact email**, **Website**, **Information source**, **Last verified date**, **Internal Notes / Validation Required** |
 
-1. In **Known services**, choose **Import services** and select the local inventory in Excel, CSV or TSV format. Review the proposed cards and the source rows. The app recognizes the column labels below grouped headings and keeps other populated columns with the service.
+1. Select the local Excel, CSV or TSV inventory through **Workspace → Add a document** or **Known services → Import services**. Review the proposed cards and source rows. The app recognizes column labels below grouped headings and keeps other populated columns with the service. Use **Edit** within the review to correct a program, service area or contact. Save once to make included cards available in **Known services** and **Manage memory**. A new chat puts matching, unrated **Own source** leads before comparable public options.
 2. Use **Needs details** in Known services to find gaps in contact, coverage, intake, eligibility or verification. Open the card and choose **Edit details** to correct an entry you added. Update the workbook too if it remains your source.
 3. When you receive changes, edit the full inventory workbook and keep its filename. Keep existing Service IDs or the same organization, program, service type, subcategory and location so the app can match rows. Import the revised workbook and select **Update saved inventory**. The app updates matching cards in place and keeps attached ratings and notes. Review included rows before saving. Rows omitted from an update are kept as previous rows.
 4. For new providers, add a row to the workbook, choose **Add a service** in Known services, or ask “Can you add a service for me?” in chat. Enter any detail you have and choose **Save service**. An incomplete card appears under **Known services** with a **Needs details** label. Open **View details → Edit details** to fill in the rest. Keep working spreadsheets and case results in the local workspace.
@@ -226,7 +226,7 @@ Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc/q
 | --- | --- |
 | **A service is missing from suggestions** | Search for its name in **Known services**. Confirm the category and service area, check **Needs details**, and check the **Removed services** filter. For a question about a particular provider, use its exact name. |
 | **A service has no rating** | Open **View details → Your notes & results**. If you saved a result, choose **Edit** to add a rating. If the feedback was kept only as an older chat message, record it once on the intended service card using **Worked** or **Didn’t work**. |
-| **A spreadsheet shows in Manage memory** | Use **Known services → Import services** when you want its rows in the directory. Review the column mapping and included rows before saving. |
+| **An inventory spreadsheet shows only in Manage memory** | Reopen the workspace after updating. Earlier inventories with recognizable service rows also appear in **Known services**. If a sheet still needs review, choose **Known services → Import services**, open the original workbook, and check the included rows before saving. |
 | **Cards are missing after signing in** | Check the active connection. Choose the original saved connection, or copy starter cards into the account if they were imported before sign-in. |
 | **ChatGPT sign-in or answers stop** | Use **Connection & backup → Reconnect ChatGPT**, then send a short test question. Check the active model and any usage or permissions message. Local cards and feedback are still available. |
 | **Windows setup says a file is in use** | Close the running app and retry the installer. |

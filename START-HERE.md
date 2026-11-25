@@ -19,7 +19,7 @@ Choose **Ask assistant** beneath View details, or **Ask more about this card** i
 ## Start with three steps
 
 1. **Connect ChatGPT.** Sign in on the official OpenAI page in your browser, review identity and plan-usage permission, then return to the app. Use your own account. Account, workspace and app eligibility are decided by OpenAI; signing in alone does not prove AI usage is available. The app never switches to API billing.
-2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and any warnings, then choose **Save cards**. Import happens on your computer. For a first look, choose **Manage memory → Try a sample spreadsheet** in the empty memory list. The sample contains no real services or contacts.
+2. **Add a document.** Use the button beside **Speak** at the bottom of the chat. Review the extracted cards and warnings. Choose **Edit** beside an entry to make a correction, then save the reviewed cards. Import happens on your computer. For a first look, choose **Manage memory → Try a sample spreadsheet** in the empty memory list. The sample contains no real services or contacts.
 3. **Ask a question.** Matching source cards appear below the answer. Open one for its exact fields, contacts, source links and notes. **Ask about this card** makes it the conversation's selected source.
 
 On a service card, choose **Add a note** near the top. Notes and corrections save automatically when you pause. Wait for **Saved on this card**. Choose **New note** for a separate entry. Closing the card or app also waits for a pending note to save.
@@ -40,7 +40,7 @@ Supported: **.xlsx, .csv, .tsv, .docx, searchable .pdf, .txt, .md**. Limits: 20 
 
 Excel/CSV tables should have a clear header row followed by records. One row becomes one card, with its worksheet and row number. Named contacts appear only when a contact-name column exists; otherwise listed phone numbers or emails are shown. Check source details before relying on them.
 
-Identical files do not create duplicate document cards. A revised spreadsheet with the same filename and unique IDs or names offers **Update existing document**. Matching cards keep their notes even when rows move. Removed rows are retained as previous rows. When unique keys are ambiguous, save a separate version to preserve the existing information. Source content is read-only; add a correction note or reimport the revised source.
+Identical files do not create duplicate document cards. A revised spreadsheet with the same filename and unique IDs or names offers **Update existing document**. Matching cards keep their notes even when rows move. Removed rows are retained as previous rows. When unique keys are ambiguous, save a separate version to preserve the existing information. Editing a card in review leaves the original file intact. After saving a reference card, you can add a correction note or reimport the revised source.
 
 Calculations use imported numeric cell values. Excel formulas are not executed or recalculated: only their last saved results are used, with a warning. Missing results remain missing. Calculation answers show matched row counts and exclude nonnumeric values. PDF text is not treated as a reliable spreadsheet table.
 
@@ -80,7 +80,7 @@ Choose **Add a service** at the top of chat, or ask “Could you help me add a s
 
 In **Known services**, choose **Remove** on a row to hide it from the directory and future recommendations. Switch **Active services** to **Removed services**. Choose **Restore** to bring the card back with its history, or confirm **Delete permanently** to erase it and its saved notes, ratings and results from this workspace.
 
-To load a spreadsheet, choose **Known services → Import services**. In the review, pick a row to check the program, coverage and contact details. Include the rows you want to save.
+To load a service inventory, choose **Add a document** in Workspace or **Import services** in Known services. In the review, check the program, category, coverage and contact details. Use **Edit** to make corrections before saving. The included rows appear as **Own source** cards in Known services and are also available in Manage memory and new chats. Reopen your workspace after updating to recover previously saved inventories with recognizable service rows. For the Navigation tracker, use **Import services** and confirm each outcome you want to record.
 
 Known services lists **Services with recorded outcomes** first, followed by own and public services without outcomes. A blue **(Own source)** label identifies entries you added. Preloaded entries show **(Public source)**. See saved notes and results in **View details**.
 

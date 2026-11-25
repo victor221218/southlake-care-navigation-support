@@ -21,6 +21,7 @@ let caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHisto
 let expandedMemoryGroup = '', memoryHistoryOffset = 0;
 let manualWrapUp = false;
 let serviceEditor = null;
+let documentPreviewEditor = null;
 let showRemovedServices = false;
 let trackingReview = null;
 const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
@@ -241,6 +242,7 @@ function serviceDirectoryHTML(cards) {
 }
 function memoryEntry(item,group,expanded) {
   const conversation = item.kind === 'conversation';
+  const serviceCard = item.entry_type==='card'&&item.source_format===OWN_SERVICE_FORMAT;
   const prefix = group.title + ' · ';
   const label = conversation ? 'Saved conversation' : item.outcome ? 'Service result' :
     item.entry_type === 'comment' ? 'Note' : item.document_id ? 'Document card' : 'Saved note';
@@ -251,22 +253,22 @@ function memoryEntry(item,group,expanded) {
   const status = resultBadge(item);
   const attrs = `data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}" ${item.outcome?'data-service-result="true"':''}`;
   const remove = button('delete-memory','Delete','quiet danger',`${attrs} aria-label="${e('Delete this '+label.toLowerCase())}"`);
+  const editService=serviceCard&&!item.archived?button('edit-own-service','Edit','secondary',`${attrs} aria-label="${e('Edit '+title)}"`):'';
   if (!expanded) {
     const deleteFromPreview = item.entry_type==='comment' || item.memory_type==='notes';
-    return `<li data-preview-id="${e(item.id)}"><div class="memory-preview-row"><div><strong>${e(title)}</strong> ${sourceTag()}
+    return `<li data-preview-id="${e(item.id)}"><div class="memory-preview-row"><div><strong>${e(title)}</strong> ${sourceTag(serviceCard?item.source_format:undefined)}
       ${status}${!status && item.entry_type==='comment' ? '<span class="memory-entry-label">Note</span>' : ''}
-      ${body ? `<p>${e(body)}</p>` : ''}</div>${deleteFromPreview ? remove : ''}</div></li>`;
+      ${body ? `<p>${e(body)}</p>` : ''}</div>${editService || (deleteFromPreview ? remove : '')}</div></li>`;
   }
   const editLabel = conversation ? 'Case options' : item.document_id && item.entry_type==='card' ? 'Add correction' : 'Edit';
   return `<li class="memory-record" data-memory-id="${e(item.id)}">
     <div class="memory-entry-content">
       <div class="memory-entry-heading">${button('open-card',e(title),'memory-record-main',
-        `data-id="${e(item.card_id)}" aria-label="${e('Open '+title)}"`)}${sourceTag()}${status}</div>
+        `data-id="${e(item.card_id)}" aria-label="${e('Open '+title)}"`)}${sourceTag(serviceCard?item.source_format:undefined)}${status}</div>
       ${body ? `<p>${e(body)}</p>` : ''}
       <small>${label}${item.archived?' · Previous row':''} · ${e(date(item.updated_at))}</small>
     </div>
-    <div class="memory-record-actions">${button('edit-memory',editLabel,'secondary',attrs)}
-      ${remove}</div></li>`;
+    <div class="memory-record-actions">${serviceCard ? editService : button('edit-memory',editLabel,'secondary',attrs)+remove}</div></li>`;
 }
 function memoryGroupHTML(group) {
   const open = Boolean(group.history);
@@ -956,10 +958,12 @@ function discardResult(){return !feedbackEditor||JSON.stringify(resultDraft())==
 async function openModal(content,kind=''){if(feedbackSaving)throw new Error('Wait for the service result to finish saving.');if(!discardResult())throw new Error('Save the result or choose Cancel result before leaving.');await flushNote();noteEditor=null;feedbackEditor=null;cardHistory=null;modal.className=kind;modal.innerHTML=content;if(!modal.open)modal.showModal();}
 function modalHead(title,subtitle=''){return`<div class="modal-heading"><div><h2 id="modal-title">${e(title)}</h2>${subtitle?`<p>${e(subtitle)}</p>`:''}</div>${button('close-modal','×','icon-button','aria-label="Close panel"')}</div>`;}
 async function closeModal(){
-  if(feedbackSaving||serviceEditor?.saving||trackingReview?.saving)throw new Error('Wait for the service to finish saving.');
+  if(feedbackSaving||serviceEditor?.saving||trackingReview?.saving||documentPreviewEditor?.saving)throw new Error('Wait for this change to finish saving.');
   if(!discardResult())return false;
   await flushNote();
-  if(serviceEditor?.importId||trackingReview)await api('cancel-import');
+  if(preview?.id||serviceEditor?.importId||trackingReview)await api('cancel-import');
+  preview=null;
+  documentPreviewEditor=null;
   trackingReview=null;
   serviceEditor=null;noteEditor=null;feedbackEditor=null;cardHistory=null;
   modal.close();modal.replaceChildren();return true;
@@ -1082,7 +1086,7 @@ async function flushNote(){
 function serviceEditorHTML(editor) {
   const row=editor.rows[editor.index];
   const list=editor.importId?`<div class="service-review-tools">
-    <label>Spreadsheet row<select id="service-review-row">${editor.rows.map((item,index)=>
+    <label>Source row<select id="service-review-row">${editor.rows.map((item,index)=>
       `<option value="${index}" ${index===editor.index?'selected':''}>${e(item.values.name||'Unnamed service')} · ${e(item.locator)}</option>`).join('')}</select></label>
     <label class="service-include"><input id="include-service-row" type="checkbox" ${row.include?'checked':''}> Include this row</label>
     <p id="service-review-count" role="status"></p>
@@ -1107,8 +1111,52 @@ function serviceEditorHTML(editor) {
       <p id="service-editor-error" class="callout" hidden></p>
     </div><div class="modal-footer">
       ${editor.previous?.can_update?button('update-service-inventory','Update saved inventory','primary'):''}
-      ${button('save-own-service',editor.importId?'Add selected services':'Save service',editor.previous?.can_update?'secondary':'primary')}
-      ${button('close-modal','Cancel','quiet')}</div>`;
+      ${button('save-own-service',editor.inventoryOverview?'Save to Known services':editor.importId?'Add selected services':'Save service',editor.previous?.can_update?'secondary':'primary')}
+      ${editor.inventoryOverview ? button('back-to-inventory-preview','Back to preview','quiet') : button('close-modal','Cancel','quiet')}</div>`;
+}
+function importPreviewCard(section,index,action) {
+  const title=section.title||'Untitled card';
+  return `<div class="import-preview-row"><div><strong>${e(title)}</strong><span>${e(section.locator)}</span>
+    ${section.body?`<p>${e(section.body)}</p>`:''}</div>
+    ${button(action,'Edit','secondary',`data-index="${index}" aria-label="${e('Edit '+title)}"`)}</div>`;
+}
+function inventoryPreviewHTML(editor) {
+  const included=editor.rows.filter(row=>row.include).length;
+  const cards=editor.rows.slice(0,8).map((row,index)=>{
+    const description=serviceFields.filter(([name])=>name!=='name'&&row.values[name])
+      .map(([name,label])=>label+': '+row.values[name]);
+    return importPreviewCard({title:row.values.name||'Unnamed service',locator:row.locator,
+      body:description.slice(0,7).join('\n')+(row.include?'':'\nExcluded from this import')},index,'edit-inventory-preview-row');
+  });
+  return modalHead('Review your document',editor.filename)+`<div class="detail-body">
+    <div class="import-count"><strong>${included}</strong><span>services ready to save</span></div>
+    <p>Save these cards to Known services to use them in recommendations. You can also find the source in Manage memory.</p>
+    <p class="subtle">The original file and extracted cards stay on this computer.</p>
+    ${editor.warnings.map(warning=>`<p class="callout">${e(warning)}</p>`).join('')}
+    <h3>Preview · first ${cards.length} cards</h3>
+    <div class="import-preview">${cards.join('')}</div>
+    ${editor.rows.length>cards.length?button('review-all-inventory-rows','Review all rows','secondary'):''}
+    <p id="service-editor-error" class="callout" role="alert" hidden></p>
+  </div><div class="modal-footer">
+    ${editor.previous?.can_update?button('update-service-inventory','Update saved inventory','primary'):''}
+    ${button('save-own-service','Save to Known services',editor.previous?.can_update?'secondary':'primary')}
+    ${button('close-modal','Cancel','quiet')}</div>`;
+}
+function editInventoryPreviewRow(index) {
+  const editor=serviceEditor;
+  if (!editor?.importId||editor.saving||!editor.rows[index]) return;
+  editor.index=index;
+  modal.innerHTML=serviceEditorHTML(editor);
+  modal.scrollTop=0;
+  updateServiceEditor();
+  $('service-field-name').focus({preventScroll:true});
+}
+function showInventoryPreview() {
+  const editor=serviceEditor;
+  if (!editor?.inventoryOverview||editor.saving) return;
+  modal.innerHTML=inventoryPreviewHTML(editor);
+  (modal.querySelector(`[data-action="edit-inventory-preview-row"][data-index="${editor.index}"]`)||
+    modal.querySelector('[data-action="review-all-inventory-rows"]'))?.focus();
 }
 function updateServiceEditor() {
   const {rows,index,importId}=serviceEditor;
@@ -1124,22 +1172,22 @@ function updateServiceEditor() {
     $('service-review-row').options[index].textContent=(row.values.name||'Unnamed service')+' · '+row.locator;
   }
 }
-async function openServiceEditor({card=null, review=null}={}) {
+async function openServiceEditor({card=null, review=null, inventoryOverview=false}={}) {
   const rows=review?review.rows.map(row=>({...row,incomplete:Boolean(missingServiceDetails(row.values).length)})):
     [{values:serviceDraft(card||{},{nameFromOrganization:false}).values,include:true}];
   const index=review?Math.max(0, rows.findIndex(row=>missingServiceDetails(row.values).length)):0;
   const editor={card, rows, index, importId:review?.id, filename:review?.filename, previous:review?.previous,
-    warnings:review?.warnings||[], changed:new Set(), saving:false};
-  await openModal(serviceEditorHTML(editor),'service-editor-dialog');
+    warnings:review?.warnings||[], changed:new Set(), saving:false,inventoryOverview};
+  await openModal(inventoryOverview?inventoryPreviewHTML(editor):serviceEditorHTML(editor),'service-editor-dialog');
   serviceEditor=editor;
-  updateServiceEditor();
+  if (!inventoryOverview) updateServiceEditor();
 }
 async function reviewServiceFile(result) {
   if(result.duplicate){
     notice('These service cards are already in Known services.');
     return;
   }
-  await openServiceEditor({review:result});
+  await openServiceEditor({review:result,inventoryOverview:result.service_inventory===true});
   preview=null;
 }
 async function saveOwnService(update=false) {
@@ -1183,8 +1231,7 @@ async function saveOwnService(update=false) {
       await refresh();
       await openCard(card.id);
     } else {
-      if(libraryMode!=='services')await changeLibraryMode('services');
-      query='';category='';offset=0;$('search').value='';
+      await changeLibraryMode('services');
       await refresh();
       $('cards').scrollTop=0;
     }
@@ -1254,11 +1301,77 @@ async function importDocument(sample=false,services=false){
   if(busy||importing)return;importing=true;$('add-document').disabled=true;$('add-document').textContent='Reading document…';
   try{const result=await api(sample?'sample-document':'pick-document',{services});if(result.cancelled)return;
     if(result.tracking){await reviewTrackingFile(result);return;}
-    if(services){await reviewServiceFile(result);return;}
+    if(services||result.service_inventory){await reviewServiceFile(result);return;}
     if(result.duplicate){libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;await refresh();$('document-filter').value=documentFilter;notice('This document is already saved. Open Manage memory to review its cards.');return;}
     preview=result;
-    await openModal(modalHead('Review your document',result.filename)+`<div class="detail-body"><div class="import-count"><strong>${result.count}</strong><span>cards ready to save</span></div><p>The original file and extracted text will be kept on this computer. This import does not contact OpenAI.</p>${result.warnings.map(w=>`<p class="callout">${e(w)}</p>`).join('')}${result.previous?`<div class="callout"><strong>A document with this name is already saved.</strong><p>Save separately to keep both. ${result.previous.can_update?'Or update matching rows using their unique ID or name; attached notes are preserved. Removed rows become previous rows.':'This file has no safe unique row keys, so it will be kept as a separate version.'}</p></div>`:''}<h3>Preview · first ${result.preview.length} cards</h3><div class="import-preview">${result.preview.map(s=>`<div><strong>${e(s.title)}</strong><span>${e(s.locator)}</span><p>${e(s.body.slice(0,240))}</p></div>`).join('')}</div></div><div class="modal-footer">${button('save-import','Save '+result.count+' cards','primary')}${result.previous?.can_update?button('update-import','Update existing document','secondary'):''}${SERVICE_FILE_TYPES.includes(result.format)?button('review-import-services','Add to Known services','secondary'):''}${button('cancel-import','Cancel','quiet')}</div>`,'import-dialog');
+    await openModal(documentPreviewHTML(result),'import-dialog');
   }finally{importing=false;$('add-document').disabled=busy;$('add-document').textContent='＋ Add a document';}
+}
+function documentPreviewHTML(result) {
+  return modalHead('Review your document',result.filename)+`<div class="detail-body">
+    <div class="import-count"><strong>${result.count}</strong><span>cards ready to save</span></div>
+    <p>The original file and extracted text will be kept on this computer. This import does not contact OpenAI.</p>
+    ${result.warnings.map(warning=>`<p class="callout">${e(warning)}</p>`).join('')}
+    ${result.previous?`<div class="callout"><strong>A document with this name is already saved.</strong>
+      <p>Save separately to keep both. ${result.previous.can_update?'Or update matching rows using their unique ID or name. Attached notes are preserved and removed rows become previous rows.':'This file has no safe unique row keys, so it will be kept as a separate version.'}</p></div>`:''}
+    <h3>Preview · first ${result.preview.length} cards</h3>
+    <div class="import-preview">${result.preview.map((section,index)=>importPreviewCard({...section,body:section.body.slice(0,360)},index,'edit-document-preview-row')).join('')}</div>
+  </div><div class="modal-footer">
+    ${button('save-import','Save '+result.count+' cards','primary')}
+    ${result.previous?.can_update?button('update-import','Update existing document','secondary'):''}
+    ${SERVICE_FILE_TYPES.includes(result.format)?button('review-import-services','Add to Known services','secondary'):''}
+    ${button('close-modal','Cancel','quiet')}</div>`;
+}
+async function editDocumentPreviewRow(index) {
+  const pending=preview;
+  if (!pending?.preview[index]||importing) return;
+  const section=await api('review-document-card',{id:pending.id,index});
+  if (preview!==pending) return;
+  const fields=Object.entries(section.fields||{});
+  documentPreviewEditor={index,section,fields,saving:false};
+  modal.innerHTML=modalHead('Edit card',section.locator)+`<div class="detail-body">
+    <label>Card title<input id="preview-card-title" maxlength="180" value="${e(section.title)}"></label>
+    ${fields.length?fields.map(([key,value],position)=>`<label>${e(key)}
+      <textarea id="preview-card-field-${position}" rows="2">${e(String(value??''))}</textarea></label>`).join(''):
+      `<label>Card text<textarea id="preview-card-body" rows="9" maxlength="30000">${e(section.body)}</textarea></label>`}
+    <p id="document-preview-error" class="callout" role="alert" hidden></p>
+  </div><div class="modal-footer">
+    ${button('save-document-preview-row','Apply changes','primary')}
+    ${button('back-to-document-preview','Back to preview','quiet')}</div>`;
+  modal.scrollTop=0;
+  $('preview-card-title').focus({preventScroll:true});
+}
+function showDocumentPreview() {
+  if (!preview||documentPreviewEditor?.saving) return;
+  const index=documentPreviewEditor?.index;
+  documentPreviewEditor=null;
+  modal.innerHTML=documentPreviewHTML(preview);
+  modal.querySelector(`[data-action="edit-document-preview-row"][data-index="${index}"]`)?.focus();
+}
+async function applyDocumentPreviewEdit() {
+  const editor=documentPreviewEditor;
+  if (!preview||!editor||editor.saving) return;
+  const fields=Object.fromEntries(editor.fields.map(([key,value],position)=>{
+    const input=$('preview-card-field-'+position).value;
+    if (input===String(value??'')) return [key,value];
+    const number=Number(input);
+    return [key,typeof value==='number'&&input.trim()&&Number.isFinite(number)?number:input];
+  }));
+  editor.saving=true;
+  const controls=[...modal.querySelectorAll('button,input,textarea')];
+  controls.forEach(control=>control.disabled=true);
+  try {
+    preview.preview[editor.index]=await api('review-document-row',{id:preview.id,index:editor.index,
+      title:$('preview-card-title').value,body:$('preview-card-body')?.value,fields});
+    editor.saving=false;
+    showDocumentPreview();
+  } catch(error) {
+    $('document-preview-error').textContent=error.message;
+    $('document-preview-error').hidden=false;
+  } finally {
+    editor.saving=false;
+    controls.forEach(control=>control.disabled=false);
+  }
 }
 async function saveImport(update=false){if(!preview||importing)return;importing=true;modal.querySelectorAll('button').forEach(b=>b.disabled=true);
   try{const result=await api('confirm-import',{id:preview.id,update});libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;offset=0;preview=null;await closeModal();await refresh();$('document-filter').value=documentFilter;notice(result.updated?`${result.updated} matching cards updated. Notes kept.`:`${result.count} cards saved. You can ask about them now.`);$('message').focus();}
@@ -1391,6 +1504,12 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='import')await importDocument();
     else if(action==='import-services')await importDocument(false,true);
     else if(action==='review-import-services'&&preview)await reviewServiceFile(await api('review-service-import',{id:preview.id}));
+    else if(action==='edit-document-preview-row')await editDocumentPreviewRow(Number(target.dataset.index));
+    else if(action==='save-document-preview-row')await applyDocumentPreviewEdit();
+    else if(action==='back-to-document-preview')showDocumentPreview();
+    else if(action==='edit-inventory-preview-row')editInventoryPreviewRow(Number(target.dataset.index));
+    else if(action==='review-all-inventory-rows')editInventoryPreviewRow(serviceEditor?.index);
+    else if(action==='back-to-inventory-preview')showInventoryPreview();
     else if(action==='add-own-service')await openServiceEditor();
     else if(action==='remove-known-service'||action==='restore-known-service')await setKnownServiceRemoved(target,action==='remove-known-service');
     else if(action==='delete-removed-service')await deleteRemovedService(target);
@@ -1402,7 +1521,6 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='sample')await importDocument(true);
     else if(action==='save-import')await saveImport();
     else if(action==='update-import')await saveImport(true);
-    else if(action==='cancel-import'){await api('cancel-import');preview=null;await closeModal();}
     else if(action==='close-modal')await closeModal();
     else if(action==='chat-followup-start'||action==='chat-followup-step')await actOnFollowup(action,target);
     else if(action==='chat-followup-options')showFollowupOptions(target);

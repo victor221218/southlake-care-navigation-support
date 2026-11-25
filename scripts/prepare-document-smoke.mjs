@@ -14,7 +14,8 @@ await writeFile(path.join(stage,'document-smoke-bootstrap.cjs'),`const path=requ
 const base=path.dirname(process.execPath),report=path.join(base,'document-smoke-result.json'),pointer=path.join(base,'test-profile.txt'),reopen=process.argv.includes('--hive-reopen-check');
 const profile=reopen?fs.readFileSync(pointer,'utf8'):fs.mkdtempSync(path.join(base,'isolated-documents-'));if(!path.resolve(profile).startsWith(path.resolve(base)+path.sep))throw new Error('Unexpected test profile');if(!reopen)fs.writeFileSync(pointer,profile);process.env.HIVE_QA_DATA_DIR=profile;
 dialog.showOpenDialog=async(window,options)=>{
-  const fixtures={'Add a document':'assets/SAMPLE-FICTIONAL-Services.csv','Import service inventory or navigation tracker':'test-fixtures/services.xlsx'};
+  const fixtures={'Add a document':reopen?'test-fixtures/workspace-inventory.xlsx':'assets/SAMPLE-FICTIONAL-Services.csv',
+    'Import service inventory or navigation tracker':'test-fixtures/services.xlsx'};
   if(!fixtures[options.title])throw new Error('Unexpected test file dialog.');
   return{canceled:false,filePaths:[path.join(app.getAppPath(),fixtures[options.title])]};
 };

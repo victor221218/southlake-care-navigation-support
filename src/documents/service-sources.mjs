@@ -1,10 +1,12 @@
-import {headerKey as header} from './navigation-templates.mjs';
+import {headerKey as header, INVENTORY_TEMPLATE, navigationTemplate} from './navigation-templates.mjs';
 import {serviceTopic} from './topic.mjs';
 
 export const PUBLIC_SERVICE_FORMAT = 'service-directory';
 export const OWN_SERVICE_FORMAT = 'own-services';
 export const isServiceSource = format => format === PUBLIC_SERVICE_FORMAT || format === OWN_SERVICE_FORMAT;
 export const SERVICE_FILE_TYPES = ['xlsx', 'csv', 'tsv'];
+export const isServiceInventory = (format, filename) => format === OWN_SERVICE_FORMAT &&
+  SERVICE_FILE_TYPES.includes(String(filename || '').split('.').at(-1).toLowerCase());
 
 // These labels are used in the review form and stored with the card.
 export const serviceFields = [
@@ -25,6 +27,25 @@ export const serviceFields = [
 
 const columns = new Map(serviceFields.flatMap(([key, label, , aliases]) =>
   [label, ...aliases.split('|')].map(name => [header(name), key])));
+export function isInventoryWorkbook(sections) {
+  const sheets = new Map();
+  for (const section of sections) {
+    const sheet = /^(.*) · row \d+$/.exec(section.locator)?.[1];
+    if (!sheet) return false;
+    if (!sheets.has(sheet)) sheets.set(sheet, new Set());
+    for (const field of Object.keys(section.fields || {})) sheets.get(sheet).add(field);
+  }
+  return sheets.size > 0 && [...sheets.values()].every(labels => {
+    const headers = [...labels];
+    const known = navigationTemplate(headers);
+    if (known) return known === INVENTORY_TEMPLATE;
+    const mapped = new Set(headers.map(label => columns.get(header(label))));
+    return mapped.has('category') && (mapped.has('organization') || headers.some(label =>
+      /^(?:service category|service type|program type)$/.test(header(label)))) &&
+      (mapped.has('name') || mapped.has('organization')) &&
+      ['area', 'phone', 'email', 'eligibility', 'referral', 'intake'].some(key => mapped.has(key));
+  });
+}
 const text = (value, limit) => typeof value === 'number' || typeof value === 'string'
   ? String(value).replace(/\u0000/g, '').trim().slice(0, limit) : '';
 const blank = /^(?:n\/?a|unknown|tbd|to be (?:confirmed|verified)|[—–-]+)$/i;

@@ -1,4 +1,4 @@
-import {isServiceSource} from './service-sources.mjs';
+import {isServiceInventory,isServiceSource} from './service-sources.mjs';
 
 const organizationField = /^(?:organi[sz]ation|company|provider)(?: name)?$/i;
 const historyPageSize = 20;
@@ -33,7 +33,8 @@ function preview({fields_json, ...item}, length) {
 export function groupMemory(items, relatedOrganizations, matches, {offset, limit, expanded, historyOffset}) {
   const groups = new Map(), matchedIds = new Set();
   for (const item of items) {
-    const organization = organizationOf(item);
+    const organization = item.memory_type==='documents' && isServiceInventory(item.source_format,item.filename)
+      ? '' : organizationOf(item);
     const names = relatedOrganizations.get(item.id) || new Set(organization ? [organization] : []);
     for (const {id,title,type} of groupsFor(item,names)) {
       if (!matches(item,title)) continue;

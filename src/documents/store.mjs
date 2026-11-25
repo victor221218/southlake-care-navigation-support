@@ -1,9 +1,9 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {DocumentCases} from './cases.mjs';
 import {compareHistory,directoryGroup} from './ranking.mjs';
 import {groupMemory,organizationOf} from './memory-library.mjs';
 import {matchesServiceTopic} from './topic.mjs';
-import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, directoryGaps, isServiceSource, serviceContacts, serviceDraft, serviceFields, serviceSection} from './service-sources.mjs';
+import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, directoryGaps, isInventoryWorkbook, isServiceSource, serviceContacts, serviceDraft, serviceFields, serviceSection} from './service-sources.mjs';
 
 const now = () => new Date().toISOString();
 const clean = (value, limit = 12000) => String(value ?? '').replace(/\u0000/g, '').trim().slice(0, limit);
@@ -12,6 +12,9 @@ export const tokens = value => [...new Set(norm(value).split(' ').filter(t => t.
 const unpack = row => row && ({ ...row, fields: JSON.parse(row.fields_json || '{}'), contacts: JSON.parse(row.contacts_json || '[]'), links: JSON.parse(row.links_json || '[]'), archived: Boolean(row.archived), removed_from_directory: Boolean(row.removed_from_directory) });
 const resultLabel = outcome => outcome === 'worked' ? 'Worked' : "Didn't work";
 const serviceFormats = `('${PUBLIC_SERVICE_FORMAT}', '${OWN_SERVICE_FORMAT}')`;
+const spreadsheetFormats = `(${SERVICE_FILE_TYPES.map(format=>"'"+format+"'").join(',')})`;
+const linkedInventory = `d.format='${OWN_SERVICE_FORMAT}' AND (${SERVICE_FILE_TYPES.map(format=>"lower(d.filename) LIKE '%."+format+"'").join(' OR ')})`;
+export const serviceFileDigest = digest => createHash('sha256').update(OWN_SERVICE_FORMAT + ':' + digest).digest('hex');
 function validResult(outcome, rating) {
   if (!['worked','not_worked'].includes(outcome)) throw new Error('Choose Worked or Didn’t work.');
   if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new Error('Choose a rating from 1 to 5, or leave it blank.');
@@ -36,7 +39,10 @@ const cardContacts = (format,body,fields) => format === OWN_SERVICE_FORMAT
   ? serviceContacts(serviceDraft({fields}).values) : contactsIn(body,fields);
 
 export class DocumentStore {
-  constructor({ database, owner, emit = () => {} }) { Object.assign(this, { database, owner, emit }); }
+  constructor({ database, owner, emit = () => {} }) {
+    Object.assign(this, { database, owner, emit });
+    this.reviewedInventories = new Map();
+  }
   db() { return this.database(); }
   changed(value) { this.db().afterCommit(() => this.emit({ type: 'memory-changed', value })); return value; }
   async documents() { return (await this.db().prepare('SELECT d.*, (SELECT COUNT(*) FROM personal_cards c WHERE c.document_id=d.id AND c.archived=0) AS card_count FROM personal_documents d WHERE owner_id=? ORDER BY updated_at DESC').bind(this.owner()).all()).results.map(({ original_path, ...row }) => ({ ...row, warnings: JSON.parse(row.warnings) })); }
@@ -52,6 +58,41 @@ export class DocumentStore {
       .bind(this.owner(), filename).first();
   }
   async document(id) { return this.db().prepare('SELECT * FROM personal_documents WHERE id=? AND owner_id=?').bind(id, this.owner()).first(); }
+  async recoverServiceInventories() {
+    const owner = this.owner(), db = this.db();
+    return db.transaction(async () => {
+      let count = 0;
+      const {results:documents}=await db.prepare(`SELECT id,digest,version FROM personal_documents
+        WHERE owner_id=? AND format IN ${spreadsheetFormats}`).bind(owner).all();
+      for (const document of documents) {
+        if (this.owner() !== owner) break;
+        if (this.reviewedInventories.get(document.id) === document.version) continue;
+        const digest = serviceFileDigest(document.digest);
+        const linked = await db.prepare('SELECT id FROM personal_documents WHERE owner_id=? AND digest=?').bind(owner,digest).first();
+        if (linked) continue;
+        const {results:cards}=await db.prepare(`SELECT id,title,body,locator,fields_json,archived FROM personal_cards
+          WHERE owner_id=? AND document_id=?`).bind(owner,document.id).all();
+        const sections=cards.map(card=>({...card,fields:JSON.parse(card.fields_json)}));
+        if (!isInventoryWorkbook(sections.filter(section=>!section.archived))) {
+          db.afterCommit(()=>this.reviewedInventories.set(document.id,document.version));
+          continue;
+        }
+        for (const section of sections) {
+          const {values}=serviceDraft(section);
+          if (!Object.values(values).some(Boolean)) continue;
+          const canonical=serviceSection(section,values,{allowMissingName:true});
+          const body=clean(canonical.body,30000),fields=canonical.fields;
+          await db.prepare(`UPDATE personal_cards SET title=?,body=?,fields_json=?,contacts_json=?,links_json=?,
+            version=version+1 WHERE id=? AND owner_id=?`).bind(clean(canonical.title,180),body,JSON.stringify(fields),
+              JSON.stringify(cardContacts(OWN_SERVICE_FORMAT,body,fields)),JSON.stringify(linksIn(body,fields)),section.id,owner).run();
+        }
+        await db.prepare('UPDATE personal_documents SET format=?,digest=?,version=version+1 WHERE id=? AND owner_id=?')
+          .bind(OWN_SERVICE_FORMAT,digest,document.id,owner).run();
+        count++;
+      }
+      return count ? this.changed({recovered_inventories:count}) : {recovered_inventories:0};
+    });
+  }
   async import(parsed, { originalPath = null, replaceId = null } = {}) {
     const owner = this.owner();
     if (!parsed.sections?.length || parsed.sections.length > 5000) throw new Error('Choose a document containing 1–5,000 readable cards.');
@@ -217,7 +258,7 @@ export class DocumentStore {
     const owner=this.owner();
     const cards=(await this.db().prepare(`SELECT c.id,c.id AS card_id,c.kind,c.title,c.body,c.fields_json,c.document_id,c.archived,c.updated_at,c.version,d.filename,d.format AS source_format
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
-      WHERE c.owner_id=? AND (d.format IS NULL OR d.format NOT IN ${serviceFormats})
+      WHERE c.owner_id=? AND (d.format IS NULL OR d.format NOT IN ${serviceFormats} OR (${linkedInventory}))
       AND (c.kind<>'conversation' OR EXISTS (
         SELECT 1 FROM personal_cases chat WHERE chat.archive_card_id=c.id AND chat.owner_id=c.owner_id AND chat.status='archived'
       ))

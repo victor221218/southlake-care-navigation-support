@@ -13,7 +13,7 @@ import {InputHistory} from './documents/input-history.mjs';
 import { cspForPath } from './security.mjs';
 import { APP_NAME, windowsDataDirectory } from './app-identity.mjs';
 import { ensureKnownServices, SERVICE_DIRECTORY_FORMAT } from './documents/services.mjs';
-import { OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceSource } from './documents/service-sources.mjs';
+import { OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, isServiceInventory, isServiceSource } from './documents/service-sources.mjs';
 
 const root=app.getAppPath(),uiOrigin='hive://app';
 app.setName(APP_NAME);
@@ -30,7 +30,25 @@ const safeError=error=>({message:error.message||'This action could not complete.
 const fromApp=event=>event.sender===window?.webContents&&event.senderFrame?.url.startsWith(uiOrigin+'/');
 const idle=()=>{if(assistant.busy||importer.busy||connection.busy||pickerBusy)throw new Error('Finish the current answer, file import, or sign-in first.');};
 async function updateAccount(){try{account=await connection.session();accountError='';}catch(error){accountError=error.message;account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'};}return account;}
-async function snapshot(){await updateAccount();await ensureKnownServices(store);const allDocuments=await store.documents(),activeCase=await cases.current();return{account,accountError,documents:allDocuments.filter(d=>!isServiceSource(d.format)),cards:await store.list({collection:'personal',limit:60}),services:await store.list({collection:'services',limit:1}),cases:await cases.list({all:true}),active_case:activeCase,input_history:await inputHistory.state(),serviceCategories:await store.serviceCategories(),version:app.getVersion(),platform:process.platform,models:{items:assistant.modelItems,selected:assistant.model},storage:'Saved on this computer',voice:'English voice model included',workspace:account.connected?account.label:'Your workspace'};}
+async function snapshot(){
+  await updateAccount();
+  await ensureKnownServices(store);
+  const recovered=await store.recoverServiceInventories();
+  if(recovered.recovered_inventories)assistant.clear();
+  const allDocuments=await store.documents(),activeCase=await cases.current();
+  return {
+    account, accountError,
+    documents:allDocuments.filter(d=>!isServiceSource(d.format)||isServiceInventory(d.format,d.filename)),
+    cards:await store.list({collection:'personal',limit:60}),
+    services:await store.list({collection:'services',limit:1}),
+    cases:await cases.list({all:true}), active_case:activeCase,
+    input_history:await inputHistory.state(), serviceCategories:await store.serviceCategories(),
+    version:app.getVersion(), platform:process.platform,
+    models:{items:assistant.modelItems,selected:assistant.model},
+    storage:'Saved on this computer', voice:'English voice model included',
+    workspace:account.connected?account.label:'Your workspace'
+  };
+}
 async function allowedOriginal(document){
   if(!document?.original_path)return null;
   const base=path.resolve(dataDir,'documents',owner())+path.sep,target=path.resolve(document.original_path);
@@ -103,7 +121,9 @@ async function invoke(method,args){
     }finally{pickerBusy=false;}
   }
   if(method==='sample-document'){idle();return importer.prepare(path.join(root,'assets/SAMPLE-FICTIONAL-Services.csv'));}
-  if(method==='confirm-import'){if(assistant.busy||connection.busy)throw new Error('Wait for the current answer or sign-in.');return importer.confirm(args.id,args.update===true);}
+  if(method==='review-document-card'){idle();return importer.reviewDocumentCard(args.id,args.index);}
+  if(method==='review-document-row'){idle();return importer.setDocumentRow(args);}
+  if(method==='confirm-import'){idle();const result=await importer.confirm(args.id,args.update===true);assistant.clear();return result;}
   if(method==='review-service-import'){idle();return importer.reviewServices(args.id);}
   if(method==='review-service-row'){idle();importer.setServiceRow(args);return{updated:true};}
   if(method==='confirm-service-import'){

@@ -432,6 +432,17 @@
 .note-source-heading h3 { margin: 0; }
 .library-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
 .service-editor-dialog { max-width: 720px; }
+.import-preview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.import-preview-row > button {
+  padding: 7px 14px;
+  font-size: 12px;
+}
 .service-form-reply > button { margin-top: 10px; }
 .inline-service-form { width: 100%; max-width: 690px; }
 .inline-service-form h3 { margin: 0; color: #193f57; font-size: 15px; }

@@ -409,8 +409,8 @@ test('reviewed workbook rows become own services while retaining their fields an
     await ensureKnownServices(f.store);
     const importer=new DocumentImporter({store:f.store,directory:path.join(f.folder,'files'),
       worker:path.resolve('dist/document-worker.cjs'),pdfWorker:path.resolve('dist/pdf.worker.mjs')});
-    const preview=await importer.prepare(filename);
-    const review=await importer.reviewServices(preview.id);
+    const review=await importer.prepare(filename);
+    assert.equal(review.service_inventory,true);
     assert.equal(review.rows.length,3);
     assert.deepEqual(review.rows.map(row=>row.include),[true,true,false]);
     assert.equal(review.rows[0].values.email,'rides@example.org');
@@ -429,9 +429,13 @@ test('reviewed workbook rows become own services while retaining their fields an
     assert.equal(info.fields['Service area'],'Aurora');
     assert.equal(info.has_original,1);
     const regular=await importer.prepare(filename);
-    assert(!regular.previous);
-    await importer.confirm(regular.id);
-    assert.equal((await f.store.list({collection:'personal'})).total,3);
+    assert.equal(regular.duplicate,true);
+    assert.equal(regular.id,saved.document_id);
+    assert.equal((await f.store.list({collection:'personal'})).total,0);
+    const memory=await f.store.memories({document_id:saved.document_id,kind:'documents',grouped:true});
+    assert.equal(memory.items[0].title,path.basename(filename));
+    assert.equal(memory.items[0].total,2);
+    assert(memory.items[0].preview.some(row=>row.card_id===card.id));
     assert.equal((await f.store.list({collection:'services'})).total,29);
     const backup=await f.store.export();
     f.switch('recipient');
@@ -440,6 +444,76 @@ test('reviewed workbook rows become own services while retaining their fields an
     assert.equal(restored.source_format,OWN_SERVICE_FORMAT);
     assert.equal(restored.contacts[0].value,'meals@example.org');
     assert.equal((await f.store.get(restored.id)).fields['Eligibility notes'],'Weekday delivery');
+  } finally { await f.close(); }
+});
+
+test('legacy service inventory rows are linked in place, with their source and notes', async () => {
+  const f=await fixture();
+  try {
+    const contents=[
+      'Partner / organization\tProgram / clinic\tService type\tService area\tMain contact phone\tAvailable slots\tService ID',
+      'Example Alder Transit\tDemo Rides\tTransportation\tNorth York\t416-555-0194\t5\tALDER'
+    ].join('\n');
+    const filename=path.join(f.folder,'Practice inventory.tsv');
+    await writeFile(filename,contents);
+    const parsed=await parseDocument(Buffer.from(contents),path.basename(filename));
+    const previous=await f.store.import(parsed,{originalPath:filename});
+    const [legacy]=(await f.store.list({collection:'personal'})).items;
+    await f.store.comment({card_id:legacy.id,body:'Keep this appointment note.'});
+    await f.reopen();
+    assert.equal((await f.store.list({collection:'services'})).total,0);
+    assert.equal((await f.store.recoverServiceInventories()).recovered_inventories,1);
+    assert.equal((await f.store.recoverServiceInventories()).recovered_inventories,0);
+    const [service]=(await f.store.list({collection:'services',category:'Transportation'})).items;
+    assert.equal(service.id,legacy.id);
+    assert.equal(service.source_key,legacy.source_key);
+    assert.equal(service.source_format,OWN_SERVICE_FORMAT);
+    assert.equal(service.area,'North York');
+    assert.equal((await f.store.document(previous.document_id)).original_path,filename);
+    assert.match((await f.store.get(legacy.id)).comments[0].body,/appointment note/);
+    assert.equal((await f.store.calculate({document_id:previous.document_id,operation:'sum',column:'Available slots'})).value,5);
+
+    const memory=await f.store.memories({document_id:previous.document_id,kind:'documents'});
+    assert.deepEqual(memory.items.map(item=>item.card_id),[legacy.id]);
+    const cases=new DocumentCases({store:f.store});
+    const assistant=new DocumentAssistant({cases,store:f.store,connection:{session:async()=>({sharing:false})}});
+    const reply=await assistant.chat({case_id:(await cases.create()).id,
+      text:'Find a transportation service in North York. Show ranked service cards.',remember:false});
+    assert.equal(reply.cards[0].id,legacy.id);
+    f.switch('recipient');
+    assert.equal((await f.store.recoverServiceInventories()).recovered_inventories,0);
+    assert.equal((await f.store.list({collection:'services'})).total,0);
+  } finally { await f.close(); }
+});
+
+test('editing a document preview keeps original bytes, stable row keys and numeric types', async () => {
+  const f=await fixture();
+  try {
+    const filename=path.join(f.folder,'Practice figures.csv');
+    const initial='ID,Office,Slots,Wait days\nONE,North desk,5,2';
+    await writeFile(filename,initial);
+    const importer=importerFor(f),first=await importer.prepare(filename);
+    assert.equal(first.service_inventory,undefined);
+    const row=importer.reviewDocumentCard(first.id,0);
+    const revised=importer.setDocumentRow({id:first.id,index:0,title:'Revised desk',fields:{...row.fields,Slots:'7'}});
+    assert.equal(revised.fields.Slots,7);
+    assert.equal(revised.fields['Wait days'],2);
+    assert.match(revised.body,/Slots: 7/);
+    const saved=await importer.confirm(first.id);
+    const source=await f.store.document(saved.document_id);
+    assert.equal(await readFile(source.original_path,'utf8'),initial);
+    const [firstCard]=(await f.store.list({document_id:saved.document_id})).items;
+    assert.equal(firstCard.title,'Revised desk');
+    const updatedFile='ID,Office,Slots,Wait days\nONE,North desk,8,3';
+    await writeFile(filename,updatedFile);
+    const second=await importer.prepare(filename);
+    assert.equal(second.previous.can_update,true);
+    await importer.confirm(second.id,true);
+    const [secondCard]=(await f.store.list({document_id:saved.document_id})).items;
+    assert.equal(secondCard.id,firstCard.id);
+    assert.equal(secondCard.source_key,firstCard.source_key);
+    assert.equal((await f.store.calculate({document_id:saved.document_id,operation:'sum',column:'Slots'})).value,8);
+    assert.equal((await f.store.recoverServiceInventories()).recovered_inventories,0);
   } finally { await f.close(); }
 });
 
