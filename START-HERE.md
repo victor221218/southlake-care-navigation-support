@@ -91,7 +91,7 @@ Known services lists **Services with recorded outcomes** first, followed by own 
 3. Open **⋯ → Record feedback** to jump to a pending result. Open **⋯ → Rename conversation** to type a new title or choose **Suggest a title**.
 4. Click a conversation title to return to its messages and draft. Use **Earlier messages** to read older parts of the chat.
 
-Service recommendations show matching **Own-source leads** first, even before you rate them, then **Public options**. Own leads with low ratings or mostly unsuccessful outcomes appear last with their saved history. Read each card’s short reason and **Confirm** check. Choose **View details → Why this rank**, or ask “How did you rank the options?” for the comparison.
+Ask “Can you help me with a transportation service?” to see matching service cards. Recommendations show **Own-source leads** first, even before you rate them. Comparable **Public options** follow in order of saved ratings and outcomes. Own leads with low ratings or mostly unsuccessful outcomes appear last with their saved history. Choose **View details → Why this rank**, or ask “How did you rank the options?” for the comparison.
 
 ### Keep or discard a conversation
 

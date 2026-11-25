@@ -64,7 +64,43 @@ async function run(){try{
     document.getElementById('card-notes').scrollIntoView({block:'center'});
     const sourceCapture=await window.hiveSmoke.capture('card-notes');
     click('[data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
-    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture});return;
+
+    // Use the isolated workspace to recreate the transportation example after verifying the earlier results.
+    const centreResult=service.comments.find(note=>note.outcome==='not_worked');
+    await request('save-service-result',{id:centreResult.id,card_id:service.id,expected_version:centreResult.version,
+      outcome:'worked',rating:3,body:'Isolated ranking check.'});
+    const rides=(await request('list-cards',{collection:'services',category:'Transportation',limit:100})).items;
+    const ridePlus=rides.find(card=>card.title==='CHATS · iRIDEplus');
+    assert(ridePlus);
+    await request('save-service-result',{card_id:ridePlus.id,outcome:'worked',rating:5,body:'Isolated ranking check.'});
+    for (const ownRide of rides.filter(card=>card.source_format==='own-services')) {
+      await request('set-service-removed',{id:ownRide.id,removed:true});
+    }
+    const cab=await request('add-own-service',{values:{name:'Example Cab',category:'Transportation'}});
+
+    click('[data-action="workspace"]');
+    click('.chat-header-actions [data-action="new-chat"]');
+    await wait(()=>document.body.dataset.view==='workspace'&&document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+    type('message','Can you help me with a transportation service?');
+    click('#send-button');
+    await wait(()=>document.querySelectorAll('#messages .answer-card').length>=3&&document.getElementById('send-button').textContent==='Send ↑');
+    const choices=[...document.querySelectorAll('#messages .answer-card')];
+    assert(choices.slice(0,3).map(choice=>choice.dataset.id).join('|')===[cab.card_id,ridePlus.id,service.id].join('|')&&
+      choices[0].querySelector('.own-source-tag')&&choices[0].closest('[data-source-group="own"]').querySelectorAll('.answer-card').length===1&&
+      choices[1].querySelector('.rating-badge')?.textContent.includes('5.0/5')&&choices[2].querySelector('.rating-badge')?.textContent.includes('3.0/5')&&
+      !document.getElementById('messages').textContent.includes('Saved case:')&&!document.querySelector('#messages .answer-summary'),
+      'The own cab appears alone first, followed by the two rated public providers and only provider cards.');
+    const transportationCapture=await window.hiveSmoke.capture('transportation-ranking');
+    assert(transportationCapture.ok,'Capture the checked transportation ranking.');
+
+    click('[data-action="manage-memory"]');
+    await wait(()=>document.body.dataset.view==='memory');
+    filter('memory-kind-filter','chats');
+    await revealMemoryEntry(archived.archive_card_id);
+    click(memoryRow(archived.archive_card_id)+' [data-action="open-card"]');
+    await wait(()=>document.body.dataset.view==='workspace'&&document.getElementById('messages').textContent.includes('walker requirement'));
+    assert(!document.getElementById('case-archived-banner').hidden,'The closed chat opens from Manage memory.');
+    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture,transportation_recommendation_order:true,archived_transcript_in_memory:true,transportation_capture:transportationCapture});return;
   }
   const initial=await request('snapshot');assert(initial.services.total===27&&initial.cards.total===0&&initial.documents.length===0);
   const grid=document.getElementById('workspace-grid').getBoundingClientRect(),chat=document.getElementById('chat-panel').getBoundingClientRect();assert(chat.width>=contentWidth(document.getElementById('workspace-grid'))-4,'Workspace chat must fill the content width.');

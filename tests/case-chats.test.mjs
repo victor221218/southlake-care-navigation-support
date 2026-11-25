@@ -503,6 +503,91 @@ const showOptions=options=>({type:'function_call',name:'present_service_options'
 const option=id=>({id,reason:'A possible match for this request.',confirm:'Confirm the pickup address and boarding help with intake.'});
 function online(f,fetcher){const assistant=new DocumentAssistant({store:f.store,cases:f.cases,connection:{session:async()=>({sharing:true}),accessToken:async()=> 'test-only'},fetcher});assistant.model='fixture';return assistant;}
 
+test('a conversational transportation request shows the unrated cab first and the two rated public services next',async()=>{
+  const f=await fixture();
+  try {
+    await ensureKnownServices(f.store);
+    const lookup=async query=>(await f.store.list({collection:'services',query})).items[0];
+    const ridePlus=await lookup('iRIDEplus');
+    const seniorsCentre=await lookup('North York Seniors Centre');
+    const other=await lookup('Circle of Care');
+    await f.store.serviceResult({card_id:ridePlus.id,outcome:'worked',rating:5});
+    await f.store.serviceResult({card_id:seniorsCentre.id,outcome:'worked',rating:3});
+    const {card_id:ownId}=await f.store.addOwnService({name:'Example Cab',category:'Transportation'});
+    const oldUserText='Can you help me with a transportation service?';
+    const archived=[];
+    for (const text of [oldUserText,'Can you find me transportation service']) {
+      const earlier=await f.cases.create('Transportation');
+      const turn=await f.cases.begin({id:earlier.id,text});
+      await f.cases.finish(turn,{text:'Fictional ride follow-up.',source:'local'});
+      archived.push(await f.cases.archive({id:earlier.id,expected_version:earlier.version}));
+    }
+    const expected=[ownId,ridePlus.id,seniorsCentre.id];
+    const clarification={type:'message',content:[{type:'output_text',text:'Where are you travelling from?'}]};
+    const connected=(output)=>online(f,async(_,request)=>{
+      const body=JSON.parse(request.body);
+      assert(archived.every(item=>!body.instructions.includes(item.card_id)));
+      return streamed(output);
+    });
+    for (const [assistant,prompt] of [
+      [local(f),oldUserText],
+      [connected([clarification]),oldUserText],
+      [connected([showOptions([option(other.id)])]),'Can you find me transportation service'],
+      [connected([clarification]),'Transportation']
+    ]) {
+      const fresh=await f.cases.create();
+      const answer=await assistant.chat({case_id:fresh.id,text:prompt,remember:false});
+      assert.equal(answer.presentation,'service-options',prompt);
+      assert.deepEqual(answer.cards.slice(0,3).map(card=>card.id),expected,prompt);
+      assert.deepEqual(answer.cards.slice(0,3).map(card=>card.card_source_group),['own','public','public']);
+      assert.deepEqual(answer.cards.slice(0,3).map(card=>card.experience.rating_average),[null,5,3]);
+      assert(answer.cards.every(card=>card.document_id && card.kind!=='conversation'));
+    }
+    assert.equal((await f.store.memories({kind:'chats'})).total,2);
+  } finally { await f.close(); }
+});
+
+test('archived conversations are available in memory and excluded from assistant retrieval and older reply cards',async()=>{
+  const f=await fixture();
+  try {
+    const text='Fictional appointment archive marker periwinkle';
+    const earlier=await f.cases.create('Practice conversation');
+    const turn=await f.cases.begin({id:earlier.id,text});
+    await f.cases.finish(turn,{text:'Fictional transcript.',source:'local'});
+    const archive=await f.cases.archive({id:earlier.id,expected_version:earlier.version});
+    const archiveCard=await f.store.get(archive.card_id);
+    const note=await f.store.note({body:'Personal note about periwinkle.'});
+    const fresh=await f.cases.create('Notes check');
+    const previous=await f.cases.begin({id:fresh.id,text:'What do I have about periwinkle?' });
+    await f.cases.finish(previous,{text:'Earlier reply.',source:'chatgpt',cards:[archiveCard,note]});
+    await f.reopen();
+    const hydrated=await f.cases.hydrate(await f.cases.read(fresh.id));
+    assert.deepEqual(hydrated.messages.at(-1).payload.cards.map(card=>card.id),[note.id]);
+
+    let calls=0;
+    const assistant=online(f,async(_,request)=>{
+      const body=JSON.parse(request.body);
+      assert(!body.instructions.includes(archive.card_id));
+      assert(!body.instructions.includes(text));
+      if (++calls===1) return streamed([
+        {type:'function_call',name:'search_cards',call_id:'search',arguments:'{"query":"periwinkle"}'},
+        {type:'function_call',name:'read_card',call_id:'read',arguments:JSON.stringify({id:archive.card_id})}
+      ]);
+      const output=id=>JSON.parse(body.input.find(item=>item.call_id===id && item.type==='function_call_output').output);
+      assert.deepEqual(output('search').items.map(card=>card.id),[note.id]);
+      assert.match(output('read').error,/Manage memory/);
+      return streamed([{type:'message',content:[{type:'output_text',text:'Here is your personal note.'}]}]);
+    });
+    const result=await assistant.chat({case_id:fresh.id,text:'Show my notes about periwinkle.',remember:false});
+    assert.equal(calls,2);
+    assert.equal(result.source,'chatgpt');
+    assert.deepEqual(result.cards.map(card=>card.id),[note.id]);
+    const memory=await f.store.memories({kind:'chats',query:'periwinkle'});
+    assert.equal(memory.items[0].id,archive.card_id);
+    assert((await f.cases.read(earlier.id)).messages.some(message=>message.body===text));
+  } finally { await f.close(); }
+});
+
 test('connected home-service requests surface relevant service cards and their feedback even after a prose reply',async()=>{
   const f=await fixture();
   try {

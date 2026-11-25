@@ -198,7 +198,7 @@ export class DocumentCases {
   }
   async hydrate(record){for(const message of record.messages){const cards=[];
       if(message.payload.presentation==='service-form' && message.payload.cards?.[0]?.id) message.payload.service_form_saved=true;
-      for(const ref of message.payload.cards||[]){try{const card=await this.store.get(ref.id,{case_id:record.id});cards.push({...card,...cardRef(ref),body:card.body.slice(0,650),fields:undefined,comments:undefined});}catch{}}message.payload.cards=cards;
+      for(const ref of message.payload.cards||[]){try{const card=await this.store.get(ref.id,{case_id:record.id,include_conversations:false});cards.push({...card,...cardRef(ref),body:card.body.slice(0,650),fields:undefined,comments:undefined});}catch{}}message.payload.cards=cards;
       if(message.payload.followup)message.payload.followup=await hydrateFollowup(message.payload.followup,this.store,record.id);
       if(message.state==='pending'){message.body=message.body||'This answer was interrupted. Retry the question to continue.';message.payload.error=true;message.payload.source='error';await this.db().prepare("UPDATE personal_case_messages SET state='error',body=? WHERE id=? AND owner_id=?").bind(message.body,message.id,this.owner()).run();message.state='error';}}return record;}
   async legacyFeedback(row) {

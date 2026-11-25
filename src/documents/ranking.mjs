@@ -4,7 +4,8 @@ import {isServiceSource, OWN_SERVICE_FORMAT, PUBLIC_SERVICE_FORMAT} from './serv
 const searchNoise = new Set(['please','about','service','services','would','could','need','have','that','this',
   'with','what','show','find','recommend','recommended','rank','ranked','rankings','ranking','options','cards','for',
   'can','you','our','using','based','experience','history','your','the','who','use','uses','needs',
-  'previous','previously','tried','rating','ratings','scores','last']);
+  'previous','previously','tried','rating','ratings','scores','last',
+  'help','want','looking','look','suggest','list','choices','some','get','getting','finding']);
 
 export const rankingPolicy = 'I check the service category and area first. Matching own-source leads appear first, even without a rating. Public options follow. Own-source leads with an average of 2/5 or lower, or more Didn’t work than Worked results, appear after public options. Within each group, I consider the details of the request, your average ratings and recorded outcomes. Unrated services use 3/5 for sorting only. Pending follow-ups and ordinary notes do not count as outcomes.';
 
@@ -84,10 +85,14 @@ function historyReason(card) {
   return rating+worked+' worked, '+failed+' didn’t work in your records.';
 }
 
-export function rankResponseCards(cards, query='', topic=null) {
+export function serviceSearchTerms(query, topic) {
   const scopedTerms = new Set(headerKey(topic?.title).split(' '));
-  const terms=[...new Set(headerKey(query).split(' '))]
+  return [...new Set(headerKey(query).split(' '))]
     .filter(word=>word.length>=3&&!searchNoise.has(word)&&!scopedTerms.has(word));
+}
+
+export function rankResponseCards(cards, query='', topic=null) {
+  const terms=serviceSearchTerms(query,topic);
   const matched=card=>{
     const searchable=new Set(headerKey([card.title,card.category,card.fields?.Category,card.area,card.fields?.['Service area'],card.body].join(' ')).split(' '));
     return terms.filter(word=>searchable.has(word)||searchable.has(word+'s'));

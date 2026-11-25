@@ -162,7 +162,7 @@ export class DocumentStore {
       WHERE c.owner_id=? AND c.archived=0 AND c.removed_from_directory=0 AND d.format IN ${serviceFormats}`).bind(this.owner()).all();
     return results.map(({fields_json,...card})=>({...card,fields:JSON.parse(fields_json)}));
   }
-  async list({ query = '', document_id = null, collection = 'all', category = '', case_id = null, include_archived = false, removed_services = false, limit = 60, offset = 0, ranking = false, directory = false, topic = null } = {}) {
+  async list({ query = '', document_id = null, collection = 'all', category = '', case_id = null, include_archived = false, include_conversations = true, removed_services = false, limit = 60, offset = 0, ranking = false, directory = false, topic = null } = {}) {
     if (!['all', 'services', 'personal'].includes(collection)) throw new Error('Choose a supported card collection.');
     const rows = (await this.db().prepare(`SELECT c.*,d.filename,d.format AS source_format, (SELECT COUNT(*) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_count,
       (SELECT group_concat(body,' ') FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id) AS comment_text,
@@ -173,6 +173,7 @@ export class DocumentStore {
       (SELECT AVG(rating) FROM personal_comments n WHERE n.card_id=c.id AND n.owner_id=c.owner_id AND outcome IS NOT NULL) AS rating_average
       FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id
       WHERE c.owner_id=? AND c.removed_from_directory=? ${include_archived ? '' : 'AND c.archived=0'} ${document_id ? 'AND c.document_id=?' : ''}
+      ${include_conversations ? '' : "AND c.kind<>'conversation'"}
       ${case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=c.owner_id AND cm.retention='automatic' AND cm.entry_type='card' AND cm.entry_id=c.id AND cm.case_id<>?)":''}
       ${collection === 'services' ? `AND d.format IN ${serviceFormats}` : collection === 'personal' ? `AND (d.format IS NULL OR d.format NOT IN ${serviceFormats})` : ''}
       ORDER BY c.updated_at DESC,c.id`).bind(this.owner(),Number(collection==='services'&&removed_services===true), ...(document_id ? [document_id] : []),...(case_id?[case_id]:[])).all()).results;
@@ -266,9 +267,10 @@ export class DocumentStore {
     }
     return related;
   }
-  async get(id,{case_id=null}={}) {
+  async get(id,{case_id=null,include_conversations=true}={}) {
     const card = unpack(await this.db().prepare('SELECT c.*,d.filename,d.format AS source_format,d.original_path IS NOT NULL AS has_original FROM personal_cards c LEFT JOIN personal_documents d ON d.id=c.document_id WHERE c.id=? AND c.owner_id=?').bind(id, this.owner()).first());
     if (!card) throw new Error('This card is not in your active workspace.');
+    if (!include_conversations && card.kind==='conversation') throw new Error('Review saved conversations in Manage memory.');
     if(case_id&&await this.db().prepare("SELECT 1 FROM personal_case_memory WHERE owner_id=? AND retention='automatic' AND entry_type='card' AND entry_id=? AND case_id<>?").bind(this.owner(),id,case_id).first())throw new Error('This automatically saved message belongs to another case.');
     const comments = (await this.db().prepare('SELECT id,body,outcome,rating,created_at,updated_at,version FROM personal_comments n WHERE card_id=? AND owner_id=? '+(case_id?"AND NOT EXISTS (SELECT 1 FROM personal_case_memory cm WHERE cm.owner_id=n.owner_id AND cm.retention='automatic' AND cm.entry_type='comment' AND cm.entry_id=n.id AND cm.case_id<>?) ":'')+'ORDER BY created_at').bind(id, this.owner(),...(case_id?[case_id]:[])).all()).results;
     delete card.fields_json; delete card.contacts_json; delete card.links_json;

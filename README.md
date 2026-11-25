@@ -2,7 +2,7 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.7.** Matching own-source leads appear first in chat, including leads you have yet to rate.
+**Prototype source version 2.17.8.** Find matching service cards in chat and review closed conversations in Manage memory.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
@@ -14,8 +14,8 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.7/Care-Navigation-Support-Setup-2.17.7.exe) |
-| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.7/Care-Navigation-Support-Mac-Apple-Silicon-2.17.7-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.7/Care-Navigation-Support-Mac-Intel-2.17.7-Test.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.8/Care-Navigation-Support-Setup-2.17.8.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.8/Care-Navigation-Support-Mac-Apple-Silicon-2.17.8-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.8/Care-Navigation-Support-Mac-Intel-2.17.8-Test.zip) |
 | **Quick-start guide** | [Read the quick-start guide](START-HERE.md) or open **START-HERE.html** inside the handoff ZIP |
 | **Maintain the inventory and outcomes** | [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) |
 | **Download all deliverables** | Use **Download the latest handoff package** above |
@@ -86,7 +86,9 @@ After the last pending result and any open note are saved, a separate assistant 
 
 Use **Undo note** or **Undo result** directly beneath the follow-up card. The matching **Redo** control appears there after Undo. A rating change is labeled **Undo rating change**. Corrections affect the saved feedback linked to that card. The provider detail view also has its own correction controls. Text fields keep their normal typing shortcuts.
 
-Chat recommendations check service category and area first. **Own-source leads** appear first, including unrated entries, with a blue **(Own source)** label. **Public options** follow in their usual order. Own-source leads with an average of 2/5 or lower, or more unsuccessful than successful results, appear under **Own-source leads to review** with their saved history. Within each group, request match and saved experience determine order. Cards display recorded ratings and counts. Confirm eligibility and suitability with the provider.
+Chat recommendations check service category and area first. **Own-source leads** appear first, including unrated entries, with a blue **(Own source)** label. Within **Public options**, comparable services with stronger ratings and outcomes appear first. Own-source leads with an average of 2/5 or lower, or more unsuccessful than successful results, appear under **Own-source leads to review**. Cards display recorded ratings and counts. Confirm eligibility and suitability with the provider.
+
+To review a closed chat, open **Manage memory** and choose **Saved conversations**. Service recommendations draw on provider records and feedback saved to those providers.
 
 ### Use a service and record what happened
 

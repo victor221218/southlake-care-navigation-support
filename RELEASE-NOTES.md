@@ -1,3 +1,8 @@
+# Care Navigation Support 2.17.8
+
+- Review closed conversations in **Manage memory → Saved conversations**. Chat recommendations draw on matching provider cards and their recorded feedback.
+- Conversational requests such as “Can you help me with a transportation service?” show matching service cards. An unrated own lead appears first, followed by public options ordered by fit, ratings and outcomes.
+
 # Care Navigation Support 2.17.7
 
 - Matching own-source service cards appear first in chat, even without ratings. A blue label identifies your leads. Public alternatives follow, with unsuccessful or low-rated own leads shown below them.
