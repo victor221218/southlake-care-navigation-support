@@ -80,6 +80,20 @@ export class DocumentStore {
       .bind(this.owner(), filename).first();
   }
   async document(id) { return this.db().prepare('SELECT * FROM personal_documents WHERE id=? AND owner_id=?').bind(id, this.owner()).first(); }
+  async pruneEmptyImports(documentId = null, owner = this.owner()) {
+    const db = this.db();
+    const predicate = `owner_id=? AND format<>? ${documentId ? 'AND id=?' : ''}
+      AND NOT EXISTS (SELECT 1 FROM personal_cards WHERE document_id=personal_documents.id)`;
+    const params = [owner, PUBLIC_SERVICE_FORMAT, ...(documentId ? [documentId] : [])];
+    return db.transaction(async () => {
+      const {results} = await db.prepare(`SELECT id,owner_id,original_path FROM personal_documents WHERE ${predicate}`).bind(...params).all();
+      if (results.length) {
+        await db.prepare(`DELETE FROM personal_documents WHERE ${predicate}`).bind(...params).run();
+        db.afterCommit(() => { for (const {id} of results) this.reviewedInventories.delete(id); });
+      }
+      return results;
+    });
+  }
   async recoverServiceInventories() {
     const owner = this.owner(), db = this.db();
     return db.transaction(async () => {
@@ -120,7 +134,8 @@ export class DocumentStore {
     if (!parsed.sections?.length || parsed.sections.length > 5000) throw new Error('Choose a document containing 1–5,000 readable cards.');
     return this.db().transaction(async () => {
       const duplicate = await this.duplicate(parsed.digest);
-      if (duplicate) return { duplicate: true, document_id: duplicate.id, count: 0 };
+      const [discardedImport] = duplicate ? await this.pruneEmptyImports(duplicate.id, owner) : [];
+      if (duplicate && !discardedImport) return { duplicate: true, document_id: duplicate.id, count: 0 };
       const old = replaceId ? await this.document(replaceId) : null;
       if (replaceId && (!old || old.filename !== parsed.filename || old.format !== parsed.format || !parsed.stableKeys)) throw new Error('This file cannot safely update that document. Save it as a separate version.');
       const stamp = now(), id = old?.id || randomUUID();
@@ -146,7 +161,8 @@ export class DocumentStore {
           added++;
         }
       }
-      return this.changed({ document_id: id, count: added + updated, added, updated, duplicate: false });
+      const result = this.changed({ document_id: id, count: added + updated, added, updated, duplicate: false });
+      return discardedImport ? {...result, discarded_import:discardedImport} : result;
     });
   }
   async addOwnService(values, {fromChat = false} = {}) {
@@ -432,22 +448,29 @@ export class DocumentStore {
       await this.db().prepare('INSERT OR IGNORE INTO personal_deleted_document_rows (owner_id,document_id,source_key_hash) VALUES (?,?,?)')
         .bind(owner,document_id,rowKeyHash(source_key)).run();
     }
+    await this.#clearImportedCardHistory(owner,id);
+    await this.db().prepare('DELETE FROM personal_cards WHERE id=? AND owner_id=?').bind(id,owner).run();
+    const [discardedImport] = await this.pruneEmptyImports(document_id, owner);
+    const result = this.changed({deleted:true,card_id:id});
+    return discardedImport ? {...result, discarded_import:discardedImport} : result;
+  }
+  async #clearImportedCardHistory(owner,id,{wholeFile=false}={}) {
+    const cardIds = `SELECT id FROM personal_cards WHERE owner_id=? AND ${wholeFile?'document_id':'id'}=?`;
     await this.db().prepare(`DELETE FROM personal_case_memory WHERE owner_id=? AND (
-      (entry_type='card' AND entry_id=?) OR (entry_type='comment' AND
-        entry_id IN (SELECT id FROM personal_comments WHERE owner_id=? AND card_id=?
-          UNION SELECT entry_id FROM personal_input_history WHERE owner_id=? AND entry_type='comment' AND card_id=?)))`)
-      .bind(owner,id,owner,id,owner,id).run();
-    await this.db().prepare("DELETE FROM personal_input_history WHERE owner_id=? AND (card_id=? OR (entry_type='card' AND entry_id=?))")
-      .bind(owner,id,id).run();
+      (entry_type='card' AND entry_id IN (${cardIds})) OR (entry_type='comment' AND
+        entry_id IN (SELECT id FROM personal_comments WHERE owner_id=? AND card_id IN (${cardIds})
+          UNION SELECT entry_id FROM personal_input_history WHERE owner_id=? AND entry_type='comment' AND card_id IN (${cardIds}))))`)
+      .bind(owner,owner,id,owner,owner,id,owner,owner,id).run();
+    await this.db().prepare(`DELETE FROM personal_input_history WHERE owner_id=? AND
+      (card_id IN (${cardIds}) OR (entry_type='card' AND entry_id IN (${cardIds})))`)
+      .bind(owner,owner,id,owner,id).run();
     await this.db().prepare(`UPDATE personal_case_messages
       SET payload_json=json_set(json_remove(payload_json,'$.cards','$.service_form','$.service_form_wrap_up'),'$.service_form_saved',json('true'))
       WHERE owner_id=? AND json_extract(payload_json,'$.presentation')='service-form'
-        AND json_extract(payload_json,'$.cards[0].id')=?`).bind(owner,id).run();
+        AND json_extract(payload_json,'$.cards[0].id') IN (${cardIds})`).bind(owner,owner,id).run();
     await this.db().prepare(`UPDATE personal_case_messages SET payload_json=json_remove(payload_json,
       '$.followup.body','$.followup.note_draft','$.followup.outcome','$.followup.rating','$.followup.result_id','$.followup.note_ids')
-      WHERE owner_id=? AND json_extract(payload_json,'$.followup.card_id')=?`).bind(owner,id).run();
-    await this.db().prepare('DELETE FROM personal_cards WHERE id=? AND owner_id=?').bind(id,owner).run();
-    return this.changed({deleted:true,card_id:id});
+      WHERE owner_id=? AND json_extract(payload_json,'$.followup.card_id') IN (${cardIds})`).bind(owner,owner,id).run();
   }
   async forgetCard(id) {
     return this.db().transaction(async () => {
@@ -459,7 +482,17 @@ export class DocumentStore {
     });
   }
   async forgetComment({id,card_id}) {await this.get(card_id);const result=await this.db().prepare('DELETE FROM personal_comments WHERE id=? AND card_id=? AND owner_id=?').bind(id,card_id,this.owner()).run();if(!result.meta.changes)throw new Error('This note is no longer available.');return this.changed({deleted:true,card_id});}
-  async forgetDocument(id) { if (!await this.document(id)) throw new Error('This document is unavailable.'); await this.db().prepare('DELETE FROM personal_documents WHERE id=? AND owner_id=?').bind(id,this.owner()).run(); return this.changed({ deleted: true }); }
+  async forgetDocument(id) {
+    return this.db().transaction(async () => {
+      const document = await this.document(id);
+      if (!document) throw new Error('This document is unavailable.');
+      const {owner_id,original_path} = document;
+      await this.#clearImportedCardHistory(owner_id,id,{wholeFile:true});
+      await this.db().prepare('DELETE FROM personal_documents WHERE id=? AND owner_id=?').bind(id,owner_id).run();
+      this.db().afterCommit(() => this.reviewedInventories.delete(id));
+      return {...this.changed({deleted:true}), discarded_import:{id,owner_id,original_path}};
+    });
+  }
   async calculate({ document_id, sheet = '', column = '', operation = 'count', filters = [], group_by = '' }) {
     if (!await this.document(document_id)) throw new Error('Choose one of your imported documents.');
     if (!['count','sum','average','min','max','group_count'].includes(operation) || filters.length > 5) throw new Error('Choose a supported calculation.');

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, protocol, net, session, shell, safeStorage, dialog, Menu, clipboard, systemPreferences } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { mkdir, readFile, writeFile, stat, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { openDatabase } from './database.mjs';
 import { ChatGPTConnection, Vault } from './auth.mjs';
 import { DocumentStore } from './documents/store.mjs';
@@ -32,6 +32,7 @@ const idle=()=>{if(assistant.busy||importer.busy||connection.busy||pickerBusy)th
 async function updateAccount(){try{account=await connection.session();accountError='';}catch(error){accountError=error.message;account={connected:false,sharing:false,profileId:null,profiles:[],label:'This computer'};}return account;}
 async function snapshot(){
   await updateAccount();
+  await importer.pruneEmptyImports();
   await ensureKnownServices(store);
   const recovered=await store.recoverServiceInventories();
   if(recovered.recovered_inventories)assistant.clear();
@@ -54,6 +55,11 @@ async function allowedOriginal(document){
   const base=path.resolve(dataDir,'documents',owner())+path.sep,target=path.resolve(document.original_path);
   if(!target.startsWith(base))throw new Error('The original file path is unavailable.');return target;
 }
+async function finishDeletion({discarded_import,...result}){
+  assistant.clear();
+  await importer.removeManagedOriginal(discarded_import);
+  return result;
+}
 async function invoke(method,args){
   if(method==='snapshot')return snapshot();
   if(method==='ui-ready'){ready=true;return{ready:true};}
@@ -68,7 +74,7 @@ async function invoke(method,args){
   if(method==='get-card')return store.get(args.id);
   if(method==='edit-document-card'){idle();const result=await store.editDocumentCard(args);assistant.clear();return result;}
   if(method==='set-service-removed'){idle();const result=await store.setServiceRemoved(args);assistant.clear();return result;}
-  if(method==='delete-removed-service'){idle();const result=await store.deleteRemovedService(args);assistant.clear();return result;}
+  if(method==='delete-removed-service'){idle();return finishDeletion(await store.deleteRemovedService(args));}
   if(method==='add-own-service'||method==='update-own-service'){
     idle();
     const result=await (method==='add-own-service'?store.addOwnService(args.values):store.updateOwnService(args));
@@ -107,11 +113,8 @@ async function invoke(method,args){
   if(method==='save-comment'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:args.id?'Edit note':'Add note'},()=>store.comment(args));assistant.clear();return result;}
   if(method==='save-service-result'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:args.id?'Change service result or rating':'Record service result'},()=>store.serviceResult(args));assistant.clear();return result;}
   if(method==='forget-comment'){idle();const result=await inputHistory.record({type:'comment',id:args.id,card_id:args.card_id,label:'Delete note or result'},()=>store.forgetComment(args));assistant.clear();return result;}
-  if(method==='forget-card'){idle();const card=await store.get(args.id);if(card.case_info)throw new Error('Use Delete case history to remove this saved case and its messages.');const result=card.document_id?await store.forgetCard(args.id):await inputHistory.record({type:'card',id:args.id,label:'Delete memory'},()=>store.forgetCard(args.id));assistant.clear();return result;}
-  if(method==='forget-document'){
-    idle();const source=await allowedOriginal(await store.document(args.id));const result=await store.forgetDocument(args.id);
-    if(source)await rm(source,{force:true}).catch(()=>{});assistant.clear();return result;
-  }
+  if(method==='forget-card'){idle();const card=await store.get(args.id);if(card.case_info)throw new Error('Use Delete case history to remove this saved case and its messages.');return finishDeletion(card.document_id?await store.forgetCard(args.id):await inputHistory.record({type:'card',id:args.id,label:'Delete memory'},()=>store.forgetCard(args.id)));}
+  if(method==='forget-document'){idle();return finishDeletion(await store.forgetDocument(args.id));}
   if(method==='pick-document'){
     idle();pickerBusy=true;const services=args.services===true;
     try{

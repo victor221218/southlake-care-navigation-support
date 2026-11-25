@@ -636,7 +636,7 @@ function renderLibraryMode(){
   $('search').placeholder=services?'Search a service, place or phone number':'Search an organization, service or note';
   document.querySelectorAll('[data-library-mode]').forEach(b=>{const active=b.dataset.libraryMode===libraryMode;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
 }
-async function changeLibraryMode(mode){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter='';memoryKind='all';includeArchived=false;showRemovedServices=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value='';$('category-filter').value='';$('service-visibility').value='active';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
+async function changeLibraryMode(mode,{sourceId='',previousRows=false}={}){if(!['workspace','services','memory'].includes(mode))return;const sequence=++navigationSequence;if(mode==='memory'||(mode==='services'&&libraryMode!=='services'))await pauseVoice();if(sequence!==navigationSequence)return;serviceChatOpen=false;libraryMode=mode;query='';category='';documentFilter=sourceId;memoryKind='all';includeArchived=previousRows;showRemovedServices=false;offset=0;expandedMemoryGroup='';memoryHistoryOffset=0;$('search').value='';$('document-filter').value=documentFilter;$('category-filter').value='';$('service-visibility').value='active';$('memory-kind-filter').value='all';renderLibraryMode();await loadCards();}
 async function refresh(){state=await api('snapshot');if(activeOwner&&activeOwner!==(state.account.profileId||'device')){caseFilter='';$('case-search').value='';serviceFormDrafts.clear();}$('account-label').textContent=state.account.connected?state.account.label:'Connect ChatGPT';$('connection-dot').className='connection-dot '+(state.account.sharing?'online':'');$('workspace-label').textContent=state.workspace;$('version-label').textContent=(state.platform==='darwin'?'macOS':'Windows')+' · version '+state.version;
   $('document-filter').innerHTML='<option value="">All sources</option>'+state.documents.map(d=>`<option value="${e(d.id)}">${e(d.filename)} (${d.card_count})</option>`).join('');if(documentFilter&&!state.documents.some(d=>d.id===documentFilter))documentFilter='';$('document-filter').value=documentFilter;
   $('category-filter').innerHTML='<option value="">All service categories</option>'+(state.serviceCategories||[]).map(c=>`<option value="${e(c)}">${e(c)}</option>`).join('');$('category-filter').value=category;renderLibraryMode();renderModel();renderCases();renderUndo();await loadCards();const identity=state.account.profileId||'device';if(!activeCase||activeOwner!==identity){activeCase=null;activeOwner=identity;await loadCase(state.active_case.id,{activate:false});}else if(activeCase.id===state.active_case.id){activeCase={...activeCase,...state.active_case};renderCaseTitle();}}
@@ -675,7 +675,7 @@ async function setKnownServiceRemoved(target, removed) {
     }
     renderMessages();
     await refresh();
-    notice(removed?'Moved to Removed services.':'Restored to Known services.');
+    notice(removed?'Moved to Removed services. You can restore it or delete it permanently there.':'Restored to Known services.');
   } finally {
     target.disabled=false;
   }
@@ -1186,7 +1186,7 @@ async function openServiceEditor({card=null, review=null, inventoryOverview=fals
 }
 async function reviewServiceFile(result) {
   if(result.duplicate){
-    notice('These service cards are already in Known services.');
+    await showDuplicateImport(result,'This workbook is already imported');
     return;
   }
   await openServiceEditor({review:result,inventoryOverview:result.service_inventory===true});
@@ -1215,11 +1215,11 @@ async function saveOwnService(update=false) {
   const controls=[...modal.querySelectorAll('button,input,select,textarea')];
   controls.forEach(control=>control.disabled=true);
   try {
-    let count=1;
+    let imported=null;
     if (importId) {
       // Keep each review update below the request size limit, even for large spreadsheets.
       for(const index of changed)await api('review-service-row',{id:importId,index,...rows[index]});
-      count=(await api('confirm-service-import',{id:importId,update})).count;
+      imported=await api('confirm-service-import',{id:importId,update});
     } else if (card) {
       await api('update-own-service',{id:card.id,expected_version:card.version,values:rows[0].values});
     } else {
@@ -1228,6 +1228,10 @@ async function saveOwnService(update=false) {
     editor.saving=false;
     serviceEditor=null;
     await closeModal();
+    if (imported?.duplicate) {
+      await showDuplicateImport({...imported,filename:editor.filename},'This workbook is already imported');
+      return;
+    }
     if (card) {
       if (selected?.id===card.id) {selected=await api('get-card',{id:card.id});context();}
       await refresh();
@@ -1237,8 +1241,9 @@ async function saveOwnService(update=false) {
       await refresh();
       $('cards').scrollTop=0;
     }
-    notice(card?.archived?'Previous service row updated.':
-      count?count===1?'Service saved in Known services.':count+' services saved in Known services.':'These service cards are already in Known services.');
+    const count=imported?.count??1;
+    notice(card?.archived?'Previous service row updated.':count===1?'Service saved in Known services.':
+      count?count+' services saved in Known services.':'No selected rows were saved. Open Manage files to review the import.');
   } catch(error) {
     if(serviceEditor===editor){
       $('service-editor-error').textContent=error.message;
@@ -1305,7 +1310,7 @@ async function importDocument(sample=false,services=false){
   try{const result=await api(sample?'sample-document':'pick-document',{services});if(result.cancelled)return;
     if(result.tracking){await reviewTrackingFile(result);return;}
     if(services||result.service_inventory){await reviewServiceFile(result);return;}
-    if(result.duplicate){libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;await refresh();$('document-filter').value=documentFilter;notice('This document is already saved. Open Manage memory to review its cards.');return;}
+    if(result.duplicate){await showDuplicateImport(result,'This document is already imported');return;}
     preview=result;
     await openModal(documentPreviewHTML(result),'import-dialog');
   }finally{importing=false;$('add-document').disabled=busy;$('add-document').textContent='＋ Add a document';}
@@ -1398,9 +1403,57 @@ async function applyDocumentCardEdit() {
   }
 }
 async function saveImport(update=false){if(!preview||importing)return;importing=true;modal.querySelectorAll('button').forEach(b=>b.disabled=true);
-  try{const result=await api('confirm-import',{id:preview.id,update});libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;offset=0;preview=null;await closeModal();await refresh();$('document-filter').value=documentFilter;notice(result.updated?`${result.updated} matching cards updated. Notes kept.`:`${result.count} cards saved. You can ask about them now.`);$('message').focus();}
-  finally{importing=false;modal.querySelectorAll('button').forEach(b=>b.disabled=false);}}
-async function manageDocuments(){await refresh();await openModal(modalHead('Your documents','Originals and extracted cards stay on this computer.')+`<div class="detail-body document-list">${state.documents.length?state.documents.map(d=>`<article><div><strong>${e(d.filename)}</strong><p>${d.card_count} current cards · version ${d.version} · ${e(date(d.updated_at))}</p></div><div>${button('filter-document','Show cards','secondary',`data-id="${e(d.id)}"`)}${d.version>1?button('previous-rows','Include previous rows','quiet',`data-id="${e(d.id)}"`):''}${button('open-original','Open file ↗','quiet',`data-id="${e(d.id)}"`)}${button('delete-document','Delete','danger quiet',`data-id="${e(d.id)}"`)}</div></article>`).join(''):'<p>No documents imported yet.</p>'}</div>`);}
+  try{
+    const {filename}=preview;
+    const result=await api('confirm-import',{id:preview.id,update});
+    preview=null;
+    await closeModal();
+    if (result.duplicate) {
+      await showDuplicateImport({...result,filename},'This document is already imported');
+      return;
+    }
+    libraryMode='workspace';category='';query='';$('search').value='';documentFilter=result.document_id;offset=0;
+    await refresh();$('document-filter').value=documentFilter;
+    notice(result.updated?`${result.updated} matching cards updated. Notes kept.`:`${result.count} cards saved. You can ask about them now.`);
+    $('message').focus();
+  } finally {importing=false;modal.querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+async function showDuplicateImport({id,document_id,filename},title) {
+  if (modal.open&&!await closeModal()) return;
+  await openModal(modalHead(title,filename)+`<div class="detail-body">
+    <p>Open Manage files to review this import. To start fresh, choose <strong>Delete import</strong> for this file, then upload it again.</p>
+  </div><div class="modal-footer">
+    ${button('documents','Manage files','primary',`data-id="${e(document_id||id)}"`)}
+    ${button('close-modal','Close','quiet')}</div>`);
+}
+async function manageDocuments(focusId) {
+  await refresh();
+  const files=state.documents.map(doc=>{
+    const attrs=`data-id="${e(doc.id)}"`;
+    return `<article><div><strong>${e(doc.filename)}</strong>
+      <p>${doc.card_count} current cards · version ${doc.version} · ${e(date(doc.updated_at))}</p></div>
+      <div>${button('filter-document','Show cards','secondary',attrs)}
+      ${doc.version>1?button('previous-rows','Include previous rows','quiet',attrs):''}
+      ${button('open-original','Open file ↗','quiet',attrs)}
+      ${button('delete-document','Delete import','danger quiet',`${attrs} data-filename="${e(doc.filename)}"`)}</div></article>`;
+  });
+  await openModal(modalHead('Your documents','Originals and extracted cards stay on this computer.')+
+    `<div class="detail-body document-list">${files.join('')||'<p>No documents imported yet.</p>'}</div>`);
+  if (focusId) modal.querySelector(`[data-action="filter-document"][data-id="${CSS.escape(focusId)}"]`)?.focus();
+}
+async function deleteDocument(target) {
+  const {id,filename}=target.dataset;
+  if (!confirm(`Permanently delete the import of “${filename}” and all its saved cards and notes? You can upload the file again afterward.`)) return;
+  target.disabled=true;
+  try {
+    await api('forget-document',{id});
+    if (documentFilter===id) {documentFilter='';includeArchived=false;offset=0;}
+    if (selected?.document_id===id) {selected=null;context();}
+    if (activeCase) await loadCase(activeCase.id,{activate:false});
+    await manageDocuments();
+    notice('Import deleted. You can upload the file again.');
+  } finally {target.disabled=false;}
+}
 async function noteForm(id=null) {
   const card=id?await api('get-card',{id}):null;
   await openModal(modalHead(id?'Edit saved memory':'Add memory','')+`<form id="note-form" class="detail-body">
@@ -1589,8 +1642,10 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='new-card-note'){await flushNote();$('card-note-editor').hidden=false;noteEditor={cardId:noteEditor.cardId,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};$('card-note').value='';$('note-status').textContent='Notes save automatically when you pause.';$('card-note').focus();}
     else if(action==='edit-card-comment'){await flushNote();const card=await api('get-card',{id:noteEditor.cardId}),note=card.comments.find(n=>n.id===target.dataset.id);if(!note)throw new Error('This note is no longer available.');if(note.outcome){await startServiceResult(card.id,note.id);return;}noteEditor={cardId:card.id,id:note.id,version:note.version,body:note.body,saved:note.body,queue:Promise.resolve()};$('card-note-editor').hidden=false;$('card-note').value=note.body;$('note-status').textContent='Editing saved note. Changes save when you pause.';$('card-note').focus();}
     else if(action==='delete-card-comment'){if(feedbackEditor?.id===target.dataset.id){notice('Finish or cancel editing this result before deleting it.',true);return;}if(!confirm('Delete this saved note or result?'))return;await flushNote();const cardId=noteEditor.cardId;await api('forget-comment',{id:target.dataset.id,card_id:cardId});if(noteEditor.id===target.dataset.id){noteEditor={cardId,id:null,version:null,body:'',saved:'',queue:Promise.resolve()};$('card-note').value='';}updateCardHistory(await api('get-card',{id:cardId}));await refreshCardHistoryControls(cardId);$('note-status').textContent='Note or result deleted.';if($('service-history-status'))$('service-history-status').textContent='Saved note or result deleted.';await refresh();}
-    else if(action==='documents')await manageDocuments();
-    else if(action==='filter-document'||action==='previous-rows'){libraryMode='memory';documentFilter=target.dataset.id;includeArchived=action==='previous-rows';offset=0;await closeModal();$('document-filter').value=documentFilter;renderLibraryMode();await loadCards();}
+    else if(action==='documents')await manageDocuments(target.dataset.id);
+    else if(action==='filter-document'||action==='previous-rows'){
+      if (await closeModal()) await changeLibraryMode('memory',{sourceId:target.dataset.id,previousRows:action==='previous-rows'});
+    }
     else if(action==='open-original')await api('open-original',{id:target.dataset.id});
     else if(action==='open-link')await api('open-link',{url:target.dataset.url});
     else if(action==='copy-contact'){await api('copy-contact',{id:target.dataset.id,value:target.dataset.value});notice('Contact copied.');}
@@ -1599,7 +1654,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='edit-note')await noteForm(target.dataset.id);
     else if(action==='save-personal-note'){await api('save-note',{id:target.dataset.id||null,expected_version:Number(target.dataset.version)||null,title:$('note-title').value,organization:$('note-organization').value,body:$('note-body').value});await closeModal();await refresh();notice('Memory saved.');}
     else if(action==='delete-card'){if(!confirm('Delete this card and its attached notes? This cannot be undone.'))return;await flushNote();await api('forget-card',{id:target.dataset.id});await closeModal();if(selected?.id===target.dataset.id){selected=null;context();}await refresh();notice('Card deleted.');}
-    else if(action==='delete-document'){if(!confirm('Delete this imported document, its cards and their notes? This cannot be undone.'))return;await api('forget-document',{id:target.dataset.id});if(documentFilter===target.dataset.id){documentFilter='';offset=0;}await manageDocuments();await refresh();}
+    else if(action==='delete-document')await deleteDocument(target);
     else if(action==='sign-in')await signIn();
     else if(action==='add-account')await signIn(true);
     else if(action==='cancel-sign-in')await api('cancel-sign-in');

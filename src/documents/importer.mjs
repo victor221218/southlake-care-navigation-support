@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads';
-import { readFile, stat, mkdir, writeFile, rename, rm } from 'node:fs/promises';
+import { readFile, stat, mkdir, writeFile, rename, rm, realpath } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, cleanServiceFields, isInventoryWorkbook, serviceDraft, serviceSection} from './service-sources.mjs';
@@ -25,12 +25,28 @@ export function parseInWorker({bytes,filename,worker,pdfWorker,timeoutMs=45000})
 export class DocumentImporter {
   constructor({store,directory,worker,pdfWorker}){Object.assign(this,{store,directory,worker,pdfWorker});this.pending=null;this.busy=false;}
   cancel(){this.pending=null;}
+  async removeManagedOriginal(document) {
+    if (!document?.original_path) return;
+    const root=path.resolve(this.directory), folder=path.resolve(root,document.owner_id), target=path.resolve(document.original_path);
+    if (path.dirname(folder)!==root || path.dirname(target)!==folder ||
+        !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.[a-z0-9]+$/i.test(path.basename(target))) return;
+    try {
+      const [resolvedRoot,resolvedFolder]=await Promise.all([realpath(root),realpath(folder)]);
+      if (resolvedFolder===path.join(resolvedRoot,path.basename(folder))) await rm(target,{force:true});
+    } catch {}
+  }
+  async pruneEmptyImports() {
+    const discarded=await this.store.pruneEmptyImports();
+    await Promise.all(discarded.map(document=>this.removeManagedOriginal(document)));
+  }
   async prepare(filename,{services=false}={}){
     if(this.busy)throw new Error('Wait for the current file to finish.');this.busy=true;const owner=this.store.owner();
     try{
       this.pending=null;
       if((await stat(filename)).size>20*1024*1024)throw new Error('Choose a document smaller than 20 MB.');
       const bytes=await readFile(filename),parsed=await parseInWorker({bytes,filename:path.basename(filename),worker:this.worker,pdfWorker:this.pdfWorker});
+      if(owner!==this.store.owner())throw new Error('The active account changed. Import this file again.');
+      await this.pruneEmptyImports();
       if(owner!==this.store.owner())throw new Error('The active account changed. Import this file again.');
       if (parsed.template===TRACKING_TEMPLATE) {
         const id=randomUUID();
@@ -161,9 +177,12 @@ export class DocumentImporter {
       const replaceId=serviceReplaceId||(update?item.previous?.id:null);
       const previous=replaceId?await this.store.document(replaceId):null;
       this.preview(id);
-      const result=await this.store.import(serviceDocument||item.parsed,{originalPath:destination,replaceId});this.pending=null;
+      const {discarded_import,...result}=await this.store.import(serviceDocument||item.parsed,{originalPath:destination,replaceId});this.pending=null;
       if(result.duplicate)await rm(destination,{force:true}).catch(()=>{});
-      if(!result.duplicate&&previous?.original_path&&path.resolve(previous.original_path).startsWith(path.resolve(folder)+path.sep))await rm(previous.original_path,{force:true}).catch(()=>{});
+      else {
+        await this.removeManagedOriginal(discarded_import);
+        await this.removeManagedOriginal(previous);
+      }
       return result;
     }catch(error){await rm(destination,{force:true}).catch(()=>{});await rm(destination+'.next',{force:true}).catch(()=>{});throw error;}
     finally{this.busy=false;}

@@ -202,7 +202,87 @@ async function run(){try{
     await wait(()=>document.querySelector('#messages .answer-card')&&document.getElementById('send-button').textContent==='Send ↑');
     assert(!document.querySelector(`#messages .answer-card[data-id="${fixture.id}"]`),
       'A new conversation must not recommend the deleted inventory card.');
-    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture,transportation_recommendation_order:true,archived_transcript_in_memory:true,transportation_capture:transportationCapture,workspace_inventory_linked:true,imported_transportation_ranked:true,reference_memory_row_edit:true,reference_memory_row_delete:true,linked_inventory_row_delete:true});return;
+
+    click('#add-document');
+    await wait(()=>document.getElementById('modal-title')?.textContent==='This workbook is already imported');
+    click('#modal [data-action="documents"]');
+    await wait(()=>document.querySelector(`#modal [data-action="delete-document"][data-id="${fixture.document_id}"]`));
+    click('#modal [data-action="close-modal"]');
+    await wait(()=>!document.getElementById('modal').open);
+
+    click('[data-action="manage-memory"]');
+    await wait(()=>document.body.dataset.view==='memory');
+    filter('document-filter',fixture.document_id);
+    try {
+      window.confirm=()=>true;
+      for (const card of remainingMemory.items) {
+        const row=`[data-preview-id="${card.id}"]`;
+        await wait(()=>document.querySelector(row+' [data-action="delete-memory"]'));
+        click(row+' [data-action="delete-memory"]');
+        await wait(()=>!document.querySelector(row));
+      }
+    } finally { window.confirm=confirmDelete; }
+    assert(!(await request('snapshot')).documents.some(doc=>doc.id===fixture.document_id),
+      'Deleting the final workbook card removes the old import entirely.');
+
+    const previousIds=[fixture.id,...remainingServices.items.map(card=>card.id)];
+    const importAgain=async control=>{
+      click(control);
+      await wait(()=>document.querySelectorAll('#modal [data-action="edit-inventory-preview-row"]').length===3);
+      click('#modal [data-action="save-own-service"]');
+      await wait(()=>document.body.dataset.view==='services'&&!document.getElementById('modal').open&&
+        document.getElementById('cards').textContent.includes('Fixture Appointment Shuttle'));
+      const sources=(await request('snapshot')).documents.filter(doc=>doc.filename==='workspace-inventory.xlsx');
+      const [source]=sources;
+      assert(sources.length===1&&source.card_count===3,'The original workbook should save every row in one new import.');
+      const services=await request('list-cards',{collection:'services',document_id:source.id});
+      const memory=await request('list-memory',{kind:'documents',document_id:source.id});
+      assert(services.total===3&&services.items.every(card=>!previousIds.includes(card.id)),
+        'Reimporting the exact workbook should create three fresh cards.');
+      assert(memory.total===3&&memory.items.every(item=>services.items.some(service=>service.id===item.id)),
+        'All of the reimported cards must also be available in Manage memory.');
+      return {source,services};
+    };
+
+    click('[data-action="workspace"]');
+    await wait(()=>document.body.dataset.view==='workspace');
+    const workspaceImport=await importAgain('#add-document');
+    assert(workspaceImport.source.id!==fixture.document_id,'Workspace should treat the restored workbook as a new import.');
+    previousIds.push(...workspaceImport.services.items.map(card=>card.id));
+    click('[data-action="manage-memory"]');
+    await wait(()=>document.body.dataset.view==='memory');
+    click('#manage-files');
+    const deleteFile=`#modal [data-action="delete-document"][data-id="${workspaceImport.source.id}"]`;
+    await wait(()=>document.querySelector(deleteFile));
+    try {
+      window.confirm=()=>true;
+      click(deleteFile);
+      await wait(()=>!document.querySelector(deleteFile));
+    } finally { window.confirm=confirmDelete; }
+    const resetSnapshot=await request('snapshot');
+    assert(resetSnapshot.documents.some(doc=>doc.id===card.document_id)&&
+      !resetSnapshot.documents.some(doc=>doc.id===workspaceImport.source.id),
+      'Deleting a whole import should release its source and keep other documents.');
+    click('#modal [data-action="close-modal"]');
+    await wait(()=>!document.getElementById('modal').open);
+    click('[data-action="known-services"]');
+    await wait(()=>document.body.dataset.view==='services');
+    const directoryImport=await importAgain('#import-services');
+    assert(directoryImport.source.id!==workspaceImport.source.id,
+      'Known services should accept the exact same workbook after the previous import is deleted.');
+
+    click('[data-action="workspace"]');
+    click('.chat-header-actions [data-action="new-chat"]');
+    await wait(()=>document.body.dataset.view==='workspace'&&document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+    type('message','I would need an older adult who needs transportation ride to North York on 11/30');
+    click('#send-button');
+    await wait(()=>document.querySelector('#messages .answer-card')&&document.getElementById('send-button').textContent==='Send ↑');
+    const restoredShuttle=directoryImport.services.items.find(service=>service.title.includes('Fixture Appointment Shuttle'));
+    const restoredRecommendation=document.querySelector('#messages .answer-card');
+    assert(restoredRecommendation.dataset.id===restoredShuttle?.id&&restoredRecommendation.querySelector('.own-source-tag'),
+      'The reimported Own source ride should be the first matching recommendation for the demo prompt.');
+
+    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture,transportation_recommendation_order:true,archived_transcript_in_memory:true,transportation_capture:transportationCapture,workspace_inventory_linked:true,imported_transportation_ranked:true,reference_memory_row_edit:true,reference_memory_row_delete:true,linked_inventory_row_delete:true,empty_inventory_reimport_verified:true,reimported_inventory_ranked:true});return;
   }
   const initial=await request('snapshot');assert(initial.services.total===27&&initial.cards.total===0&&initial.documents.length===0);
   const grid=document.getElementById('workspace-grid').getBoundingClientRect(),chat=document.getElementById('chat-panel').getBoundingClientRect();assert(chat.width>=contentWidth(document.getElementById('workspace-grid'))-4,'Workspace chat must fill the content width.');

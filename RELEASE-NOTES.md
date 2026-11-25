@@ -1,3 +1,8 @@
+# Care Navigation Support 2.17.11
+
+- Import the same Excel, CSV or TSV file again after deleting all its cards. The app clears the empty import record, including empty spreadsheet imports left by earlier versions.
+- For an import that still has saved rows, use Manage files to see the workbook and delete it if you want to start over.
+
 # Care Navigation Support 2.17.10
 
 - Edit and delete individual imported cards, notes and results in the Manage memory preview or expanded history.

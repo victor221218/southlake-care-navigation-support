@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
 import { mkdir, mkdtemp, readFile, writeFile, copyFile } from 'node:fs/promises';
@@ -622,6 +623,73 @@ test('saved reference rows can be corrected and deleted individually with the or
     assert.equal((await f.store.calculate({document_id:saved.document_id,operation:'sum',column:'Slots'})).value,5);
     const original=await f.store.document(saved.document_id);
     assert.equal(await readFile(original.original_path,'utf8'),file);
+  } finally { await f.close(); }
+});
+
+test('the same Excel file imports afresh once the last saved service is permanently deleted', async () => {
+  const f=await fixture();
+  try {
+    const filename=await writeServiceFixture(f.folder), original=await readFile(filename);
+    const importer=importerFor(f);
+    const review=await importer.prepare(filename);
+    assert.equal(review.service_inventory,true);
+    const saved=await importer.confirmServices(review.id);
+    const initial=(await f.store.list({collection:'services',document_id:saved.document_id})).items;
+    assert.equal(initial.length,2);
+    const [deleted, remaining]=initial;
+    await f.store.serviceResult({card_id:deleted.id,outcome:'worked',rating:5});
+    await f.store.forgetCard(deleted.id);
+
+    assert.equal((await importer.prepare(filename)).duplicate,true);
+    await f.store.setServiceRemoved({id:remaining.id,removed:true});
+    assert.equal((await f.store.list({collection:'services',document_id:saved.document_id})).total,0);
+    assert.equal((await importer.prepare(filename,{services:true})).duplicate,true);
+    await f.store.deleteRemovedService({id:remaining.id});
+
+    assert.equal(await f.store.document(saved.document_id),null);
+    assert.equal((await f.store.export()).deleted_document_rows?.length??0,0);
+    assert.equal((await f.store.memories({document_id:saved.document_id})).total,0);
+    await f.reopen();
+    const retry=await importer.prepare(filename,{services:true});
+    assert(!retry.duplicate&&!retry.previous);
+    const reopened=await importer.confirmServices(retry.id);
+    assert.notEqual(reopened.document_id,saved.document_id);
+    const cards=(await f.store.list({collection:'services',document_id:reopened.document_id})).items;
+    assert.deepEqual(cards.map(card=>card.title).sort(),initial.map(card=>card.title).sort());
+    assert(cards.every(card=>!initial.some(old=>old.id===card.id)&&card.experience.rating_count===0));
+    assert.deepEqual(await readFile(filename),original);
+  } finally { await f.close(); }
+});
+
+test('legacy empty inventory and its deletion markers let the exact Excel file import again', async () => {
+  const f=await fixture();
+  try {
+    const filename=await writeServiceFixture(f.folder), importer=importerFor(f);
+    const draft=await importer.prepare(filename);
+    const old=await importer.confirmServices(draft.id);
+    const managedCopy=(await f.store.document(old.document_id)).original_path;
+    const cards=(await f.store.list({collection:'services',document_id:old.document_id})).items;
+    const db=f.store.db();
+    await db.transaction(async()=>{
+      for (const card of cards) {
+        const key=createHash('sha256').update(card.source_key).digest('hex');
+        await db.prepare('INSERT INTO personal_deleted_document_rows (owner_id,document_id,source_key_hash) VALUES (?,?,?)')
+          .bind('user-a',old.document_id,key).run();
+      }
+      await db.prepare('DELETE FROM personal_cards WHERE owner_id=? AND document_id=?').bind('user-a',old.document_id).run();
+    });
+    assert((await f.store.documents()).some(source=>source.id===old.document_id&&source.card_count===0));
+    await f.reopen();
+
+    const retry=await importer.prepare(filename);
+    assert(retry.service_inventory&&!retry.duplicate&&!retry.previous);
+    const saved=await importer.confirmServices(retry.id);
+    assert.equal(saved.count,cards.length);
+    assert.notEqual(saved.document_id,old.document_id);
+    assert.equal(await f.store.document(old.document_id),null);
+    assert.equal((await f.store.export()).deleted_document_rows?.length??0,0);
+    assert.equal((await f.store.memories({kind:'documents',document_id:saved.document_id})).total,cards.length);
+    await assert.rejects(readFile(managedCopy),{code:'ENOENT'});
   } finally { await f.close(); }
 });
 

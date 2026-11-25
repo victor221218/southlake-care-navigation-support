@@ -111,7 +111,7 @@ In **Chat history**, open the conversation’s **⋯** menu and choose **Finish 
 
 ### Find an organization’s history
 
-In **Manage memory**, search for the organization, service, or note. Use **Edit** or **Delete** beside an imported card, note or result. Choose **Expand history** to see more items and their dates. Deleting one imported service removes that card from Manage memory, Known services and future recommendations. The source file and its other rows stay available. Use **Add memory** to write a new note with an optional organization name.
+In **Manage memory**, search for the organization, service, or note. Use **Edit** or **Delete** beside an imported card, note or result. Choose **Expand history** to see more items and their dates. Deleting one imported service removes that card from Manage memory, Known services and future recommendations. The other rows stay available. After deleting the last card, you can import the same workbook again. Use **Manage files** to clear the whole import, including removed or previous rows, in one step. Use **Add memory** to write a new note with an optional organization name.
 
 ### Correct a wrong rating or note
 
