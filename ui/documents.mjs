@@ -21,7 +21,7 @@ let caseHasNewer = false, caseMenuTrigger = null, caseListMarkup = '', cardHisto
 let expandedMemoryGroup = '', memoryHistoryOffset = 0;
 let manualWrapUp = false;
 let serviceEditor = null;
-let documentPreviewEditor = null;
+let documentCardEditor = null;
 let showRemovedServices = false;
 let trackingReview = null;
 const keepChatHelp = 'Keep this conversation as one item in Manage memory.';
@@ -244,7 +244,7 @@ function memoryEntry(item,group,expanded) {
   const conversation = item.kind === 'conversation';
   const serviceCard = item.entry_type==='card'&&item.source_format===OWN_SERVICE_FORMAT;
   const prefix = group.title + ' · ';
-  const label = conversation ? 'Saved conversation' : item.outcome ? 'Service result' :
+  const label = conversation ? 'Saved conversation' : serviceCard ? 'Imported service' : item.outcome ? 'Service result' :
     item.entry_type === 'comment' ? 'Note' : item.document_id ? 'Document card' : 'Saved note';
   const title = conversation ? item.title.replace(/^Saved case: /,'') :
     item.title.startsWith(prefix) ? item.title.slice(prefix.length) : item.title === group.title ? label : item.title;
@@ -252,15 +252,17 @@ function memoryEntry(item,group,expanded) {
     (item.outcome && item.body === resultLabel(item.outcome)+'.') ? '' : item.body;
   const status = resultBadge(item);
   const attrs = `data-id="${e(item.id)}" data-card-id="${e(item.card_id)}" data-entry-type="${e(item.entry_type)}" ${item.outcome?'data-service-result="true"':''}`;
-  const remove = button('delete-memory','Delete','quiet danger',`${attrs} aria-label="${e('Delete this '+label.toLowerCase())}"`);
-  const editService=serviceCard&&!item.archived?button('edit-own-service','Edit','secondary',`${attrs} aria-label="${e('Edit '+title)}"`):'';
+  const editLabel = conversation ? 'Rename' : 'Edit';
+  const actionTitle = item.entry_type==='comment' ? label.toLowerCase()+' for '+title : title;
+  const edit = button(serviceCard?'edit-own-service':'edit-memory',editLabel,'secondary',
+    `${attrs} aria-label="${e(editLabel+' '+actionTitle)}"`);
+  const remove = button('delete-memory','Delete','quiet danger',`${attrs} aria-label="${e('Delete '+actionTitle)}"`);
+  const actions = `<div class="memory-record-actions">${edit}${remove}</div>`;
   if (!expanded) {
-    const deleteFromPreview = item.entry_type==='comment' || item.memory_type==='notes';
     return `<li data-preview-id="${e(item.id)}"><div class="memory-preview-row"><div><strong>${e(title)}</strong> ${sourceTag(serviceCard?item.source_format:undefined)}
       ${status}${!status && item.entry_type==='comment' ? '<span class="memory-entry-label">Note</span>' : ''}
-      ${body ? `<p>${e(body)}</p>` : ''}</div>${editService || (deleteFromPreview ? remove : '')}</div></li>`;
+      ${body ? `<p>${e(body)}</p>` : ''}</div>${actions}</div></li>`;
   }
-  const editLabel = conversation ? 'Case options' : item.document_id && item.entry_type==='card' ? 'Add correction' : 'Edit';
   return `<li class="memory-record" data-memory-id="${e(item.id)}">
     <div class="memory-entry-content">
       <div class="memory-entry-heading">${button('open-card',e(title),'memory-record-main',
@@ -268,7 +270,7 @@ function memoryEntry(item,group,expanded) {
       ${body ? `<p>${e(body)}</p>` : ''}
       <small>${label}${item.archived?' · Previous row':''} · ${e(date(item.updated_at))}</small>
     </div>
-    <div class="memory-record-actions">${serviceCard ? editService : button('edit-memory',editLabel,'secondary',attrs)+remove}</div></li>`;
+    ${actions}</li>`;
 }
 function memoryGroupHTML(group) {
   const open = Boolean(group.history);
@@ -958,12 +960,12 @@ function discardResult(){return !feedbackEditor||JSON.stringify(resultDraft())==
 async function openModal(content,kind=''){if(feedbackSaving)throw new Error('Wait for the service result to finish saving.');if(!discardResult())throw new Error('Save the result or choose Cancel result before leaving.');await flushNote();noteEditor=null;feedbackEditor=null;cardHistory=null;modal.className=kind;modal.innerHTML=content;if(!modal.open)modal.showModal();}
 function modalHead(title,subtitle=''){return`<div class="modal-heading"><div><h2 id="modal-title">${e(title)}</h2>${subtitle?`<p>${e(subtitle)}</p>`:''}</div>${button('close-modal','×','icon-button','aria-label="Close panel"')}</div>`;}
 async function closeModal(){
-  if(feedbackSaving||serviceEditor?.saving||trackingReview?.saving||documentPreviewEditor?.saving)throw new Error('Wait for this change to finish saving.');
+  if(feedbackSaving||serviceEditor?.saving||trackingReview?.saving||documentCardEditor?.saving)throw new Error('Wait for this change to finish saving.');
   if(!discardResult())return false;
   await flushNote();
   if(preview?.id||serviceEditor?.importId||trackingReview)await api('cancel-import');
   preview=null;
-  documentPreviewEditor=null;
+  documentCardEditor=null;
   trackingReview=null;
   serviceEditor=null;noteEditor=null;feedbackEditor=null;cardHistory=null;
   modal.close();modal.replaceChildren();return true;
@@ -1235,7 +1237,8 @@ async function saveOwnService(update=false) {
       await refresh();
       $('cards').scrollTop=0;
     }
-    notice(count?count===1?'Service saved in Known services.':count+' services saved in Known services.':'These service cards are already in Known services.');
+    notice(card?.archived?'Previous service row updated.':
+      count?count===1?'Service saved in Known services.':count+' services saved in Known services.':'These service cards are already in Known services.');
   } catch(error) {
     if(serviceEditor===editor){
       $('service-editor-error').textContent=error.message;
@@ -1322,35 +1325,43 @@ function documentPreviewHTML(result) {
     ${SERVICE_FILE_TYPES.includes(result.format)?button('review-import-services','Add to Known services','secondary'):''}
     ${button('close-modal','Cancel','quiet')}</div>`;
 }
+function documentCardEditorHTML(card,fields,editingPreview) {
+  return modalHead(editingPreview?'Edit card':'Edit document card',card.locator)+`<div class="detail-body">
+    <label>Card title<input id="preview-card-title" maxlength="180" value="${e(card.title)}"></label>
+    ${fields.length?fields.map(([key,value],position)=>`<label>${e(key)}
+      <textarea id="preview-card-field-${position}" rows="2">${e(String(value??''))}</textarea></label>`).join(''):
+      `<label>Card text<textarea id="preview-card-body" rows="9" maxlength="30000">${e(card.body)}</textarea></label>`}
+    <p id="document-preview-error" class="callout" role="alert" hidden></p>
+  </div><div class="modal-footer">
+    ${editingPreview?button('save-document-preview-row','Apply changes','primary'):
+      button('save-memory-document-card','Save changes','primary')}
+    ${editingPreview?button('back-to-document-preview','Back to preview','quiet'):
+      button('close-modal','Cancel','quiet')}</div>`;
+}
 async function editDocumentPreviewRow(index) {
   const pending=preview;
   if (!pending?.preview[index]||importing) return;
-  const section=await api('review-document-card',{id:pending.id,index});
+  const card=await api('review-document-card',{id:pending.id,index});
   if (preview!==pending) return;
-  const fields=Object.entries(section.fields||{});
-  documentPreviewEditor={index,section,fields,saving:false};
-  modal.innerHTML=modalHead('Edit card',section.locator)+`<div class="detail-body">
-    <label>Card title<input id="preview-card-title" maxlength="180" value="${e(section.title)}"></label>
-    ${fields.length?fields.map(([key,value],position)=>`<label>${e(key)}
-      <textarea id="preview-card-field-${position}" rows="2">${e(String(value??''))}</textarea></label>`).join(''):
-      `<label>Card text<textarea id="preview-card-body" rows="9" maxlength="30000">${e(section.body)}</textarea></label>`}
-    <p id="document-preview-error" class="callout" role="alert" hidden></p>
-  </div><div class="modal-footer">
-    ${button('save-document-preview-row','Apply changes','primary')}
-    ${button('back-to-document-preview','Back to preview','quiet')}</div>`;
+  const fields=Object.entries(card.fields||{});
+  documentCardEditor={index,card,fields,saving:false};
+  modal.innerHTML=documentCardEditorHTML(card,fields,true);
   modal.scrollTop=0;
   $('preview-card-title').focus({preventScroll:true});
 }
 function showDocumentPreview() {
-  if (!preview||documentPreviewEditor?.saving) return;
-  const index=documentPreviewEditor?.index;
-  documentPreviewEditor=null;
+  if (!preview||documentCardEditor?.saving) return;
+  const index=documentCardEditor?.index;
+  documentCardEditor=null;
   modal.innerHTML=documentPreviewHTML(preview);
   modal.querySelector(`[data-action="edit-document-preview-row"][data-index="${index}"]`)?.focus();
 }
-async function applyDocumentPreviewEdit() {
-  const editor=documentPreviewEditor;
-  if (!preview||!editor||editor.saving) return;
+async function applyDocumentCardEdit() {
+  const editor=documentCardEditor;
+  if (!editor||editor.saving) return;
+  const {card,index}=editor;
+  const editingPreview=index!==undefined;
+  if (editingPreview&&!preview) return;
   const fields=Object.fromEntries(editor.fields.map(([key,value],position)=>{
     const input=$('preview-card-field-'+position).value;
     if (input===String(value??'')) return [key,value];
@@ -1361,11 +1372,24 @@ async function applyDocumentPreviewEdit() {
   const controls=[...modal.querySelectorAll('button,input,textarea')];
   controls.forEach(control=>control.disabled=true);
   try {
-    preview.preview[editor.index]=await api('review-document-row',{id:preview.id,index:editor.index,
-      title:$('preview-card-title').value,body:$('preview-card-body')?.value,fields});
+    const changes={title:$('preview-card-title').value,body:$('preview-card-body')?.value,fields};
+    const updated=editingPreview
+      ? await api('review-document-row',{id:preview.id,index,...changes})
+      : await api('edit-document-card',{id:card.id,expected_version:card.version,...changes});
     editor.saving=false;
-    showDocumentPreview();
+    if (editingPreview) {
+      preview.preview[index]=updated;
+      showDocumentPreview();
+    } else {
+      await closeModal();
+      if (selected?.id===card.id) {selected=await api('get-card',{id:card.id});context();}
+      await refresh();
+      const editButton=$('cards').querySelector(`[data-action="edit-memory"][data-id="${CSS.escape(card.id)}"]`);
+      (editButton || $('search')).focus({preventScroll:true});
+      notice('Document card updated.');
+    }
   } catch(error) {
+    if (documentCardEditor!==editor) throw error;
     $('document-preview-error').textContent=error.message;
     $('document-preview-error').hidden=false;
   } finally {
@@ -1388,39 +1412,63 @@ async function noteForm(id=null) {
   $('note-body').focus();
 }
 async function editMemory(target){
-  const card=await api('get-card',{id:target.dataset.cardId});if(card.case_info){await caseOptions(card.case_info.id);return;}
-  if(target.dataset.entryType==='comment'){
-    const note=card.comments.find(n=>n.id===target.dataset.id);if(!note)throw new Error('This memory is no longer available. Refresh the list.');
-    if(note.outcome){await startServiceResult(card.id,note.id);return;}
-    await openModal(modalHead('Edit saved feedback',card.title)+`<form class="detail-body"><label>Saved information<textarea id="memory-comment-body" rows="8" maxlength="12000" required>${e(note.body)}</textarea></label><p class="subtle">This changes your saved note. The provider or document source stays intact.</p><div class="modal-footer">${button('save-memory-comment','Save changes','primary',`data-id="${e(note.id)}" data-card-id="${e(card.id)}" data-version="${note.version}"`)}</div></form>`);$('memory-comment-body').focus();
-  }else if(card.document_id){await openCard(card.id);$('card-note').scrollIntoView({block:'center'});$('card-note').focus();}
-  else await noteForm(card.id);
+  const card=await api('get-card',{id:target.dataset.cardId});
+  if (target.dataset.entryType==='comment') {
+    const note=card.comments.find(n=>n.id===target.dataset.id);
+    if (!note) throw new Error('This memory is no longer available. Refresh the list.');
+    if (note.outcome) {await startServiceResult(card.id,note.id);return;}
+    await openModal(modalHead('Edit saved feedback',card.title)+`<form class="detail-body"><label>Saved information<textarea id="memory-comment-body" rows="8" maxlength="12000" required>${e(note.body)}</textarea></label><div class="modal-footer">${button('save-memory-comment','Save changes','primary',`data-id="${e(note.id)}" data-card-id="${e(card.id)}" data-version="${note.version}"`)}</div></form>`);
+    $('memory-comment-body').focus();
+  } else if (card.case_info) {
+    await caseOptions(card.case_info.id,{renameOnly:true});
+  } else if (card.document_id){
+    const fields=Object.entries(card.fields||{});
+    await openModal(documentCardEditorHTML(card,fields,false));
+    documentCardEditor={card,fields,saving:false};
+    $('preview-card-title').focus({preventScroll:true});
+  } else await noteForm(card.id);
 }
 async function deleteMemory(target){
   const comment=target.dataset.entryType==='comment';
-  if (!comment) {
-    const card=await api('get-card',{id:target.dataset.cardId});
-    if(card.case_info){
+  const {cardId,id}=target.dataset;
+  const group=target.closest('.memory-group')?.dataset.groupId;
+  target.disabled=true;
+  try {
+    const card=comment?null:await api('get-card',{id:cardId});
+    const service=card&&isService(card);
+    if (card?.case_info) {
       if(!confirm('Permanently delete this saved case and its chat history? Separate service notes and results stay.'))return;
       await api('delete-case',{id:card.case_info.id,expected_version:card.case_info.version});
       if(activeCase?.id===card.case_info.id)activeCase=null;
-      await refresh();notice('Saved case history deleted.');return;
+    } else {
+      const item=target.dataset.serviceResult==='true'?'service result':'note';
+      const question=comment?`Delete this saved ${item}?`:service
+        ? `Permanently delete “${card.title}” and its saved notes, ratings and results? This removes the service from Manage memory, Known services and recommendations.`
+        : `${card.document_id?'Permanently delete':'Delete'} “${card.title}” and its attached notes?`;
+      if(!confirm(question))return;
+      await flushNote();
+      if (comment) {
+        await api('forget-comment',{id,card_id:cardId});
+        if (target.dataset.serviceResult==='true') {
+          const serviceCard=await api('get-card',{id:cardId});
+          if (updateChatServiceExperience(cardId,serviceCard)) renderMessages();
+        }
+      } else {
+        await flushCaseDraft();
+        const inChat=selected?.id===cardId||messages.some(message=>
+          message.followup?.card_id===cardId||message.cards?.some(reference=>reference.id===cardId));
+        await api('forget-card',{id});
+        if (selected?.id===cardId) {selected=null;context();}
+        if (inChat&&activeCase) await loadCase(activeCase.id,{activate:false});
+      }
     }
+    await refresh();
+    const remaining=group && $('cards').querySelector(`.memory-group[data-group-id="${CSS.escape(group)}"] [data-action="toggle-memory-group"]`);
+    (remaining || $('search')).focus({preventScroll:true});
+    notice(card?.case_info?'Saved case history deleted.':service?'Imported service deleted.':'Memory deleted.');
+  } finally {
+    target.disabled=false;
   }
-  const item=target.dataset.serviceResult==='true'?'service result':'note';
-  if(!confirm(comment?`Delete this saved ${item}?`:'Delete this saved card and its attached notes? This cannot be undone.'))return;
-  const group=target.closest('.memory-group')?.dataset.groupId;
-  await flushNote();
-  await api(comment?'forget-comment':'forget-card',comment?{id:target.dataset.id,card_id:target.dataset.cardId}:{id:target.dataset.id});
-  if (target.dataset.serviceResult==='true') {
-    const card=await api('get-card',{id:target.dataset.cardId});
-    if (updateChatServiceExperience(card.id,card)) renderMessages();
-  }
-  if(!comment&&selected?.id===target.dataset.cardId){selected=null;context();}
-  await refresh();
-  const remaining=group && $('cards').querySelector(`.memory-group[data-group-id="${CSS.escape(group)}"] [data-action="toggle-memory-group"]`);
-  (remaining || $('search')).focus({preventScroll:true});
-  notice('Memory deleted. Future answers will use the remaining saved information.');
 }
 async function settings(){await refresh();const starter=state.account.connected?await api('starter-count'):{count:0};await openModal(modalHead('Connection & backup','Manage your connection and saved information.')+`<div class="detail-body settings-body"><section><h3>ChatGPT connection</h3><p><strong>${e(state.account.connected?state.account.label:'Connect your own ChatGPT account')}</strong></p><p>${state.account.sharing?'Plan permission is enabled. Send a question to verify this account can complete an answer.':'AI answers use an eligible ChatGPT account and its allowed plan usage. Sign-in opens the official OpenAI page in your browser. Account and app eligibility are decided by OpenAI.'}</p>${state.accountError?`<p class="callout">${e(state.accountError)}</p>`:''}<div class="button-row">${button('sign-in',state.account.connected?'Reconnect ChatGPT':'Continue with ChatGPT','primary')}${state.account.connected?button('sign-out','Sign out','secondary'):''}${button('add-account','Use a different account','quiet')}</div>${state.account.profiles.length?`<label class="saved-accounts">Saved connections<select id="saved-accounts"><option value="">Choose a saved connection…</option>${state.account.profiles.map(p=>`<option value="${e(p.id)}">${e(p.label)}${p.connected?'':' · reconnect'}</option>`).join('')}</select></label>`:''}<p class="subtle">This app cannot read your ChatGPT chat history or ChatGPT Memory. It keeps its own document cards. There is no shared team database.</p>${state.account.sharing?button('load-models','Choose an available AI model','quiet'):''}<div id="model-picker"></div></section>
     ${starter.count?`<section class="callout"><h3>${starter.count} saved starter items on this computer</h3><p>These cards or service notes were saved before sign-in. Copy them into this account to use them with ChatGPT.</p>${button('copy-starter','Copy starter cards into this account','secondary')}</section>`:''}
@@ -1505,7 +1553,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
     else if(action==='import-services')await importDocument(false,true);
     else if(action==='review-import-services'&&preview)await reviewServiceFile(await api('review-service-import',{id:preview.id}));
     else if(action==='edit-document-preview-row')await editDocumentPreviewRow(Number(target.dataset.index));
-    else if(action==='save-document-preview-row')await applyDocumentPreviewEdit();
+    else if(action==='save-document-preview-row'||action==='save-memory-document-card')await applyDocumentCardEdit();
     else if(action==='back-to-document-preview')showDocumentPreview();
     else if(action==='edit-inventory-preview-row')editInventoryPreviewRow(Number(target.dataset.index));
     else if(action==='review-all-inventory-rows')editInventoryPreviewRow(serviceEditor?.index);

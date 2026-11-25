@@ -2,7 +2,7 @@
 
 A desktop prototype that helps navigators turn spreadsheets and documents into searchable **memory cards**, ask questions in everyday language, and keep useful notes for future conversations.
 
-**Prototype source version 2.17.9.** Review and edit imported service rows, then find the same services in Known services and chat.
+**Prototype source version 2.17.10.** Edit or delete individual imported cards from Manage memory. Changes to service cards also apply in Known services and future chats.
 
 The app, Windows shortcut and installer are named **Care Navigation Support**. Close the previous version before running the update. The app uses the existing Windows install and data locations.
 
@@ -14,8 +14,8 @@ The complete package includes the Windows installer, both Mac test packages, edi
 
 | What you need | Open this |
 | --- | --- |
-| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.9/Care-Navigation-Support-Setup-2.17.9.exe) |
-| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.9/Care-Navigation-Support-Mac-Apple-Silicon-2.17.9-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.9/Care-Navigation-Support-Mac-Intel-2.17.9-Test.zip) |
+| **Install and try the app** | [Windows installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.10/Care-Navigation-Support-Setup-2.17.10.exe) |
+| **Try the app on a Mac** | [Apple Silicon test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.10/Care-Navigation-Support-Mac-Apple-Silicon-2.17.10-Test.zip) or [Intel test installer](https://github.com/victor221218/southlake-care-navigation-support/releases/download/v2.17.10/Care-Navigation-Support-Mac-Intel-2.17.10-Test.zip) |
 | **Quick-start guide** | [Read the quick-start guide](START-HERE.md) or open **START-HERE.html** inside the handoff ZIP |
 | **Maintain the inventory and outcomes** | [Inventory and outcome guide](#maintain-the-service-inventory-and-outcomes) |
 | **Download all deliverables** | Use **Download the latest handoff package** above |
@@ -50,7 +50,7 @@ The app opens in **Workspace**, with a full-width chat and document upload besid
 
 Choose **Known services** to browse the 27 researched pathways as full-width horizontal rows. Category filtering and search appear above the directory; the assistant opens in a floating panel on the right. Open View details for contact details, access requirements, source links and research dates, or choose Ask assistant beneath View details to open the floating chat with that provider selected. The average of your saved ratings appears beside the program contact. Scores of 1–2 are red, 3 is yellow and 4–5 are green. A named person appears only when listed in the public source. Confirm eligibility, boundaries, costs and current capacity before referring.
 
-**Manage memory**, directly beneath Known services, groups saved history by organization. Search an organization, service or note. Each group shows a short bullet preview with **Delete** beside the visible notes and results. Choose **Expand history** to see dated notes, results and saved conversations, with controls to open, edit or delete an item. Imported cards without an organization are grouped by file. Use **Add memory** to write a note and optionally name its organization.
+**Manage memory**, directly beneath Known services, groups saved history by organization. Search an organization, service or note. Use the actions beside a saved item to edit or delete it. Choose **Expand history** to see more items and their dates. Imported service inventories are grouped by file. Deleting an individual imported card keeps its source file and the other cards. A deleted service also disappears from Known services and future recommendations. Use **Add memory** to write a note and optionally name its organization.
 
 ![Known services with Ask assistant in the upper-right heading](docs/known-services.png)
 
@@ -127,7 +127,7 @@ The Ask assistant entry point is in the upper-right of the Known services headin
 - In **Workspace**, type and choose **Send**, or choose **Speak → Stop listening**, review the English transcription, and choose **Send**. Use **Stop** during an answer to interrupt it.
 - Choose **Add a document** for reference cards you can summarize, compare or calculate from. Recognized service inventories open for service review from either **Add a document** or **Known services → Import services**. If a spreadsheet opens as a reference preview, choose **Add to Known services** to review possible service rows.
 - Review the preview and warnings and use **Edit** beside a card to correct its fields. Save reference cards to Manage memory. Save service rows to Known services to also make them available in Manage memory and new chats. In **Manage memory → Manage files**, use **Show cards**, **Include previous rows**, **Open file**, or **Delete**. Deleting a document removes its extracted cards and attached notes after confirmation.
-- Use **View details** to check the source fields and row or page reference. Use **Add correction** to annotate a source card. To update a spreadsheet and keep matching card history, keep the same file name and stable row IDs, reimport, and choose **Update existing document**.
+- Use **View details** to check the source fields and row or page reference. Use **Edit** in Manage memory to correct a saved card, or add a note to keep a dated observation. To update a spreadsheet and keep matching card history, keep the same file name and stable row IDs, reimport, and choose **Update existing document**.
 - For a calculation, name the sheet, numeric column and filters in the question. Review the count of matched rows and excluded nonnumeric values before using the answer.
 
 ### Example

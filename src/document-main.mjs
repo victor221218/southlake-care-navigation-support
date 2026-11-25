@@ -66,6 +66,7 @@ async function invoke(method,args){
   if(method==='list-cards')return store.list(args);
   if(method==='list-memory')return store.memories(args);
   if(method==='get-card')return store.get(args.id);
+  if(method==='edit-document-card'){idle();const result=await store.editDocumentCard(args);assistant.clear();return result;}
   if(method==='set-service-removed'){idle();const result=await store.setServiceRemoved(args);assistant.clear();return result;}
   if(method==='delete-removed-service'){idle();const result=await store.deleteRemovedService(args);assistant.clear();return result;}
   if(method==='add-own-service'||method==='update-own-service'){

@@ -3,7 +3,7 @@ import {DocumentCases} from './cases.mjs';
 import {compareHistory,directoryGroup} from './ranking.mjs';
 import {groupMemory,organizationOf} from './memory-library.mjs';
 import {matchesServiceTopic} from './topic.mjs';
-import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, directoryGaps, isInventoryWorkbook, isServiceSource, serviceContacts, serviceDraft, serviceFields, serviceSection} from './service-sources.mjs';
+import {PUBLIC_SERVICE_FORMAT, OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, directoryGaps, isInventoryWorkbook, isServiceInventory, isServiceSource, serviceContacts, serviceDraft, serviceFields, serviceSection} from './service-sources.mjs';
 
 const now = () => new Date().toISOString();
 const clean = (value, limit = 12000) => String(value ?? '').replace(/\u0000/g, '').trim().slice(0, limit);
@@ -15,6 +15,7 @@ const serviceFormats = `('${PUBLIC_SERVICE_FORMAT}', '${OWN_SERVICE_FORMAT}')`;
 const spreadsheetFormats = `(${SERVICE_FILE_TYPES.map(format=>"'"+format+"'").join(',')})`;
 const linkedInventory = `d.format='${OWN_SERVICE_FORMAT}' AND (${SERVICE_FILE_TYPES.map(format=>"lower(d.filename) LIKE '%."+format+"'").join(' OR ')})`;
 export const serviceFileDigest = digest => createHash('sha256').update(OWN_SERVICE_FORMAT + ':' + digest).digest('hex');
+const rowKeyHash = key => createHash('sha256').update(key).digest('hex');
 function validResult(outcome, rating) {
   if (!['worked','not_worked'].includes(outcome)) throw new Error('Choose Worked or Didn’t work.');
   if (rating != null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) throw new Error('Choose a rating from 1 to 5, or leave it blank.');
@@ -37,6 +38,27 @@ export function linksIn(body, fields = {}) {
 }
 const cardContacts = (format,body,fields) => format === OWN_SERVICE_FORMAT
   ? serviceContacts(serviceDraft({fields}).values) : contactsIn(body,fields);
+const cleanEdit = value => typeof value==='string' ? value.replace(/\u0000/g,'').trim() : '';
+export function editDocumentContent(section,{title,body,fields}) {
+  const titleEdit=cleanEdit(title);
+  if (!titleEdit || titleEdit.length>180) throw new Error('Give this card a title of up to 180 characters.');
+  let bodyEdit=cleanEdit(body), fieldsEdit=section.fields;
+  if (Object.keys(section.fields).length) {
+    fieldsEdit=Object.fromEntries(Object.entries(section.fields).map(([label,original])=>{
+      const value=fields!=null && Object.hasOwn(fields,label) ? fields[label] : undefined;
+      if (value===undefined || String(value)===String(original)) return [label,original];
+      if ((typeof value==='number' && Number.isFinite(value)) || typeof value==='boolean') return [label,value];
+      const edit=cleanEdit(value);
+      if (typeof original==='boolean' && /^(true|false)$/i.test(edit)) return [label,edit.toLowerCase()==='true'];
+      return [label,typeof original==='number' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(edit)
+        && Number.isFinite(Number(edit)) ? Number(edit) : edit];
+    }));
+    bodyEdit=Object.entries(fieldsEdit).filter(([,value])=>value!=='')
+      .map(([label,value])=>label+': '+value).join('\n');
+  }
+  if (!bodyEdit || bodyEdit.length>30000) throw new Error('Keep between 1 and 30,000 characters of card content.');
+  return {...section,title:titleEdit,body:bodyEdit,fields:fieldsEdit};
+}
 
 export class DocumentStore {
   constructor({ database, owner, emit = () => {} }) {
@@ -107,9 +129,12 @@ export class DocumentStore {
         await this.db().prepare('UPDATE personal_cards SET archived=1 WHERE document_id=? AND owner_id=?').bind(id, owner).run();
       } else await this.db().prepare('INSERT INTO personal_documents (id,owner_id,filename,digest,format,original_path,imported_at,updated_at,warnings) VALUES (?,?,?,?,?,?,?,?,?)').bind(id, owner, parsed.filename, parsed.digest, parsed.format, originalPath, stamp, stamp, JSON.stringify(parsed.warnings)).run();
       const excluded = parsed.format === PUBLIC_SERVICE_FORMAT ? await this.deletedPublicServiceKeys(owner) : new Set();
+      const deletedRows = old ? new Set((await this.db().prepare(
+        'SELECT source_key_hash FROM personal_deleted_document_rows WHERE owner_id=? AND document_id=?')
+        .bind(owner,id).all()).results.map(row=>row.source_key_hash)) : new Set();
       let added = 0, updated = 0;
       for (const section of parsed.sections) {
-        if (excluded.has(section.key)) continue;
+        if (excluded.has(section.key) || deletedRows.size && deletedRows.has(rowKeyHash(section.key))) continue;
         const title = clean(section.title, 180), body = clean(section.body, 30000), fields = section.fields || {};
         const values = [title, body, clean(section.locator, 220), JSON.stringify(fields), JSON.stringify(cardContacts(parsed.format, body, fields)), JSON.stringify(linksIn(body, fields))];
         const previous = old ? await this.db().prepare('SELECT id,body,fields_json FROM personal_cards WHERE document_id=? AND source_key=? AND owner_id=?').bind(id, section.key, owner).first() : null;
@@ -138,7 +163,7 @@ export class DocumentStore {
   async updateOwnService({id, expected_version, values}) {
     return this.db().transaction(async () => {
       const card = await this.get(id);
-      if (card.source_format !== OWN_SERVICE_FORMAT || card.archived) throw new Error('Choose a service that you added.');
+      if (card.source_format !== OWN_SERVICE_FORMAT) throw new Error('Choose a service that you added.');
       if (card.version !== expected_version) throw new Error('This service changed. Reopen it before editing.');
       const section = serviceSection(card, values, {allowMissingName:true});
       const body = clean(section.body, 30000);
@@ -147,6 +172,20 @@ export class DocumentStore {
         .bind(clean(section.title, 180),body,JSON.stringify(section.fields),
           JSON.stringify(cardContacts(OWN_SERVICE_FORMAT,body,section.fields)),JSON.stringify(linksIn(body,section.fields)),
           now(),id,this.owner()).run();
+      return this.changed({id});
+    });
+  }
+  async editDocumentCard({id,expected_version,title,body,fields}) {
+    return this.db().transaction(async () => {
+      const card=await this.get(id);
+      if (!card.document_id || isServiceSource(card.source_format)) throw new Error('Choose a saved reference card.');
+      if (card.version!==expected_version) throw new Error('This card changed. Reopen it before editing.');
+      const edited=editDocumentContent(card,{title,body,fields});
+      await this.db().prepare(`UPDATE personal_cards SET title=?,body=?,fields_json=?,contacts_json=?,links_json=?,
+        updated_at=?,version=version+1 WHERE id=? AND owner_id=?`)
+        .bind(edited.title,edited.body,JSON.stringify(edited.fields),
+          JSON.stringify(contactsIn(edited.body,edited.fields)),JSON.stringify(linksIn(edited.body,edited.fields)),
+          now(),id,card.owner_id).run();
       return this.changed({id});
     });
   }
@@ -178,17 +217,7 @@ export class DocumentStore {
         await this.db().prepare('INSERT OR IGNORE INTO personal_deleted_public_services (owner_id,source_key) VALUES (?,?)')
           .bind(owner,card.source_key).run();
       }
-      await this.db().prepare(`DELETE FROM personal_case_memory WHERE owner_id=? AND entry_type='comment' AND
-        entry_id IN (SELECT id FROM personal_comments WHERE owner_id=? AND card_id=?
-          UNION SELECT entry_id FROM personal_input_history WHERE owner_id=? AND entry_type='comment' AND card_id=?)`)
-        .bind(owner,owner,id,owner,id).run();
-      await this.db().prepare("DELETE FROM personal_input_history WHERE owner_id=? AND (card_id=? OR (entry_type='card' AND entry_id=?))")
-        .bind(owner,id,id).run();
-      await this.db().prepare(`UPDATE personal_case_messages
-        SET payload_json=json_set(json_remove(payload_json,'$.cards','$.service_form','$.service_form_wrap_up'),'$.service_form_saved',json('true'))
-        WHERE owner_id=? AND json_extract(payload_json,'$.presentation')='service-form'
-          AND json_extract(payload_json,'$.cards[0].id')=?`).bind(owner,id).run();
-      return this.forgetCard(id);
+      return this.deleteDocumentCard(card);
     });
   }
   async serviceCategories() {
@@ -397,7 +426,38 @@ export class DocumentStore {
       return this.changed({saved:true,id,card_id});
     });
   }
-  async forgetCard(id) { await this.get(id); await this.db().prepare('DELETE FROM personal_cards WHERE id=? AND owner_id=?').bind(id,this.owner()).run(); return this.changed({ deleted: true }); }
+  async deleteDocumentCard(card) {
+    const {id,owner_id:owner,document_id,source_key,source_format,filename}=card;
+    if (source_key && (SERVICE_FILE_TYPES.includes(source_format) || isServiceInventory(source_format,filename))) {
+      await this.db().prepare('INSERT OR IGNORE INTO personal_deleted_document_rows (owner_id,document_id,source_key_hash) VALUES (?,?,?)')
+        .bind(owner,document_id,rowKeyHash(source_key)).run();
+    }
+    await this.db().prepare(`DELETE FROM personal_case_memory WHERE owner_id=? AND (
+      (entry_type='card' AND entry_id=?) OR (entry_type='comment' AND
+        entry_id IN (SELECT id FROM personal_comments WHERE owner_id=? AND card_id=?
+          UNION SELECT entry_id FROM personal_input_history WHERE owner_id=? AND entry_type='comment' AND card_id=?)))`)
+      .bind(owner,id,owner,id,owner,id).run();
+    await this.db().prepare("DELETE FROM personal_input_history WHERE owner_id=? AND (card_id=? OR (entry_type='card' AND entry_id=?))")
+      .bind(owner,id,id).run();
+    await this.db().prepare(`UPDATE personal_case_messages
+      SET payload_json=json_set(json_remove(payload_json,'$.cards','$.service_form','$.service_form_wrap_up'),'$.service_form_saved',json('true'))
+      WHERE owner_id=? AND json_extract(payload_json,'$.presentation')='service-form'
+        AND json_extract(payload_json,'$.cards[0].id')=?`).bind(owner,id).run();
+    await this.db().prepare(`UPDATE personal_case_messages SET payload_json=json_remove(payload_json,
+      '$.followup.body','$.followup.note_draft','$.followup.outcome','$.followup.rating','$.followup.result_id','$.followup.note_ids')
+      WHERE owner_id=? AND json_extract(payload_json,'$.followup.card_id')=?`).bind(owner,id).run();
+    await this.db().prepare('DELETE FROM personal_cards WHERE id=? AND owner_id=?').bind(id,owner).run();
+    return this.changed({deleted:true,card_id:id});
+  }
+  async forgetCard(id) {
+    return this.db().transaction(async () => {
+      const card=await this.get(id);
+      if (card.source_format===PUBLIC_SERVICE_FORMAT) throw new Error('Use Removed services to delete a public service.');
+      if (card.document_id) return this.deleteDocumentCard(card);
+      await this.db().prepare('DELETE FROM personal_cards WHERE id=? AND owner_id=?').bind(id,card.owner_id).run();
+      return this.changed({deleted:true,card_id:id});
+    });
+  }
   async forgetComment({id,card_id}) {await this.get(card_id);const result=await this.db().prepare('DELETE FROM personal_comments WHERE id=? AND card_id=? AND owner_id=?').bind(id,card_id,this.owner()).run();if(!result.meta.changes)throw new Error('This note is no longer available.');return this.changed({deleted:true,card_id});}
   async forgetDocument(id) { if (!await this.document(id)) throw new Error('This document is unavailable.'); await this.db().prepare('DELETE FROM personal_documents WHERE id=? AND owner_id=?').bind(id,this.owner()).run(); return this.changed({ deleted: true }); }
   async calculate({ document_id, sheet = '', column = '', operation = 'count', filters = [], group_by = '' }) {
@@ -419,24 +479,62 @@ export class DocumentStore {
     const docs = (await this.db().prepare('SELECT * FROM personal_documents WHERE owner_id=?').bind(this.owner()).all()).results.map(({ owner_id, original_path, ...row }) => row);
     const cards = (await this.db().prepare('SELECT * FROM personal_cards WHERE owner_id=?').bind(this.owner()).all()).results.map(({ owner_id, ...row }) => row);
     const comments = (await this.db().prepare('SELECT * FROM personal_comments WHERE owner_id=?').bind(this.owner()).all()).results.map(({ owner_id, ...row }) => row);
-    return { format: 'southlake-personal-memory', version: 1, exported_at: now(), documents: docs, cards, comments,...await new DocumentCases({store:this}).export() };
+    const {results:deleted_document_rows} = await this.db()
+      .prepare('SELECT document_id,source_key_hash FROM personal_deleted_document_rows WHERE owner_id=?').bind(this.owner()).all();
+    return { format: 'southlake-personal-memory', version: 1, exported_at: now(), documents: docs, cards, comments,
+      ...(deleted_document_rows.length ? {deleted_document_rows} : {}), ...await new DocumentCases({store:this}).export() };
   }
   async restore(data) {
     if (data?.format !== 'southlake-personal-memory' || data.version !== 1 || !Array.isArray(data.cards) || data.cards.length > 20000 || !Array.isArray(data.documents) || !Array.isArray(data.comments) || data.comments.length > 50000) throw new Error('Choose a valid Southlake personal-memory backup.');
+    const deletedDocumentRows = data.deleted_document_rows ?? [];
+    if (!Array.isArray(deletedDocumentRows) || deletedDocumentRows.length>50000) throw new Error('The backup has invalid deleted rows.');
     const owner = this.owner(), docs = new Map(), cards = new Map(), comments = new Map(); let added = 0, notesAdded = 0;
     return this.db().transaction(async () => {
+      const {results:localDeletedRows}=await this.db()
+        .prepare('SELECT document_id,source_key_hash FROM personal_deleted_document_rows WHERE owner_id=?').bind(owner).all();
+      const deletedKeys = new Map();
+      for (const row of localDeletedRows) {
+        if (!deletedKeys.has(row.document_id)) deletedKeys.set(row.document_id,new Set());
+        deletedKeys.get(row.document_id).add(row.source_key_hash);
+      }
       for (const doc of data.documents) {
         if (typeof doc.id !== 'string' || !/^[a-f0-9]{64}$/.test(doc.digest)) throw new Error('The backup contains an invalid document.');
         const duplicate = await this.duplicate(doc.digest); const id = duplicate?.id || randomUUID();
         const format = clean(doc.format,20);
-        docs.set(doc.id, {id, format, duplicate:Boolean(duplicate)});
+        docs.set(doc.id, {id, format, duplicate:Boolean(duplicate), deleted:new Set(deletedKeys.get(id))});
         if (!duplicate) await this.db().prepare('INSERT INTO personal_documents (id,owner_id,filename,digest,format,imported_at,updated_at,version,warnings) VALUES (?,?,?,?,?,?,?,?,?)').bind(id,owner,clean(doc.filename,220),doc.digest,clean(doc.format,20),clean(doc.imported_at,40),clean(doc.updated_at,40),Number(doc.version)||1,'["Restored from backup; the original file is not included."]').run();
+        // A previous version of this file can have a different digest but the same source ID.
+        if (id!==doc.id && deletedKeys.has(doc.id)) {
+          const local=await this.document(doc.id);
+          if (local?.filename===clean(doc.filename,220)) {
+            for (const key of deletedKeys.get(doc.id)) docs.get(doc.id).deleted.add(key);
+          }
+        }
+      }
+      for (const row of deletedDocumentRows) {
+        const doc=docs.get(row?.document_id);
+        if (!doc || typeof row.source_key_hash!=='string' || !/^[a-f0-9]{64}$/.test(row.source_key_hash)) {
+          throw new Error('The backup has an invalid deleted row.');
+        }
+        doc.deleted.add(row.source_key_hash);
+      }
+      for (const doc of docs.values()) {
+        if (!doc.deleted.size) continue;
+        // A backup merge keeps any local rows already present in this workspace.
+        const existing=(await this.db().prepare('SELECT source_key FROM personal_cards WHERE owner_id=? AND document_id=?')
+          .bind(owner,doc.id).all()).results;
+        for (const row of existing) if (row.source_key) doc.deleted.delete(rowKeyHash(row.source_key));
+        for (const key of doc.deleted) {
+          await this.db().prepare('INSERT OR IGNORE INTO personal_deleted_document_rows (owner_id,document_id,source_key_hash) VALUES (?,?,?)')
+            .bind(owner,doc.id,key).run();
+        }
       }
       const deletedPublic = await this.deletedPublicServiceKeys(owner);
       for (const card of data.cards) {
         if (typeof card.id !== 'string' || card.document_id && !docs.has(card.document_id)) throw new Error('The backup has a card without its document.');
         const doc = docs.get(card.document_id);
         if (doc?.format === PUBLIC_SERVICE_FORMAT && deletedPublic.has(card.source_key)) continue;
+        if (doc?.deleted.size && typeof card.source_key==='string' && doc.deleted.has(rowKeyHash(card.source_key))) continue;
         const removed=Number(isServiceSource(doc?.format)&&(card.removed_from_directory===1||card.removed_from_directory===true));
         const existing = doc?.duplicate
           ? await this.db().prepare('SELECT id FROM personal_cards WHERE owner_id=? AND document_id=? AND source_key=?').bind(owner,doc.id,card.source_key).first()

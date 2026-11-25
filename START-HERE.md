@@ -111,7 +111,7 @@ In **Chat history**, open the conversation’s **⋯** menu and choose **Finish 
 
 ### Find an organization’s history
 
-In **Manage memory**, search for the organization, service, or note. The organization card shows a short list of saved items. Use **Delete** beside a visible note or result to remove it. Choose **Expand history** to see older items and their dates, or to open, edit or delete one. Use **Add memory** to write a new note with an optional organization name.
+In **Manage memory**, search for the organization, service, or note. Use **Edit** or **Delete** beside an imported card, note or result. Choose **Expand history** to see more items and their dates. Deleting one imported service removes that card from Manage memory, Known services and future recommendations. The source file and its other rows stay available. Use **Add memory** to write a new note with an optional organization name.
 
 ### Correct a wrong rating or note
 

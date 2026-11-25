@@ -340,7 +340,12 @@
 .memory-entry-heading .memory-record-main:hover { text-decoration: underline; }
 .memory-entry-content p { white-space: pre-wrap; }
 .memory-entry-content small { font-size: 11px; color: #526b79; }
-.memory-history .memory-record-actions { align-self: start; }
+.memory-group .memory-record-actions {
+  align-self: start;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .memory-group-footer, .memory-history-paging {
   display: flex;
   gap: 8px;

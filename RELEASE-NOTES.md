@@ -1,3 +1,8 @@
+# Care Navigation Support 2.17.10
+
+- Edit and delete individual imported cards, notes and results in the Manage memory preview or expanded history.
+- Confirm an individual card deletion to remove it and its attached notes. A deleted service also disappears from Known services and future recommendations. The source file and other imported cards stay available.
+
 # Care Navigation Support 2.17.9
 
 - Recognized service inventories can be imported from **Workspace → Add a document** or **Known services → Import services**. Save once to find the cards in **Known services**, **Manage memory** and matching chat results.

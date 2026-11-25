@@ -5,11 +5,10 @@ import path from 'node:path';
 import {OWN_SERVICE_FORMAT, SERVICE_FILE_TYPES, cleanServiceFields, isInventoryWorkbook, serviceDraft, serviceSection} from './service-sources.mjs';
 import {headerKey, INVENTORY_TEMPLATE, TRACKING_TEMPLATE} from './navigation-templates.mjs';
 import {matchingServices} from './service-matching.mjs';
-import {serviceFileDigest} from './store.mjs';
+import {editDocumentContent,serviceFileDigest} from './store.mjs';
 
 const trackerKey = (filename,row) => createHash('sha256')
   .update(JSON.stringify([headerKey(filename),row.locator,headerKey(row.provider),row.date])).digest('hex');
-const cleanEdit = value => typeof value==='string' ? value.replace(/\u0000/g,'').trim() : '';
 const documentCard = ({title,body,fields,locator}) => ({title,body,fields,locator});
 
 export function parseInWorker({bytes,filename,worker,pdfWorker,timeoutMs=45000}) {
@@ -64,23 +63,7 @@ export class DocumentImporter {
     if (this.busy) throw new Error('The import is already saving.');
     this.reviewDocumentCard(id,index);
     const item=this.preview(id), section=item.parsed.sections[index];
-    const titleEdit=cleanEdit(title);
-    if (!titleEdit || titleEdit.length>180) throw new Error('Give this card a title of up to 180 characters.');
-    let bodyEdit=cleanEdit(body), fieldsEdit=section.fields;
-    if (Object.keys(section.fields).length) {
-      fieldsEdit=Object.fromEntries(Object.entries(section.fields).map(([label,original])=>{
-        const value=fields?.[label];
-        if (value===undefined || String(value)===String(original)) return [label,original];
-        if (typeof value==='number' && Number.isFinite(value)) return [label,value];
-        const edit=cleanEdit(value);
-        return [label,typeof original==='number' && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(edit)
-          && Number.isFinite(Number(edit)) ? Number(edit) : edit];
-      }));
-      bodyEdit=Object.entries(fieldsEdit).filter(([,value])=>value!=='')
-        .map(([label,value])=>label+': '+value).join('\n');
-    }
-    if (!bodyEdit || bodyEdit.length>30000) throw new Error('Keep between 1 and 30,000 characters of card content.');
-    const edited={...section,title:titleEdit,body:bodyEdit,fields:fieldsEdit};
+    const edited=editDocumentContent(section,{title,body,fields});
     item.parsed.sections[index]=edited;
     item.serviceRows=null;
     return documentCard(edited);

@@ -517,6 +517,114 @@ test('editing a document preview keeps original bytes, stable row keys and numer
   } finally { await f.close(); }
 });
 
+test('deleting one saved inventory card removes it from memory, directory and recommendations', async () => {
+  const f=await fixture();
+  try {
+    const filename=path.join(f.folder,'Fictional Transport.xlsx'), importer=importerFor(f);
+    const writeInventory=async phone=>{
+      const book=new ExcelJS.Workbook();
+      book.addWorksheet('Service Inventory').addRows([
+        ['Service ID','Partner / organization','Program / clinic','Service type','Service area','Main contact phone'],
+        ['TEST-1','Fictional Transport','Test Appointment Rides','Transportation','North York','416-555-0168'],
+        ['TEST-2','Fictional Transport','Test Return Rides','Transportation','North York',phone]
+      ]);
+      await book.xlsx.writeFile(filename);
+    };
+    await writeInventory('416-555-0169');
+    const review=await importer.prepare(filename);
+    const saved=await importer.confirmServices(review.id);
+    const inventory=await f.store.list({collection:'services',document_id:saved.document_id});
+    const removed=inventory.items.find(card=>card.title.endsWith('Test Appointment Rides'));
+    const survivor=inventory.items.find(card=>card.title.endsWith('Test Return Rides'));
+    const note=await f.store.comment({card_id:removed.id,body:'Fictional deleted provider note.'});
+    await f.store.comment({card_id:survivor.id,body:'Fictional companion row note.'});
+
+    const cases=new DocumentCases({store:f.store}), inputs=new InputHistory({store:f.store});
+    const assistant=new DocumentAssistant({cases,store:f.store,connection:{session:async()=>({sharing:false})}});
+    const prompt='Find a transportation service in North York. Show ranked service cards.';
+    const topic=await cases.create();
+    const recommendation=await assistant.chat({case_id:topic.id,text:prompt,remember:false});
+    assert(recommendation.cards.some(card=>card.id===removed.id));
+    const followups=new CaseFollowups({cases,store:f.store,inputHistory:inputs});
+    const selection=await followups.start({case_id:topic.id,reply_id:recommendation.turn_id,card_id:removed.id});
+    const result=await followups.update({case_id:topic.id,message_id:selection.id,step:'record',outcome:'worked',rating:5});
+    const resultId=result.payload.followup.result.id;
+    await f.store.linkCaseMemory(topic.id,'comment',note.id,'explicit');
+    await cases.archive({id:topic.id,expected_version:(await cases.row(topic.id)).version});
+
+    f.switch('recipient');
+    await assert.rejects(f.store.forgetCard(removed.id),/active workspace/);
+    f.switch('user-a');
+    await f.store.forgetCard(removed.id);
+
+    const afterDeletion=await f.store.memories({document_id:saved.document_id});
+    assert.equal(afterDeletion.total,2);
+    assert(afterDeletion.items.every(item=>item.card_id===survivor.id));
+    await assert.rejects(f.store.get(removed.id),/active workspace/);
+    assert((await f.store.documents()).some(doc=>doc.id===saved.document_id&&doc.card_count===1));
+    const backup=await f.store.export();
+    const removedEntryIds=[note.id,resultId];
+    assert(!backup.comments.some(comment=>removedEntryIds.includes(comment.id)));
+    assert(!backup.case_memory.some(entry=>removedEntryIds.includes(entry.entry_id)));
+    assert.deepEqual(await inputs.state({card_id:removed.id}),{undo:null,redo:null});
+    const archived=await cases.hydrate(await cases.read(topic.id));
+    assert.equal(archived.status,'archived');
+    assert(archived.messages.some(message=>message.body===prompt));
+    assert(!archived.messages.some(message=>message.payload.cards?.some(card=>card.id===removed.id)));
+    const receipt=archived.messages.find(message=>message.id===selection.id).payload.followup;
+    assert(receipt.unavailable&&!receipt.result&&!receipt.latest_note);
+    assistant.clear();
+    const next=await assistant.chat({case_id:(await cases.create()).id,text:prompt,remember:false});
+    assert.deepEqual(next.cards.map(card=>card.id),[survivor.id]);
+
+    await f.reopen();
+    assert.equal((await importer.prepare(filename)).duplicate,true);
+    await writeInventory('416-555-0170');
+    const revision=await importer.prepare(filename);
+    assert.equal(revision.previous.can_update,true);
+    await importer.confirmServices(revision.id,true);
+    const afterUpdate=await f.store.list({collection:'services',document_id:saved.document_id});
+    assert.deepEqual(afterUpdate.items.map(card=>card.id),[survivor.id]);
+    const kept=await f.store.get(survivor.id);
+    assert.equal(kept.contacts[0].value,'416-555-0170');
+    assert.match(kept.comments[0].body,/companion row note/);
+  } finally { await f.close(); }
+});
+
+test('saved reference rows can be corrected and deleted individually with the original preserved', async () => {
+  const f=await fixture();
+  try {
+    const filename=path.join(f.folder,'Fictional capacity.csv'), importer=importerFor(f);
+    const file='ID,Name,Slots,Phone\nA,North desk,2,416-555-0181\nB,East desk,3,416-555-0182';
+    await writeFile(filename,file);
+    const review=await importer.prepare(filename);
+    const saved=await importer.confirm(review.id);
+    const initial=await f.store.list({document_id:saved.document_id});
+    const north=initial.items.find(card=>card.title==='North desk');
+    const east=initial.items.find(card=>card.title==='East desk');
+    const edit={id:north.id,expected_version:north.version,title:'Corrected north desk',
+      fields:{...north.fields,Slots:'5',Phone:'416-555-0183'}};
+    await f.store.comment({card_id:north.id,body:'Fictional capacity note to keep.'});
+    await f.store.editDocumentCard(edit);
+    await assert.rejects(f.store.editDocumentCard(edit),/changed/);
+
+    const revised=await f.store.get(north.id);
+    assert.equal(revised.source_key,north.source_key);
+    assert.equal(revised.fields.Slots,5);
+    assert.equal(revised.contacts[0].value,'416-555-0183');
+    assert.match(revised.body,/Slots: 5/);
+    assert.equal(revised.comments.length,1);
+    assert.equal((await f.store.memories({query:'Corrected north desk',kind:'documents'})).total,1);
+    assert.equal((await f.store.calculate({document_id:saved.document_id,operation:'sum',column:'Slots'})).value,8);
+    await f.store.forgetCard(east.id);
+    await f.reopen();
+    assert.deepEqual((await f.store.memories({kind:'documents'})).items.map(item=>item.id),[north.id]);
+    assert.equal((await f.store.calculate({document_id:saved.document_id,operation:'sum',column:'Slots'})).value,5);
+    const original=await f.store.document(saved.document_id);
+    assert.equal(await readFile(original.original_path,'utf8'),file);
+  } finally { await f.close(); }
+});
+
 test('researched directory starts with 27 dated public services and no invented contacts or outcomes', async () => {
   assert.equal(knownServices.length, 27);
   assert.equal(new Set(knownServices.map(s => s.id)).size, 27);

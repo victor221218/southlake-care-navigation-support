@@ -69,6 +69,26 @@ async function run(){try{
     const sourceCapture=await window.hiveSmoke.capture('card-notes');
     click('[data-action="close-modal"]');await wait(()=>!document.getElementById('modal').open);
 
+    const referenceRows=await request('list-memory',{kind:'documents',document_id:card.document_id});
+    const reference=referenceRows.items.find(item=>item.title==='Example Home Support');
+    assert(reference,'Find another row from the saved reference file.');
+    await revealMemoryEntry(reference.id,'SAMPLE-FICTIONAL-Services.csv');
+    click(memoryRow(reference.id)+' [data-action="edit-memory"]');
+    await wait(()=>document.getElementById('preview-card-title')?.value===reference.title);
+    type('preview-card-title','Corrected Example Home Support');
+    click('[data-action="save-memory-document-card"]');
+    await wait(()=>!document.getElementById('modal').open&&
+      document.querySelector(memoryRow(reference.id))?.textContent.includes('Corrected Example Home Support'));
+    const confirmDelete=window.confirm;
+    try {
+      window.confirm=()=>true;
+      click(memoryRow(reference.id)+' [data-action="delete-memory"]');
+      await wait(()=>!document.querySelector(memoryRow(reference.id)));
+    } finally { window.confirm=confirmDelete; }
+    const remainingReferences=await request('list-memory',{kind:'documents',document_id:card.document_id});
+    assert(remainingReferences.total===referenceRows.total-1&&remainingReferences.items.some(item=>item.id===card.id),
+      'Deleting one expanded reference card leaves the other rows from the file.');
+
     // Use the isolated workspace to recreate the transportation example after verifying the earlier results.
     const centreResult=service.comments.find(note=>note.outcome==='not_worked');
     await request('save-service-result',{id:centreResult.id,card_id:service.id,expected_version:centreResult.version,
@@ -129,7 +149,12 @@ async function run(){try{
     await wait(()=>document.querySelector(`[data-preview-id="${fixture.id}"] [data-action="edit-own-service"]`));
     click(`[data-preview-id="${fixture.id}"] [data-action="edit-own-service"]`);
     await wait(()=>document.getElementById('service-field-email')?.value==='appointments@example.org');
-    click('[data-action="close-modal"]');
+    type('service-field-email','confirmed-appointments@example.org');
+    click('[data-action="save-own-service"]');
+    await wait(()=>document.getElementById('modal').textContent.includes('confirmed-appointments@example.org'));
+    const edited=(await request('list-cards',{collection:'services',query:'confirmed-appointments@example.org'})).items[0];
+    assert(edited.id===fixture.id,'Editing an imported service in Manage memory updates the same card in Known services.');
+    click('#modal [data-action="close-modal"]');
     await wait(()=>!document.getElementById('modal').open);
     click('[data-action="workspace"]');
     await wait(()=>document.body.dataset.view==='workspace');
@@ -141,7 +166,43 @@ async function run(){try{
       document.querySelector('[data-source-group="public"] .answer-card')&&
       !document.getElementById('messages').textContent.includes('Fixture Airport Shuttle'),
       'A dated recommendation should put the matching inventory lead before public options and exclude the service outside North York.');
-    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture,transportation_recommendation_order:true,archived_transcript_in_memory:true,transportation_capture:transportationCapture,workspace_inventory_linked:true,imported_transportation_ranked:true});return;
+    click('[data-action="manage-memory"]');
+    await wait(()=>document.body.dataset.view==='memory');
+    type('search','Fixture Appointment Shuttle');
+    const previewDelete=`[data-preview-id="${fixture.id}"] [data-action="delete-memory"]`;
+    await wait(()=>document.querySelector(previewDelete));
+    const deleteButton=document.querySelector(previewDelete);
+    const previewRow=deleteButton.closest('.memory-preview-row');
+    const contentRight=previewRow.firstElementChild.getBoundingClientRect().right;
+    const editButton=previewRow.querySelector('[data-action="edit-own-service"]');
+    assert(editButton.getBoundingClientRect().left>=contentRight&&
+      deleteButton.getBoundingClientRect().left>=contentRight&&deleteButton.getBoundingClientRect().right<=innerWidth,
+      'Keep Edit and Delete to the right of the imported service content.');
+    try {
+      let cancelledPrompt='';
+      window.confirm=message=>{cancelledPrompt=message;return false;};
+      click(previewDelete);
+      await wait(()=>cancelledPrompt&&document.querySelector(previewDelete)?.disabled===false);
+      assert(cancelledPrompt.includes('Known services')&&document.querySelector(previewDelete),
+        'Explain what deletion affects and preserve the imported record on cancellation.');
+      window.confirm=()=>true;
+      click(previewDelete);
+      await wait(()=>!document.querySelector(`[data-preview-id="${fixture.id}"]`));
+    } finally { window.confirm=confirmDelete; }
+    const remainingServices=await request('list-cards',{collection:'services',document_id:fixture.document_id});
+    const remainingMemory=await request('list-memory',{kind:'documents',document_id:fixture.document_id});
+    assert(remainingServices.total===2&&remainingMemory.total===2&&
+      remainingMemory.items.every(item=>remainingServices.items.some(service=>service.id===item.id)),
+      'Delete should remove exactly one imported record from both Known services and Manage memory.');
+    click('[data-action="workspace"]');
+    click('.chat-header-actions [data-action="new-chat"]');
+    await wait(()=>document.body.dataset.view==='workspace'&&document.body.dataset.caseChanging==='false'&&!document.querySelector('.message'));
+    type('message','I would need an older adult who needs transportation ride to North York on 11/30');
+    click('#send-button');
+    await wait(()=>document.querySelector('#messages .answer-card')&&document.getElementById('send-button').textContent==='Send ↑');
+    assert(!document.querySelector(`#messages .answer-card[data-id="${fixture.id}"]`),
+      'A new conversation must not recommend the deleted inventory card.');
+    window.hiveSmoke.finish({ok:true,default_workspace_after_reopen:true,reopen_preserves_document:true,reopen_preserves_card_notes:true,reopen_preserves_service_feedback:true,reopen_preserves_service_result:true,reopen_preserves_chat_rating:true,reopen_preserves_saved_case:true,close_handshake_saved_pending_note:true,source_capture:sourceCapture,transportation_recommendation_order:true,archived_transcript_in_memory:true,transportation_capture:transportationCapture,workspace_inventory_linked:true,imported_transportation_ranked:true,reference_memory_row_edit:true,reference_memory_row_delete:true,linked_inventory_row_delete:true});return;
   }
   const initial=await request('snapshot');assert(initial.services.total===27&&initial.cards.total===0&&initial.documents.length===0);
   const grid=document.getElementById('workspace-grid').getBoundingClientRect(),chat=document.getElementById('chat-panel').getBoundingClientRect();assert(chat.width>=contentWidth(document.getElementById('workspace-grid'))-4,'Workspace chat must fill the content width.');

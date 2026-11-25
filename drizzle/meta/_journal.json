@@ -29,6 +29,7 @@
     { "idx": 6, "version": "6", "when": 1795050000001, "tag": "0006_personal_case_feedback", "breakpoints": true },
     { "idx": 7, "version": "6", "when": 1795507200000, "tag": "0007_navigation_outcomes", "breakpoints": true },
     { "idx": 8, "version": "6", "when": 1795507200001, "tag": "0008_removed_directory_services", "breakpoints": true },
-    { "idx": 9, "version": "6", "when": 1795507200002, "tag": "0009_deleted_public_services", "breakpoints": true }
+    { "idx": 9, "version": "6", "when": 1795507200002, "tag": "0009_deleted_public_services", "breakpoints": true },
+    { "idx": 10, "version": "6", "when": 1795507200003, "tag": "0010_deleted_document_rows", "breakpoints": true }
   ]
 }
